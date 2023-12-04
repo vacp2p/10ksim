@@ -3,10 +3,10 @@
 **Python Version**: 3.11.5
 
 ### Main objectives
-- [ ] Automatic deployment of any P2P utils
-  - [ ] Deployment of 10k Gossipsub / Waku relay nodes
-  - [ ] Bandwidth usage per node
-  - [ ] Log data for analysis
+- [X] Automatic deployment of any P2P utils
+  - [X] Deployment of 10k Gossipsub / Waku relay nodes
+  - [X] Bandwidth usage per node
+  - [X] Log data for analysis
 ### Secondary objectives
 - [ ] Add QoS parameter support to the 10k tool
 - [ ] Run further Waku protocols:

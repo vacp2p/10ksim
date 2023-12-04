@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pod
+  namespace: 10k-namespace
+spec:
+  replicas: 150
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: pod
+  template:
+    metadata:
+      labels:
+        app: pod
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: machine
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: pod
+      containers:

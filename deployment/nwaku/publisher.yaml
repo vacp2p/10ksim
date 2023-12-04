@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: publisher
+  namespace: zerotesting
+spec:
+  containers:
+    - name: publisher-container
+      image: publisher:local
+      volumeMounts:
+      - name: data-volume
+        mountPath: /publisher
+      command:
+        - sh
+        - -c
+        - python /publisher/traffic.py --multiple-nodes=http://nodes-[0..1000]:8645 --msg-size-kbytes=10 --delay-seconds=1 -cpp 1
+  volumes:
+  - name: data-volume
+    hostPath:
+      path: /home/alber/10k/waku/publisher_script

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-app-configmap
+  namespace: 10k-namespace
+data:
+  PEERS: "150"
+  CONNECTTO: "10"
+  PEERSPERPOD: "1"

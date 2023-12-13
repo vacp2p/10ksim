@@ -33,7 +33,7 @@ fi
 # Number of containers to add
 read -p "Enter how many containers per POD: " num_containers
 
-read -p "Enter message size (in MB): " msg_size
+read -p "Enter message size (in Bytes): " msg_size
 
 total_peers=$((NEW_REPLICAS*num_containers))
 

@@ -33,6 +33,8 @@ fi
 # Number of containers to add
 read -p "Enter how many containers per POD: " num_containers
 
+read -p "Enter message size (in MB): " msg_size
+
 total_peers=$((NEW_REPLICAS*num_containers))
 
 # Create a copy to append
@@ -64,6 +66,16 @@ for ((i=0; i<num_containers; i++)); do
             configMapKeyRef:
               name: my-app-configmap
               key: PEERSPERPOD
+        - name: MSGRATE
+          valueFrom:
+            configMapKeyRef:
+              name: my-app-configmap
+              key: MSGRATE
+        - name: MSGSIZE
+          valueFrom:
+            configMapKeyRef:
+              name: my-app-configmap
+              key: MSGSIZE
 EOF
 done
 
@@ -107,6 +119,8 @@ data:
   PEERS: "$total_peers"
   CONNECTTO: "10"
   PEERSPERPOD: "$num_containers"
+  MSGRATE: "1000"
+  MSGSIZE: "$msg_size"
 EOF
 
 rm network-policy.yaml

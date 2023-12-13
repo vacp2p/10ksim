@@ -7,3 +7,5 @@ data:
   PEERS: "150"
   CONNECTTO: "10"
   PEERSPERPOD: "1"
+  MSGRATE: "1000"
+  MSGSIZE: "10000"

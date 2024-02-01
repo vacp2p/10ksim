@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodes
+  namespace: zerotesting
+spec:
+  replicas: 2000
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: nodes
+  template:
+    metadata:
+      labels:
+        app: nodes
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: nodes
+      containers:

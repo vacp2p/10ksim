@@ -47,6 +47,7 @@ for ((i=0; i<num_containers; i++)); do
         image: dst-test-node:local
         ports:
         - containerPort: 5000
+        - containerPort: 8000
         args: ["$minute", "$hour"]
         env:
         - name: PEERNUMBER
@@ -102,7 +103,12 @@ for ((port=5000; port<$((5000 + num_containers)); port++)); do
       targetPort : $port
 EOF
   done
-
+  cat <<EOF >> "deploy.yaml"
+    - name: port-8000
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+EOF
   cat <<EOF >> "deploy.yaml"
   type: ClusterIP
 EOF
@@ -149,6 +155,8 @@ sudo kubectl create namespace 10k-namespace
 sudo kubectl apply -f config-map.yaml -n 10k-namespace
 
 sudo kubectl apply -f network-policy.yaml
+
+sudo kubectl apply -f pod_monitor.yaml
 
 sudo kubectl apply -f deploy.yaml
 

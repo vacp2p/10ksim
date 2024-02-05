@@ -5,6 +5,7 @@ import urllib.parse
 import argparse
 import aiohttp
 import asyncio
+from itertools import cycle
 
 
 async def send_waku_msg(node_address, kbytes, pubsub_topic, content_topic):
@@ -70,7 +71,7 @@ if __name__ == "__main__":
 
     print(args)
 
-    nodes = pod_generator(args.nodes)
+    nodes = cycle(pod_generator(args.nodes))
 
     print("Injecting traffic to multiple nodes REST APIs")
     print(f"Injecting from node {0} to node {args.nodes}")

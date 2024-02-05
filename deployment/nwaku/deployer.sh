@@ -23,9 +23,8 @@ fi
 cp "template.yaml" "deploy.yaml"
 
 # Loop to generate and append instances
-for ((i=0; i<num_containers; i++)); do
-    cat <<EOF >> "deploy.yaml"
-        - name: container-$i
+cat <<EOF >> "deploy.yaml"
+        - name: container-0
           image: wakuorg/nwaku:wakunode_dst
           env:
             - name: IP
@@ -50,9 +49,8 @@ for ((i=0; i<num_containers; i++)); do
           command:
             - sh
             - -c
-            - /usr/bin/wakunode --relay=true --rpc-admin=true --max-connections=250 --rpc-address=0.0.0.0 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=\$ENR1 --discv5-bootstrap-node=\$ENR2 --discv5-bootstrap-node=\$ENR3 --nat=extip:\${IP} --pubsub-topic="/waku/2/kubetopic" --ports-shift=$i
+            - /usr/bin/wakunode --relay=true --rpc-admin=true --max-connections=250 --rpc-address=0.0.0.0 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=\$ENR1 --discv5-bootstrap-node=\$ENR2 --discv5-bootstrap-node=\$ENR3 --nat=extip:\${IP} --pubsub-topic="/waku/2/kubetopic"
 EOF
-done
 
 sudo kubectl -n zerotesting delete networkpolicy zerotesting-policy
 
@@ -121,16 +119,10 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: nodes-$i
   ports:
-EOF
-    for ((port=8645; port<$((8645 + num_containers)); port++)); do
-        cat <<EOF >> "deploy.yaml"
-    - name: port-$port
+    - name: port-8645
       protocol: TCP
-      port: $port
-      targetPort : $port
-EOF
-    done
-    cat <<EOF >> "deploy.yaml"
+      port: 8645
+      targetPort : 8645
   type: ClusterIP
 EOF
 done

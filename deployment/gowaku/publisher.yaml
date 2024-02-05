@@ -13,7 +13,7 @@ spec:
       command:
         - sh
         - -c
-        - python /publisher/traffic.py --multiple-nodes=http://nodes-[0..2000]:8645 --msg-size-kbytes=40 --delay-seconds=1 -cpp 1
+        - python /publisher/traffic.py -n=100 --msg-size-kbytes=40 --delay-seconds=1 -cpp 1
   volumes:
   - name: data-volume
     hostPath:

@@ -19,11 +19,6 @@ else
   exit 1
 fi
 
-# Number of containers to add
-read -p "Enter how many containers per POD: " num_containers
-
-total_peers=$((pods*num_containers))
-
 # Create a copy to append
 cp "template.yaml" "deploy.yaml"
 
@@ -165,7 +160,7 @@ spec:
       command:
         - sh
         - -c
-        - python /publisher/traffic.py --multiple-nodes=http://nodes-[0..$pods]:8645 --msg-size-kbytes=40 --delay-seconds=1 -cpp $num_containers
+        - python /publisher/traffic.py -n=$pods --msg-size-kbytes=40 --delay-seconds=1
   volumes:
   - name: data-volume
     hostPath:

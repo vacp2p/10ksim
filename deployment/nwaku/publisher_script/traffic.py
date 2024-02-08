@@ -5,10 +5,25 @@ import urllib.parse
 import argparse
 import aiohttp
 import asyncio
+import socket
 from itertools import cycle
 
 
-async def send_waku_msg(node_address, kbytes, pubsub_topic, content_topic):
+def check_dns_time(node: str):
+    name_to_resolve = node.split(":")[0]
+
+    s_time = time.time()
+
+    ip_addr = socket.gethostbyname(name_to_resolve)
+
+    elapsed_ms = (time.time() - s_time) * 1000
+
+    print(f"DNS Response took {elapsed_ms} ms")
+
+    return f"{ip_addr}:{node.split(":")[1]}"
+
+
+async def send_waku_msg(node_address, kbytes, pubsub_topic, content_topic, debug):
     # TODO dirty trick .replace("=", "")
     base64_payload = (base64.b64encode(os.urandom(kbytes*1000)).decode('ascii')).replace("=", "")
     print("size message kBytes", len(base64_payload) * (3/4)/1000, "KBytes")
@@ -20,6 +35,9 @@ async def send_waku_msg(node_address, kbytes, pubsub_topic, content_topic):
     }
 
     encoded_pubsub_topic = urllib.parse.quote(pubsub_topic, safe='')
+
+    if debug:
+        node_address = check_dns_time(node_address)
 
     url = f"{node_address}/relay/v1/messages/{encoded_pubsub_topic}"
     headers = {'content-type': 'application/json'}
@@ -49,7 +67,8 @@ async def main(nodes, args):
     background_tasks = set()
     while True:
         for node in nodes:
-            task = asyncio.create_task(send_waku_msg(node, args.msg_size_kbytes, args.pubsub_topic, args.content_topic))
+            task = asyncio.create_task(send_waku_msg(node, args.msg_size_kbytes, args.pubsub_topic,
+                                                     args.content_topic, args.debug))
             print(f"Message sent to {node} at {time.strftime('%H:%M:%S')}")
             background_tasks.add(task)
             task.add_done_callback(background_tasks.discard)
@@ -61,6 +80,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('-n', '--nodes', type=int, help='Number of nodes')
+    parser.add_argument('--debug', default=False, type=bool)
     parser.add_argument('-c', '--content-topic', type=str, help='content topic', default="kubekube")
     parser.add_argument('-p', '--pubsub-topic', type=str, help='pubsub topic',
                         default="/waku/2/kubetopic")

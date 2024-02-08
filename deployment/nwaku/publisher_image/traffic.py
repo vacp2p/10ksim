@@ -10,17 +10,17 @@ from itertools import cycle
 
 
 def check_dns_time(node: str):
-    name_to_resolve = node.split(":")[0]
+    name_to_resolve = node.split(":")[1]
 
     s_time = time.time()
 
-    ip_addr = socket.gethostbyname(name_to_resolve)
+    ip_addr = socket.gethostbyname(name_to_resolve[2:])
 
     elapsed_ms = (time.time() - s_time) * 1000
 
     print(f"DNS Response took {elapsed_ms} ms")
 
-    return f"{ip_addr}:{node.split(":")[1]}"
+    return f"http://{ip_addr}:{node.split(':')[2]}"
 
 
 async def send_waku_msg(node_address, kbytes, pubsub_topic, content_topic, debug):

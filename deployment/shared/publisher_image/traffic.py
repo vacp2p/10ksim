@@ -69,7 +69,7 @@ async def inject_message(background_tasks: set, args_namespace: argparse.Namespa
     task.add_done_callback(background_tasks.discard)
 
 
-async def main(nodes: cycle[str], args_namespace: argparse.Namespace) -> None:
+async def main(nodes: cycle, args_namespace: argparse.Namespace) -> None:
     background_tasks = set()
     while True:
         for node in nodes:
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('-n', '--nodes', type=int, help='Number of nodes')
-    parser.add_argument('-d', '--debug', action='store_true',
+    parser.add_argument('--debug', action='store_true',
                         help='To show DNS resolve times')
     parser.add_argument('-c', '--content-topic', type=str, help='content topic',
                         default="kubekube")

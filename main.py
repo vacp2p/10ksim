@@ -14,8 +14,8 @@ def main():
 
     v1 = client.CoreV1Api()
 
-    scrapper = Scrapper(url, namespace, metrics)
-    scrapper.make_queries()
+    scrapper = Scrapper(url, namespace, "test/", metrics)
+    scrapper.query_and_dump_metrics()
 
 
 if __name__ == '__main__':

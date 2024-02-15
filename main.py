@@ -1,8 +1,8 @@
 # Python Imports
+import src.logging.logger
 from kubernetes import client, config
 
 # Project Imports
-
 from src.metrics.scrapper import Scrapper
 
 
@@ -10,7 +10,7 @@ def main():
     config.load_kube_config("your_kubeconfig.yaml")
     url = "your_url"
     namespace = "'zerotesting'"
-    metrics = ["container_network_receive_bytes_total", "container_network_sent_bytes_total"]
+    metrics = ["container_network_receive_bytes_total", "container_network_transmit_bytes_total"]
 
     v1 = client.CoreV1Api()
 

@@ -70,14 +70,14 @@ class Scrapper:
 
     def _prepare_path(self, metric: str) -> Result[Path, str]:
         output_file = f'{metric}.csv'
-        output_dir = Path(self._out_folder + output_file)
+        output_dir = Path(self._out_folder)
 
         try:
-            output_dir.mkdir(parents=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             return Err(f'Error creating {output_dir}. {e}')
 
-        return Ok(output_dir)
+        return Ok(output_dir / output_file)
 
     def _create_dataframe_from_data(self, data: Dict) -> pd.DataFrame:
         final_df = pd.DataFrame()
@@ -109,13 +109,17 @@ class Scrapper:
         def get_default_format_id(val):
             return int(val.split('-')[1].split('_')[0])
 
-        columns_without_nodes = []
-        columns_without_bootstrap = []
-        nodes = [item if item.startswith('nodes') else columns_without_nodes.append(item)
-                 for item in column_names]
-        bootstrap = [item if item.startswith('bootstrap') else columns_without_bootstrap.append(item)
-                     for item in columns_without_nodes]
+        nodes = []
+        bootstrap = []
+        others = []
+        for column in column_names:
+            if column.startswith('nodes'):
+                nodes.append(column)
+            elif column.startswith('bootstrap'):
+                bootstrap.append(column)
+            else:
+                others.append(column)
         nodes.sort(key=get_default_format_id)
         bootstrap.sort(key=get_default_format_id)
 
-        return list(chain(columns_without_bootstrap, bootstrap, nodes))
+        return list(chain(others, bootstrap, nodes))

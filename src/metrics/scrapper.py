@@ -31,6 +31,7 @@ class Scrapper:
             result = self._make_query(promql)
             if result.is_err():
                 logger.warning(f'Error querying {metric}. {result.err_value}')
+                continue
 
             response = result.ok_value
             logger.info(f'Response: {response.status_code}')

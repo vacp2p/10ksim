@@ -82,7 +82,7 @@ class Scrapper:
     def _create_dataframe_from_data(self, data: Dict) -> pd.DataFrame:
         final_df = pd.DataFrame()
         for pod_result_dict in data['result']:
-            column_name = pod_result_dict['metric']['pod'] + '_' + pod_result_dict['metric']['node']
+column_name = f"{pod_result_dict['metric']['pod']}_{pod_result_dict['metric']['node']}"
             values = pod_result_dict['values']
 
             pod_df = self._create_pod_df(column_name, values)

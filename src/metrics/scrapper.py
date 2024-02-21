@@ -10,23 +10,25 @@ from pathlib import Path
 # Project Imports
 from src.metrics import scrape_utils
 from result import Ok, Err, Result
+from src.utils.file_utils import read_yaml_file
 
 logger = logging.getLogger(__name__)
 
 
 class Scrapper:
-    def __init__(self, url: str, namespace: str, out_folder: str, metrics: List):
+    def __init__(self, url: str, query_config_file: str, out_folder: str):
         self._url = url
-        self._namespace = namespace
+        self._query_config_file = query_config_file
         self._out_folder = out_folder
-        self._metrics = metrics
         # TODO make interval match value in cluster
-        self._template = 'irate($metric{namespace=$namespace}[3m])'
 
     def query_and_dump_metrics(self):
-        for metric in self._metrics:
+        query_config = read_yaml_file(self._query_config_file)
+
+        for metric_dict_item in query_config['metrics_to_scrape']:
+            metric, column_name = next(iter(metric_dict_item.items()))
             logger.info(f'Querying {metric}')
-            promql = self._create_query(metric)
+            promql = self._create_query(metric, query_config['scrape_config'])
 
             result = self._make_query(promql)
             if result.is_err():
@@ -38,12 +40,14 @@ class Scrapper:
             data = response.json()['data']
 
             logger.info(f'Dumping {metric} data to .csv')
-            self._dump_data(metric, data)
+            self._dump_data(metric, column_name, data)
 
-    def _create_query(self, metric: str) -> str:
-        query = self._template.replace('$metric', metric)
-        query = query.replace('$namespace', self._namespace)
-        promql = scrape_utils.create_promql(self._url, query, 1, 60)
+    def _create_query(self, metric: str, scrape_config: Dict) -> str:
+        if '__rate_interval' in metric:
+            metric = metric.replace('$__rate_interval', scrape_config['$__rate_interval'])
+        promql = scrape_utils.create_promql(self._url, metric,
+                                            scrape_config['until_hours_ago'],
+                                            scrape_config['step'])
 
         return promql
 
@@ -57,8 +61,8 @@ class Scrapper:
             return Ok(response)
         return Err(f'Error in query. Status code {response.status_code}. {response.content}')
 
-    def _dump_data(self, metric: str, data: Dict):
-        df = self._create_dataframe_from_data(data)
+    def _dump_data(self, metric: str, column_name: str, data: Dict):
+        df = self._create_dataframe_from_data(data, column_name)
         df = self._sort_dataframe(df)
 
         result = self._prepare_path(metric)
@@ -80,13 +84,15 @@ class Scrapper:
 
         return Ok(output_dir / output_file)
 
-    def _create_dataframe_from_data(self, data: Dict) -> pd.DataFrame:
+    def _create_dataframe_from_data(self, data: Dict, column_name: str) -> pd.DataFrame:
         final_df = pd.DataFrame()
         for pod_result_dict in data['result']:
-            column_name = f"{pod_result_dict['metric']['pod']}_{pod_result_dict['metric']['node']}"
+            column_name_items = column_name.split('-')
+            metric_result_info = pod_result_dict['metric']
+            result_string = '_'.join(metric_result_info[key] for key in column_name_items)
             values = pod_result_dict['values']
 
-            pod_df = self._create_pod_df(column_name, values)
+            pod_df = self._create_pod_df(result_string, values)
 
             final_df = pd.merge(final_df, pod_df, how='outer', left_index=True, right_index=True)
 

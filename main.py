@@ -7,8 +7,8 @@ from src.metrics.scrapper import Scrapper
 
 
 def main():
-    namespace = "'zerotesting'"
-    metrics = ["container_network_receive_bytes_total", "container_network_transmit_bytes_total"]
+    config.load_kube_config("your_kubeconfig.yaml")
+    url = "your_url"
     scrape_config = "scrape.yaml"
 
     v1 = client.CoreV1Api()

@@ -1,5 +1,5 @@
 # Python Imports
-import src.logging.logger
+import src.logger.logger
 from kubernetes import client, config
 
 # Project Imports

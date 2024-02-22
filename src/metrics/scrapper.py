@@ -1,16 +1,15 @@
 # Python Imports
-import requests
 import logging
 import pandas as pd
 from itertools import chain
 from typing import List, Dict
-from requests import Response
 from pathlib import Path
 
 # Project Imports
 from src.metrics import scrape_utils
 from result import Ok, Err, Result
 from src.utils.file_utils import read_yaml_file
+from src.utils.queries import get_query_data
 
 logger = logging.getLogger(__name__)
 
@@ -20,27 +19,27 @@ class Scrapper:
         self._url = url
         self._query_config_file = query_config_file
         self._out_folder = out_folder
+        self._set_query_config()
         # TODO make interval match value in cluster
 
     def query_and_dump_metrics(self):
-        query_config = read_yaml_file(self._query_config_file)
-
-        for metric_dict_item in query_config['metrics_to_scrape']:
+        for metric_dict_item in self._query_config['metrics_to_scrape']:
             metric, column_name = next(iter(metric_dict_item.items()))
             logger.info(f'Querying {metric}')
-            promql = self._create_query(metric, query_config['scrape_config'])
+            promql = self._create_query(metric, self._query_config['scrape_config'])
 
-            result = self._make_query(promql)
-            if result.is_err():
-                logger.warning(f'Error querying {metric}. {result.err_value}')
-                continue
-
-            response = result.ok_value
-            logger.info(f'Response: {response.status_code}')
-            data = response.json()['data']
+            match get_query_data(promql):
+                case Ok(data):
+                    logger.info(f'Successfully extracted {metric} data from response')
+                case Err(err):
+                    logger.info(err)
+                    continue
 
             logger.info(f'Dumping {metric} data to .csv')
             self._dump_data(metric, column_name, data)
+
+    def _set_query_config(self):
+        self._query_config = read_yaml_file(self._query_config_file)
 
     def _create_query(self, metric: str, scrape_config: Dict) -> str:
         if '__rate_interval' in metric:
@@ -51,24 +50,14 @@ class Scrapper:
 
         return promql
 
-    def _make_query(self, promql: str) -> Result[Response, str]:
-        try:
-            response = requests.get(promql, timeout=30)
-        except requests.exceptions.Timeout:
-            return Err(f'Timeout error.')
-
-        if response.ok:
-            return Ok(response)
-        return Err(f'Error in query. Status code {response.status_code}. {response.content}')
-
     def _dump_data(self, metric: str, column_name: str, data: Dict):
-        df = self._create_dataframe_from_data(data, column_name)
-        df = self._sort_dataframe(df)
-
         result = self._prepare_path(metric)
         if result.is_err():
             logger.error(f'{result.err_value}')
             exit(1)
+
+        df = self._create_dataframe_from_data(data, column_name)
+        df = self._sort_dataframe(df)
 
         df.to_csv(result.ok_value)
         logger.info(f'{metric} data dumped')
@@ -98,13 +87,13 @@ class Scrapper:
 
         return final_df
 
-    def _sort_dataframe(self, df) -> pd.DataFrame:
+    def _sort_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         columns = self._order(df.columns.tolist())
         df = df[columns]
 
         return df
 
-    def _create_pod_df(self, column_name, values) -> pd.DataFrame:
+    def _create_pod_df(self, column_name: str, values: List) -> pd.DataFrame:
         pod_df = pd.DataFrame(values, columns=['Unix Timestamp', column_name])
         pod_df['Unix Timestamp'] = pd.to_datetime(pod_df['Unix Timestamp'], unit='s')
         pod_df.set_index('Unix Timestamp', inplace=True)

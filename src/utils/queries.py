@@ -18,4 +18,5 @@ def get_query_data(request: str) -> Result[Dict, str]:
         logger.info(f'Response: {response.status_code}')
         data = response.json()['data']
         return Ok(data)
+
     return Err(f'Error in query. Status code {response.status_code}. {response.content}')

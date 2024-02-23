@@ -305,3 +305,125 @@ class TestScrapper(unittest.TestCase):
         result = test_scrapper._prepare_path('metric1')
 
         self.assertIsInstance(result, Err)
+
+    def test__create_dataframe_from_data(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [2, 5], [3, 5],
+                                                                          [4, 5], [5, 5]]}]}
+
+        result = test_scrapper._create_dataframe_from_data(data, 'instance')
+
+        expected_data = {
+            'Unix Timestamp': pd.to_datetime(
+                ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
+                 '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
+            'nodes-1': [5] * 5
+        }
+        expected_df = pd.DataFrame(expected_data)
+        expected_df.set_index('Unix Timestamp', inplace=True)
+
+        self.assertTrue(result.equals(expected_df))
+
+    def test__create_dataframe_from_data_multiple(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [2, 5], [3, 5],
+                                                                          [4, 5], [5, 5]]},
+                           {'metric': {'instance': 'nodes-2'}, 'values': [[1, 6], [2, 6], [3, 6],
+                                                                          [4, 6], [5, 6]]}
+                           ]}
+
+        result = test_scrapper._create_dataframe_from_data(data, 'instance')
+
+        expected_data = {
+            'Unix Timestamp': pd.to_datetime(
+                ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
+                 '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
+            'nodes-1': [5] * 5,
+            'nodes-2': [6] * 5
+        }
+        expected_df = pd.DataFrame(expected_data)
+        expected_df.set_index('Unix Timestamp', inplace=True)
+
+        self.assertTrue(result.equals(expected_df))
+
+    def test__create_dataframe_from_data_not_matching_times(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [3, 5], [5, 5]]},
+                           {'metric': {'instance': 'nodes-2'}, 'values': [[1, 6], [2, 6], [4, 6]]}
+                           ]}
+
+        result = test_scrapper._create_dataframe_from_data(data, 'instance')
+
+        expected_data = {
+            'Unix Timestamp': pd.to_datetime(
+                ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
+                 '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
+            'nodes-1': [5, None, 5, None, 5],
+            'nodes-2': [6, 6, None, 6, None]
+        }
+        expected_df = pd.DataFrame(expected_data)
+        expected_df.set_index('Unix Timestamp', inplace=True)
+
+        self.assertTrue(result.equals(expected_df))
+
+    def test__sort_dataframe(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        data = {'result': [{'metric': {'instance': 'nodes-4'}, 'values': [[1, 5], [2, 5], [3, 5],
+                                                                          [4, 5], [5, 5]]},
+                           {'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [2, 5], [3, 5],
+                                                                          [4, 5], [5, 5]]},
+                           {'metric': {'instance': 'nodes-3'}, 'values': [[1, 5], [2, 5], [3, 5],
+                                                                          [4, 5], [5, 5]]}
+                           ]}
+
+        df = test_scrapper._create_dataframe_from_data(data, 'instance')
+
+        result = test_scrapper._sort_dataframe(df)
+
+        expected_columns = ['nodes-1', 'nodes-3', 'nodes-4']
+
+        self.assertEqual(expected_columns, result.columns.tolist())
+
+    def test__create_pod_df(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        values = [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5]]
+
+        result = test_scrapper._create_pod_df('nodes-1', values)
+
+        expected_data = {
+            'Unix Timestamp': pd.to_datetime(
+                ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
+                 '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
+            'nodes-1': [5] * 5
+        }
+        expected_df = pd.DataFrame(expected_data)
+        expected_df.set_index('Unix Timestamp', inplace=True)
+
+        self.assertTrue(result.equals(expected_df))
+
+    def test__order(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        columns = ['nodes-4', 'nodes-1', 'nodes-3']
+
+        result = test_scrapper._order(columns)
+
+        expected_columns = ['nodes-1', 'nodes-3', 'nodes-4']
+
+        self.assertEqual(expected_columns, result)
+
+    def test__order_bootstrap(self, _mock_get_query_data):
+        test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
+
+        columns = ['nodes-4', 'nodes-1', 'nodes-3', 'bootstrap-2']
+
+        result = test_scrapper._order(columns)
+
+        expected_columns = ['bootstrap-2', 'nodes-1', 'nodes-3', 'nodes-4']
+
+        self.assertEqual(expected_columns, result)

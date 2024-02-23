@@ -4,7 +4,7 @@ import os
 import unittest
 import logging
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from result import Ok, Err
 import pandas as pd
 
@@ -21,7 +21,7 @@ class TestScrapper(unittest.TestCase):
     def tearDownClass(cls):
         os.rmdir('test_results')
 
-    def test_query_and_dump_metrics_single(self, mock_get_query_data):
+    def test_query_and_dump_metrics_single(self, mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -50,7 +50,7 @@ class TestScrapper(unittest.TestCase):
 
         os.remove('test_results/metric1.csv')
 
-    def test_query_and_dump_metrics_multiple_column(self, mock_get_query_data):
+    def test_query_and_dump_metrics_multiple_column(self, mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -82,7 +82,7 @@ class TestScrapper(unittest.TestCase):
 
         os.remove('test_results/metric1.csv')
 
-    def test_query_and_dump_metrics_multiple_column_unordered(self, mock_get_query_data):
+    def test_query_and_dump_metrics_multiple_column_unordered(self, mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -114,7 +114,7 @@ class TestScrapper(unittest.TestCase):
 
         os.remove('test_results/metric1.csv')
 
-    def test_query_and_dump_metrics_multiple_data(self, mock_get_query_data):
+    def test_query_and_dump_metrics_multiple_data(self, mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "test_scrape.yaml",
                                           "test_results/")
@@ -171,7 +171,7 @@ class TestScrapper(unittest.TestCase):
         os.remove('test_results/metric2[$__rate_interval]).csv')
 
     @patch('src.metrics.scrapper.Scrapper._dump_data')
-    def test_query_and_dump_metrics_multiple_fail(self, mock_dump, mock_get_query_data):
+    def test_query_and_dump_metrics_multiple_fail(self, mock_dump: MagicMock, mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "test_scrape.yaml",
                                           "test_results/")
@@ -185,7 +185,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertEqual(0, mock_dump.call_count)
 
-    def test__set_query_config(self, _mock_get_query_data):
+    def test__set_query_config(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -199,7 +199,7 @@ class TestScrapper(unittest.TestCase):
         self.assertEqual(expected_config, test_scrapper._query_config)
 
     @patch('src.metrics.scrape_utils._get_datetime_now')
-    def test__create_query(self, mock_datetime_now, _mock_get_query_data):
+    def test__create_query(self, mock_datetime_now: MagicMock, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -219,7 +219,7 @@ class TestScrapper(unittest.TestCase):
         self.assertEqual(expected_result, result)
 
     @patch('src.metrics.scrape_utils._get_datetime_now')
-    def test__create_query_with_rate(self, mock_datetime_now, _mock_get_query_data):
+    def test__create_query_with_rate(self, mock_datetime_now: MagicMock, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -239,7 +239,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertEqual(expected_result, result)
 
-    def test__dump_data(self, _mock_get_query_data):
+    def test__dump_data(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           "single_test_scrape.yaml",
                                           "test_results/")
@@ -266,7 +266,7 @@ class TestScrapper(unittest.TestCase):
         os.remove('test_results/metric1.csv')
 
     @patch('src.metrics.scrapper.Scrapper._prepare_path')
-    def test__dump_data_err(self, mock_prepare_path, _mock_get_query_data):
+    def test__dump_data_err(self, mock_prepare_path: MagicMock, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "/")
 
         mock_prepare_path.return_value = Err("Error")
@@ -277,7 +277,7 @@ class TestScrapper(unittest.TestCase):
 
             self.assertEqual(cm.exception.code, 1)
 
-    def test__prepare_path(self, _mock_get_query_data):
+    def test__prepare_path(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "test_path/")
 
         result = test_scrapper._prepare_path('metric1')
@@ -286,7 +286,7 @@ class TestScrapper(unittest.TestCase):
 
         os.rmdir('test_path/')
 
-    def test__prepare_path_multiple(self, _mock_get_query_data):
+    def test__prepare_path_multiple(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "test_path_1/test_path_2")
 
         result = test_scrapper._prepare_path('metric1')
@@ -297,7 +297,7 @@ class TestScrapper(unittest.TestCase):
         os.rmdir('test_path_1')
 
     @patch('src.metrics.scrapper.Path.mkdir')
-    def test__prepare_path_err(self, mock_mkdir, _mock_get_query_data):
+    def test__prepare_path_err(self, mock_mkdir: MagicMock, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "test_path_1/test_path_2")
 
         mock_mkdir.side_effect = OSError("Error")
@@ -306,7 +306,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertIsInstance(result, Err)
 
-    def test__create_dataframe_from_data(self, _mock_get_query_data):
+    def test__create_dataframe_from_data(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [2, 5], [3, 5],
@@ -325,7 +325,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertTrue(result.equals(expected_df))
 
-    def test__create_dataframe_from_data_multiple(self, _mock_get_query_data):
+    def test__create_dataframe_from_data_multiple(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [2, 5], [3, 5],
@@ -348,7 +348,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertTrue(result.equals(expected_df))
 
-    def test__create_dataframe_from_data_not_matching_times(self, _mock_get_query_data):
+    def test__create_dataframe_from_data_not_matching_times(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         data = {'result': [{'metric': {'instance': 'nodes-1'}, 'values': [[1, 5], [3, 5], [5, 5]]},
@@ -369,7 +369,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertTrue(result.equals(expected_df))
 
-    def test__sort_dataframe(self, _mock_get_query_data):
+    def test__sort_dataframe(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         data = {'result': [{'metric': {'instance': 'nodes-4'}, 'values': [[1, 5], [2, 5], [3, 5],
@@ -388,7 +388,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertEqual(expected_columns, result.columns.tolist())
 
-    def test__create_pod_df(self, _mock_get_query_data):
+    def test__create_pod_df(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         values = [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5]]
@@ -406,7 +406,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertTrue(result.equals(expected_df))
 
-    def test__order(self, _mock_get_query_data):
+    def test__order(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         columns = ['nodes-4', 'nodes-1', 'nodes-3']
@@ -417,7 +417,7 @@ class TestScrapper(unittest.TestCase):
 
         self.assertEqual(expected_columns, result)
 
-    def test__order_bootstrap(self, _mock_get_query_data):
+    def test__order_bootstrap(self, _mock_get_query_data: MagicMock):
         test_scrapper = scrapper.Scrapper("", "single_test_scrape.yaml", "")
 
         columns = ['nodes-4', 'nodes-1', 'nodes-3', 'bootstrap-2']

@@ -1,7 +1,7 @@
 # Python Imports
 import unittest
 import datetime
-from unittest.mock import patch, Mock
+from unittest.mock import patch, MagicMock
 
 # Project Imports
 from src.metrics.scrape_utils import create_promql
@@ -10,7 +10,7 @@ from src.metrics.scrape_utils import create_promql
 class TestScrapeUtils(unittest.TestCase):
 
     @patch('src.metrics.scrape_utils._get_datetime_now')
-    def test_create_promql(self, mock_datetime_now):
+    def test_create_promql(self, mock_datetime_now: MagicMock):
         address = "0.0.0.0:9090/api/"
         query = "bandwidth"
         hours_passed = 1

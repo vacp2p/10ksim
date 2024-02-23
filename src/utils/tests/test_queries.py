@@ -1,8 +1,7 @@
 # Python Imports
 import unittest
-from unittest.mock import patch, MagicMock
-
 import requests.exceptions
+from unittest.mock import patch, MagicMock
 
 # Project Imports
 from src.utils.queries import get_query_data

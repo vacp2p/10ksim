@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class Scrapper:
     def __init__(self, url: str, query_config_file: str, out_folder: str):
         self._url = url
+        self._query_config = None
         self._query_config_file = query_config_file
         self._out_folder = out_folder
         self._set_query_config()

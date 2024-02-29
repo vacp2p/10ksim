@@ -11,8 +11,7 @@ from itertools import cycle
 async def check_dns_time(node: str) -> str:
     start_time = time.time()
     name, port = node.split(":")
-    addrinfo = socket.getaddrinfo(name, int(port), family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
-    ip_address = addrinfo[0][4][0]
+    ip_address = socket.gethostbyname(name)
     elapsed = (time.time() - start_time) * 1000
     print(f"{name} DNS Response took {elapsed} ms")
     return f"{ip_address}:{port}"
@@ -50,11 +49,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-c', '--content-topic', type=str, help='Content topic', default="kubekube")
     parser.add_argument('-p', '--pubsub-topic', type=str, help='Pubsub topic', default="/waku/2/kubetopic")
     parser.add_argument('-s', '--msg-size-kbytes', type=int, help='Message size in kBytes', default=10)
-    parser.add_argument('-d', '--delay-seconds', type=int, help='Delay between messages', default=1)
+    parser.add_argument('-d', '--delay-seconds', type=float, help='Delay between messages', default=1)
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
-    nodes_cycle = cycle([f"nodes-{i}:8645" for i in range(args.nodes)])
+    nodes_cycle = cycle([f"nodes-{i}.zerotesting-service:8645" for i in range(args.nodes)])
     print("Starting message injection to nodes")
     asyncio.run(main(nodes_cycle, args))

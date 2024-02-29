@@ -11,10 +11,11 @@ from itertools import cycle
 async def check_dns_time(node: str) -> str:
     start_time = time.time()
     name, port = node.split(":")
-    ip_address = socket.gethostbyname(name)
+    addrinfo = socket.getaddrinfo(name, int(port), family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+    ip_address = addrinfo[0][4][0]
     elapsed = (time.time() - start_time) * 1000
     print(f"{name} DNS Response took {elapsed} ms")
-    return f"http://{ip_address}:{port}"
+    return f"{ip_address}:{port}"
 
 async def send_waku_msg(node: str, kbytes: int, pubsub_topic: str, content_topic: str, debug: bool):
     payload = base64.b64encode(os.urandom(kbytes * 1024)).decode('ascii').rstrip("=")

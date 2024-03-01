@@ -1,0 +1,7 @@
+scrape_config:
+  $__rate_interval: "60s"
+  step: "60s"
+  until_hours_ago: 1
+metrics_to_scrape:
+  - "metric1": "instance"
+  - "metric2[$__rate_interval])": "instance-direction"

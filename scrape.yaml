@@ -12,3 +12,10 @@ metrics_to_scrape:
   - "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
   - "sum by(job) (libp2p_gossipsub_low_peers_topics)" : "job"
   - "sum by(job) (libp2p_gossipsub_healthy_peers_topics)": "job"
+plotting:
+  "bandwidth":
+    "folder":
+      - "test/nwaku/1000-1KB-1msgs/"
+    "data":
+      - "libp2p-rx"
+      - "libp2p-tx"

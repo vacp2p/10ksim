@@ -46,6 +46,17 @@ spec:
       containers:
         - name: waku
           image: harbor.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - wget -O - http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 450.0) {print "Metric below 450, success"; exit 0} else {print "Metric not below 450, failure"; exit 1}}'
+            successThreshold: 3
+            initialDelaySeconds: 1
+            periodSeconds: 3
+            failureThreshold: 1
+            timeoutSeconds: 5
           ports:
             - containerPort: 8545
             - containerPort: 8008

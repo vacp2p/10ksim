@@ -4,7 +4,7 @@ metadata:
   name: midstrap
   namespace: zerotesting
 spec:
-  replicas: 50
+  replicas: 30
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-service
   selector:
@@ -67,10 +67,10 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - wget -O - http://127.0.0.1:8008/metrics | grep -q 'libp2p_gossipsub_healthy_peers_topics 1.0'
-            successThreshold: 3
+                - wget -O - --retry-connrefused http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{print "Found gossipsub:", $0; if ($2 == 1.0) {gossipsub_success=1} else {exit 1}} !/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 450.0) {peers_success=1} else {exit 1}} END{if (!gossipsub_success || !peers_success) {print "Not all conditions met"; exit 1}}'
+            successThreshold: 1
             initialDelaySeconds: 5
-            periodSeconds: 3
+            periodSeconds: 1
             failureThreshold: 1
             timeoutSeconds: 5
           resources:

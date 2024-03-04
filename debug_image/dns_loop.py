@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import socket
+import time
 import argparse
 from itertools import cycle
 
@@ -39,15 +40,14 @@ def main(dns_servers):
 
             # Print counts every iteration to show progress
             print(f"Processed {i + 1}/{args.nodes} hostnames, Success: {success_count}, Failures: {fail_count}")
-
-        # Print totals after every N attempts
-        print(f"Round completed. Total successful DNS lookups: {success_count}, Total failed DNS lookups: {fail_count}")
+            time.sleep(args.delay)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Perform DNS lookups with specified target DNS server or system default")
     parser.add_argument("--target", help="IP address of the target DNS server", nargs='*', default=[])
     parser.add_argument("--accept-input", action="store_true", help="Accept a list of IP addresses from user input")
     parser.add_argument("--nodes", help="Number of nodes to resolve", type=int, default=1000)
+    parser.add_argument("--delay", help="Delay in seconds", type=float, default=0.4)
     args = parser.parse_args()
 
     dns_servers = args.target
@@ -60,3 +60,4 @@ if __name__ == "__main__":
         print("No specific DNS servers provided; using system default DNS settings.")
     
     main(dns_servers)
+

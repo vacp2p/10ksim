@@ -1,13 +1,13 @@
 # Python Imports
 import requests
 from typing import List
-import logging
+import logger
 
 # Project Imports
-import src.logging.logger
+import src.logger.logger
 from src.metrics import scrape_utils
 
-logger = logging.getLogger(__name__)
+logger = logger.getLogger(__name__)
 
 
 class Scrapper:

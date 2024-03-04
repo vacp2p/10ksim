@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bootstrap
+  namespace: zerotesting
+spec:
+  replicas: 3
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-service
+  selector:
+    matchLabels:
+      app: zerotenkay
+  template:
+    metadata:
+      labels:
+        app: zerotenkay
+    spec:
+      tolerations:
+        - key: "zerotesting"
+          operator: "Equal"
+          value: "fragment"
+          effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - zerotenkay
+                topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "zerotesting"
+                    operator: "In"
+                    values:
+                      - "fragment"
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+      containers:
+        - name: waku
+          image: harbor.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
+          ports:
+            - containerPort: 8545
+            - containerPort: 8008
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command:
+            - sh
+            - -c
+            - /usr/bin/wakunode --relay=true --rpc-admin=true  --keep-alive=true --max-connections=12500 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0  --nat=extip:$IP --pubsub-topic="/waku/2/kubetopic"
+

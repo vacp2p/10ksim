@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-debug
+  namespace: zerotesting
+  labels:
+    app: dns-debug
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dns-debug
+  template:
+    metadata:
+      labels:
+        app: dns-debug
+    spec:
+      containers:
+      - name: dns-debug-container
+        image: harbor.riff.cc/localmirror/zorlin/dnsdebug:latest
+        imagePullPolicy: Always
+        #command: ["/app/dns_loop.py"]
+        #args: ["--target", "10.42.63.130", "--nodes", "1000", "--delay", "0.1"]
+        command: ["/bin/sleep"]
+        args: ["14400"]
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local

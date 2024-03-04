@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: publisher
+  namespace: zerotesting
+  labels:
+    app: zerotenkay
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "zerotesting"
+                operator: "NotIn"
+                values:
+                  - "false"
+  dnsConfig:
+    searches:
+      - zerotesting-service.zerotesting.svc.cluster.local
+  containers:
+    - name: publisher-container
+      image: harbor.riff.cc/localmirror/zorlin/waku-publisher:experimental
+      command:
+        - sh
+        - -c
+        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=1 --debug

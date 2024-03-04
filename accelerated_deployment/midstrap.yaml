@@ -67,7 +67,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - wget -O - --retry-connrefused http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{print "Found gossipsub:", $0; if ($2 == 1.0) {gossipsub_success=1} else {exit 1}} !/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 450.0) {peers_success=1} else {exit 1}} END{if (!gossipsub_success || !peers_success) {print "Not all conditions met"; exit 1}}'
+                - wget -O - --retry-connrefused http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{print "Found gossipsub:", $0; if ($2 == 1.0) {gossipsub_success=1} else {exit 1}} !/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 280.0) {peers_success=1} else {exit 1}} END{if (!gossipsub_success || !peers_success) {print "Not all conditions met"; exit 1}}'
             successThreshold: 1
             initialDelaySeconds: 5
             periodSeconds: 1
@@ -91,4 +91,4 @@ spec:
             - |
               . /etc/enr/enr.env
               echo $ENR1 $ENR2 $ENR3
-              /usr/bin/wakunode --relay=true --rpc-admin=true --max-connections=1250 --rpc-address=0.0.0.0 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/kubetopic"
+              /usr/bin/wakunode --relay=true --rpc-admin=true --max-connections=300 --rpc-address=0.0.0.0 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/kubetopic"

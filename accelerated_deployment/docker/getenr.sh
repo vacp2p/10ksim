@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# Number of ENRs to process, default to 3 if not specified
+num_enrs=${1:-3}
+
 # Find the IPv4 IPs of "zerotesting-service.zerotesting" using nslookup
-readarray -t pod_ips < <(nslookup zerotesting-service.zerotesting | awk '/^Address: / { print $2 }' | head -n 3)
+readarray -t pod_ips < <(nslookup zerotesting-service.zerotesting | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
 
 # Prepare the directory for ENR data
 mkdir -p /etc/enr
@@ -20,7 +23,7 @@ validate_enr() {
 # Counter for valid ENRs
 valid_enr_count=0
 
-# Get and validate the ENR data from up to three IPs
+# Get and validate the ENR data from up to the specified number of IPs
 for pod_ip in "${pod_ips[@]}"; do
     echo "Querying IP: $pod_ip"
     enr=$(wget -O - --post-data='{"jsonrpc":"2.0","method":"get_waku_v2_debug_v1_info","params":[],"id":1}' --header='Content-Type:application/json' "$pod_ip:8545" 2>/dev/null | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
@@ -31,8 +34,8 @@ for pod_ip in "${pod_ips[@]}"; do
         # Save the valid ENR to the file
         ((valid_enr_count++))
         echo "export ENR$valid_enr_count='$enr'" >> "$enr_file"
-        if [ $valid_enr_count -eq 3 ]; then
-            break # Exit loop after 3 valid ENRs
+        if [ $valid_enr_count -eq "$num_enrs" ]; then
+            break # Exit loop after the specified number of valid ENRs
         fi
     else
         echo "Invalid ENR data received from IP $pod_ip"

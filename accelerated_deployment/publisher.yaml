@@ -20,8 +20,8 @@ spec:
       - zerotesting-service.zerotesting.svc.cluster.local
   containers:
     - name: publisher-container
-      image: harbor.riff.cc/localmirror/zorlin/waku-publisher:experimental
+      image: harbor2.riff.cc/localmirror/zorlin/waku-publisher:experimental
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=1 --debug
+        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=5 --debug

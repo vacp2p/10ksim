@@ -45,18 +45,25 @@ spec:
           - zerotesting-service.zerotesting.svc.cluster.local
       containers:
         - name: waku
-          image: harbor.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
+          image: harbor2.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - wget -O - http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 450.0) {print "Metric below 450, success"; exit 0} else {print "Metric not below 450, failure"; exit 1}}'
+                - wget -O - http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 4000.0) {print "Metric below 4000, success"; exit 0} else {print "Metric not below 4000, failure"; exit 1}}'
             successThreshold: 3
             initialDelaySeconds: 1
             periodSeconds: 3
             failureThreshold: 1
             timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "10m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
           ports:
             - containerPort: 8545
             - containerPort: 8008

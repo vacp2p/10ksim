@@ -72,9 +72,9 @@ spec:
                 - /bin/sh
                 - -c
                 - >
-                  wget -O - --retry-connrefused http://127.0.0.1:8008/metrics | 
+                  wget -O - --retry-connrefused http://127.0.0.1:8008/metrics |
                   awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{
-                    print "Found gossipsub:", $0; 
+                    print "Found gossipsub:", $0;
                     if ($2 == 1.0) {
                       exit 0;  # success, healthy state
                     } else {

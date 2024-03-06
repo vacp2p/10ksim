@@ -6,14 +6,14 @@ metadata:
 spec:
   replicas: 3
   podManagementPolicy: "Parallel"
-  serviceName: zerotesting-service
+  serviceName: zerotesting-bootstrap
   selector:
     matchLabels:
-      app: zerotenkay
+      app: zerotenkay-bootstrap
   template:
     metadata:
       labels:
-        app: zerotenkay
+        app: zerotenkay-bootstrap
     spec:
       tolerations:
         - key: "zerotesting"
@@ -30,7 +30,7 @@ spec:
                     - key: app
                       operator: In
                       values:
-                        - zerotenkay
+                        - zerotenkay-bootstrap
                 topologyKey: "kubernetes.io/hostname"
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -43,6 +43,7 @@ spec:
       dnsConfig:
         searches:
           - zerotesting-service.zerotesting.svc.cluster.local
+          - zerotesting-bootstrap.zerotesting.svc.cluster.local
       containers:
         - name: waku
           image: harbor2.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst

@@ -24,4 +24,4 @@ spec:
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=5 --debug
+        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=20 --debug

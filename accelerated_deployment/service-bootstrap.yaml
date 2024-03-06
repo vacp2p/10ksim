@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zerotesting-bootstrap
+  namespace: zerotesting
+spec:
+  clusterIP: None
+  selector:
+    app: zerotenkay-bootstrap

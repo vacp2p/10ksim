@@ -3,8 +3,8 @@
 # Number of ENRs to process, default to 3 if not specified
 num_enrs=${1:-3}
 
-# Find the IPv4 IPs of "zerotesting-service.zerotesting" using nslookup
-readarray -t pod_ips < <(nslookup zerotesting-service.zerotesting | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
+# Find the IPv4 IPs of "zerotesting-bootstrap.zerotesting" using nslookup
+readarray -t pod_ips < <(nslookup zerotesting-bootstrap.zerotesting | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
 
 # Shuffle the IPs before processing them to help randomise which nodes we connect to and peer with
 # Disabled for now

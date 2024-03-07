@@ -95,9 +95,9 @@ class Scrapper:
         return df
 
     def _create_pod_df(self, column_name: str, values: List) -> pd.DataFrame:
-        pod_df = pd.DataFrame(values, columns=['Unix Timestamp', column_name])
-        pod_df['Unix Timestamp'] = pd.to_datetime(pod_df['Unix Timestamp'], unit='s')
-        pod_df.set_index('Unix Timestamp', inplace=True)
+        pod_df = pd.DataFrame(values, columns=['Time', column_name])
+        pod_df['Time'] = pd.to_datetime(pod_df['Time'], unit='s')
+        pod_df.set_index('Time', inplace=True)
 
         return pod_df
 

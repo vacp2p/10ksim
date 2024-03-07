@@ -38,7 +38,7 @@ class TestScrapper(unittest.TestCase):
         test_scrapper.query_and_dump_metrics()
 
         expected_data = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1': [5] * 5
@@ -48,7 +48,7 @@ class TestScrapper(unittest.TestCase):
 
         result = pd.read_csv('test_results/metric1.csv')
         # Convert data type since it is lost when reading from a file
-        result['Unix Timestamp'] = pd.to_datetime(result['Unix Timestamp'])
+        result['Time'] = pd.to_datetime(result['Time'])
 
         self.assertTrue(result.equals(expected_df))
 
@@ -71,7 +71,7 @@ class TestScrapper(unittest.TestCase):
         test_scrapper.query_and_dump_metrics()
 
         expected_data = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1': [5] * 5,
@@ -81,7 +81,7 @@ class TestScrapper(unittest.TestCase):
 
         result = pd.read_csv('test_results/metric1.csv')
         # Convert data type since it is lost when reading from a file
-        result['Unix Timestamp'] = pd.to_datetime(result['Unix Timestamp'])
+        result['Time'] = pd.to_datetime(result['Time'])
 
         self.assertTrue(result.equals(expected_df))
 
@@ -104,7 +104,7 @@ class TestScrapper(unittest.TestCase):
         test_scrapper.query_and_dump_metrics()
 
         expected_data = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1': [5] * 5,
@@ -114,7 +114,7 @@ class TestScrapper(unittest.TestCase):
 
         result = pd.read_csv('test_results/metric1.csv')
         # Convert data type since it is lost when reading from a file
-        result['Unix Timestamp'] = pd.to_datetime(result['Unix Timestamp'])
+        result['Time'] = pd.to_datetime(result['Time'])
 
         self.assertTrue(result.equals(expected_df))
 
@@ -145,7 +145,7 @@ class TestScrapper(unittest.TestCase):
         test_scrapper.query_and_dump_metrics()
 
         expected_data_1 = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1': [5] * 5,
@@ -154,7 +154,7 @@ class TestScrapper(unittest.TestCase):
         expected_df1 = pd.DataFrame(expected_data_1)
 
         expected_data_2 = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1_out': [5] * 5,
@@ -164,13 +164,13 @@ class TestScrapper(unittest.TestCase):
 
         result1 = pd.read_csv('test_results/metric1.csv')
         # Convert data type since it is lost when reading from a file
-        result1['Unix Timestamp'] = pd.to_datetime(result1['Unix Timestamp'])
+        result1['Time'] = pd.to_datetime(result1['Time'])
 
         self.assertTrue(result1.equals(expected_df1))
 
         result2 = pd.read_csv('test_results/metric2[$__rate_interval]).csv')
         # Convert data type since it is lost when reading from a file
-        result2['Unix Timestamp'] = pd.to_datetime(result2['Unix Timestamp'])
+        result2['Time'] = pd.to_datetime(result2['Time'])
 
         self.assertTrue(result2.equals(expected_df2))
 
@@ -263,7 +263,7 @@ class TestScrapper(unittest.TestCase):
         test_scrapper._dump_data('metric1', 'instance', data)
 
         expected_data = {
-            'Unix Timestamp': pd.to_datetime(
+            'Time': pd.to_datetime(
                 ['1970-01-01 00:00:01', '1970-01-01 00:00:02', '1970-01-01 00:00:03',
                  '1970-01-01 00:00:04', '1970-01-01 00:00:05']),
             'nodes-1': [5] * 5
@@ -272,7 +272,7 @@ class TestScrapper(unittest.TestCase):
 
         result = pd.read_csv('test_results/metric1.csv')
         # Convert data type since it is lost when reading from a file
-        result['Unix Timestamp'] = pd.to_datetime(result['Unix Timestamp'])
+        result['Time'] = pd.to_datetime(result['Time'])
 
         self.assertTrue(result.equals(expected_df))
 

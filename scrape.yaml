@@ -1,7 +1,7 @@
 scrape_config:
-  $__rate_interval: "60s"
+  $__rate_interval: "121s"
   step: "60s"
-  until_hours_ago: 1
+  until_hours_ago: 10
 metrics_to_scrape:
   - "libp2p_peers": "instance"
   - "libp2p_open_streams": "instance-type-dir"
@@ -14,7 +14,7 @@ metrics_to_scrape:
 plotting:
   "bandwidth":
     "folder":
-      - "test/nwaku/1000-1KB-1msgs/"
+      - "test/nwaku/"
     "data":
-      - "libp2p-rx"
-      - "libp2p-tx"
+      - "libp2p-in"
+      - "libp2p-out"

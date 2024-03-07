@@ -1,0 +1,13 @@
+scrape_config:
+  $__rate_interval: "60s"
+  step: "60s"
+  until_hours_ago: 1
+metrics_to_scrape:
+  - "libp2p_peers": "instance"
+  - "libp2p_open_streams": "instance-type-dir"
+  - "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])": "instance-direction"
+  - "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])": "instance-direction"
+  - "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
+  - "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
+  - "sum by(job) (libp2p_gossipsub_low_peers_topics)" : "job"
+  - "sum by(job) (libp2p_gossipsub_healthy_peers_topics)": "job"

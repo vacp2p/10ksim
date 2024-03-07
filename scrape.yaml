@@ -15,7 +15,7 @@ metrics_to_scrape:
 plotting:
   "bandwidth":
     "folder":
-      - "test/nwaku/1000-1KB-1msgs/"
+      - "test/nwaku/"
     "data":
       - "libp2p-rx"
       - "libp2p-tx"

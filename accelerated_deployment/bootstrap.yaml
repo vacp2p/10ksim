@@ -76,5 +76,5 @@ spec:
           command:
             - sh
             - -c
-            - /usr/bin/wakunode --relay=true --rpc-admin=true  --keep-alive=true --max-connections=12500 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0  --nat=extip:$IP --pubsub-topic="/waku/2/kubetopic"
+            - /usr/bin/wakunode --peer-exchange=true --relay=true --rpc-admin=true  --keep-alive=true --max-connections=12500 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --rpc-address=0.0.0.0 --metrics-server=True --metrics-server-address=0.0.0.0  --nat=extip:$IP --pubsub-topic="/waku/2/kubetopic"
 

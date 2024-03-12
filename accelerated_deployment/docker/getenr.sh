@@ -30,7 +30,8 @@ valid_enr_count=0
 # Get and validate the ENR data from up to the specified number of IPs
 for pod_ip in "${pod_ips[@]}"; do
     echo "Querying IP: $pod_ip"
-    enr=$(wget -O - --post-data='{"jsonrpc":"2.0","method":"get_waku_v2_debug_v1_info","params":[],"id":1}' --header='Content-Type:application/json' "$pod_ip:8545" 2>/dev/null | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
+    # enr=$(wget -O - --post-data='{"jsonrpc":"2.0","method":"get_waku_v2_debug_v1_info","params":[],"id":1}' --header='Content-Type:application/json' "$pod_ip:8545" 2>/dev/null | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
+    enr=$(curl -s -X GET "$pod_ip:8645/debug/v1/info" -H "accept: application/json" | jq -r '.enrUri')
 
     # Validate the ENR
     validate_enr "$enr"

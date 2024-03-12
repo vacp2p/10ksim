@@ -32,27 +32,27 @@ spec:
                       values:
                         - zerotenkay-bootstrap
                 topologyKey: "kubernetes.io/hostname"
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "zerotesting"
-                    operator: "In"
-                    values:
-                      - "fragment"
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#              - matchExpressions:
+#                  - key: "zerotesting"
+#                    operator: "In"
+#                    values:
+#                      - "fragment"
       dnsConfig:
         searches:
           - zerotesting-service.zerotesting.svc.cluster.local
           - zerotesting-bootstrap.zerotesting.svc.cluster.local
       containers:
         - name: waku
-          image: harbor2.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
+          image: harbor2.riff.cc/dockermirror/wakuorg/nwaku:v0.26.0
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - wget -O - http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 4000.0) {print "Metric below 4000, success"; exit 0} else {print "Metric not below 4000, failure"; exit 1}}'
+                - curl -s http://127.0.0.1:8008/metrics | awk '!/^#/ && /^libp2p_peers /{print "Found peers:", $0; if ($2 < 4000.0) {print "Metric below 4000, success"; exit 0} else {print "Metric not below 4000, failure"; exit 1}}'
             successThreshold: 3
             initialDelaySeconds: 1
             periodSeconds: 3

@@ -32,14 +32,14 @@ spec:
                       values:
                         - zerotenkay-bootstrap
                 topologyKey: "kubernetes.io/hostname"
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "zerotesting"
-                    operator: "In"
-                    values:
-                      - "fragment"
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#              - matchExpressions:
+#                  - key: "zerotesting"
+#                    operator: "In"
+#                    values:
+#                      - "fragment"
       dnsConfig:
         searches:
           - zerotesting-service.zerotesting.svc.cluster.local
@@ -56,7 +56,7 @@ spec:
               mountPath: /etc/enr
       containers:
         - name: waku
-          image: harbor2.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst_wget
+          image: harbor2.riff.cc/dockermirror/wakuorg/nwaku:v0.26.0
           ports:
             - containerPort: 8545
             - containerPort: 8008
@@ -69,7 +69,7 @@ spec:
                 - /bin/sh
                 - -c
                 - >
-                  wget -O - --retry-connrefused http://127.0.0.1:8008/metrics |
+                  curl -s http://127.0.0.1:8008/metrics |
                   awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{
                     print "Found gossipsub:", $0;
                     if ($2 == 1.0) {

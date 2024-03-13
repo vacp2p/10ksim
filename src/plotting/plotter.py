@@ -10,7 +10,7 @@ from typing import List, Dict
 from matplotlib import ticker
 
 # Project Imports
-from utils.file_utils import get_files_from_folder_path, get_file_name_from_path
+from src.utils.file_utils import get_files_from_folder_path, get_file_name_from_path
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -22,6 +22,7 @@ class Plotter:
 
     def create_plots(self):
         for plot_name, plot_specs in self._config.items():
+            logger.debug(f"Plotting \"{plot_name}\"")
             self._create_plot(plot_name, plot_specs)
 
     def _create_plot(self, plot_name: str, plot_specs: Dict):
@@ -89,7 +90,6 @@ class Plotter:
     def _create_subplot_paths_group(self, plot_specs: Dict) -> List:
         subplot_path = [
             ([f"{folder}{data}" for folder in plot_specs["folder"]], data) for data in plot_specs["data"]
-
         ]
 
         return subplot_path

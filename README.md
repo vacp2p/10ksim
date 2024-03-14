@@ -2,18 +2,26 @@
 
 **Python Version**: 3.11.5
 
+## Yaml config:
+
+
+
+
+
 ### Main objectives
 - [X] Automatic deployment of any P2P utils
   - [X] Deployment of 10k Gossipsub / Waku relay nodes
   - [X] Bandwidth usage per node
   - [X] Log data for analysis
 ### Secondary objectives
-- [ ] Add QoS parameter support to the 10k tool
+- [X] Add QoS parameter support to the 10k tool
 - [ ] Run further Waku protocols:
   - [ ] Filter
   - [ ] Lightpush
   - [ ] Store
   - [ ] Peer exchange
+
+
 
 ## Acknowledgment
 

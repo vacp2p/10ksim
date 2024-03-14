@@ -1,7 +1,8 @@
 scrape_config:
   $__rate_interval: "60s"
   step: "60s"
-  until_hours_ago: 1
+  start_scrape: "2024-03-12 16:24:00"
+  finish_scrape: "2024-03-12 16:30:00"
 metrics_to_scrape:
   - "metric1": "instance"
   - "metric2[$__rate_interval])": "instance-direction"

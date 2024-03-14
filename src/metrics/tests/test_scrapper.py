@@ -183,7 +183,6 @@ class TestScrapper(unittest.TestCase):
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           file_path,
                                           "test_results/")
-        file_path = os.path.join(self.current_directory, 'test_scrape.yaml')
 
         err1 = "Err1"
         err2 = "Err2"
@@ -202,52 +201,48 @@ class TestScrapper(unittest.TestCase):
 
         test_scrapper._set_query_config()
 
-        expected_config = {'scrape_config': {'until_hours_ago': 1, 'step': "60s",
+        expected_config = {'scrape_config': {'start_scrape': '2024-03-12 16:24:00',
+                                             'finish_scrape': '2024-03-12 16:30:00',
+                                             'step': '60s',
                                              '$__rate_interval': '60s'},
                            'metrics_to_scrape': [{'metric1': 'instance'}]}
 
         self.assertEqual(expected_config, test_scrapper._query_config)
 
-    @patch('src.metrics.scrape_utils._get_datetime_now')
-    def test__create_query(self, mock_datetime_now: MagicMock, _mock_get_query_data: MagicMock):
+    def test__create_query(self, _mock_get_query_data: MagicMock):
         file_path = os.path.join(self.current_directory, 'single_test_scrape.yaml')
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           file_path,
                                           "test_results/")
 
         metric = "bandwidth"
-        scrape_config = {'until_hours_ago': 1, 'step': "60s", '$__rate_interval': '60s'}
-
-        return_value_first = datetime.datetime(2024, 2, 22, 11, 0, 0)
-        return_value_second = datetime.datetime(2024, 2, 22, 12, 0, 0)
-        mock_datetime_now.side_effect = [return_value_first, return_value_second]
+        scrape_config = {'start_scrape': '2024-03-12 16:24:00',
+                         'finish_scrape': '2024-03-12 16:30:00',
+                         'step': "60s", '$__rate_interval': '60s'}
 
         result = test_scrapper._create_query(metric, scrape_config)
 
-        expected_result = ('http://myurl:9090/api/v1/query_range?query=bandwidth&start=1708592400'
-                           '.0&end=1708599600.0&step=60s')
+        expected_result = ('http://myurl:9090/api/v1/query_range?query=bandwidth&'
+                           'start=1710257040.0&end=1710257400.0&step=60s')
 
         self.assertEqual(expected_result, result)
 
-    @patch('src.metrics.scrape_utils._get_datetime_now')
-    def test__create_query_with_rate(self, mock_datetime_now: MagicMock, _mock_get_query_data: MagicMock):
+    def test__create_query_with_rate(self, _mock_get_query_data: MagicMock):
         file_path = os.path.join(self.current_directory, 'single_test_scrape.yaml')
         test_scrapper = scrapper.Scrapper("http://myurl:9090/api/v1/",
                                           file_path,
                                           "test_results/")
 
         metric = "bandwidth[$__rate_interval]"
-        scrape_config = {'until_hours_ago': 1, 'step': "60s", '$__rate_interval': '60s'}
-
-        return_value_first = datetime.datetime(2024, 2, 22, 11, 0, 0)
-        return_value_second = datetime.datetime(2024, 2, 22, 12, 0, 0)
-        mock_datetime_now.side_effect = [return_value_first, return_value_second]
+        scrape_config = {'start_scrape': '2024-03-12 16:24:00',
+                         'finish_scrape': '2024-03-12 16:30:00',
+                         'step': "60s", '$__rate_interval': '60s'}
 
         result = test_scrapper._create_query(metric, scrape_config)
 
         expected_result = (
-            'http://myurl:9090/api/v1/query_range?query=bandwidth[60s]&start=1708592400'
-            '.0&end=1708599600.0&step=60s')
+            'http://myurl:9090/api/v1/query_range?query=bandwidth[60s]&'
+            'start=1710257040.0&end=1710257400.0&step=60s')
 
         self.assertEqual(expected_result, result)
 

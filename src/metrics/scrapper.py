@@ -46,7 +46,8 @@ class Scrapper:
         if '__rate_interval' in metric:
             metric = metric.replace('$__rate_interval', scrape_config['$__rate_interval'])
         promql = scrape_utils.create_promql(self._url, metric,
-                                            scrape_config['until_hours_ago'],
+                                            scrape_config['start_scrape'],
+                                            scrape_config['finish_scrape'],
                                             scrape_config['step'])
 
         return promql

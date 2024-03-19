@@ -1,36 +1,41 @@
 # Python Imports
 import logging
+import socket
 import pandas as pd
 from itertools import chain
 from typing import List, Dict
 from pathlib import Path
+from kubernetes.client import CoreV1Api
+from result import Ok, Err, Result
 
 # Project Imports
 from src.metrics import scrape_utils
-from result import Ok, Err, Result
+from src.metrics import kubernetes
 from src.utils.file_utils import read_yaml_file
-from src.utils.queries import get_query_data
 
 logger = logging.getLogger(__name__)
 
 
 class Scrapper:
-    def __init__(self, url: str, query_config_file: str, out_folder: str):
+    def __init__(self, api: CoreV1Api,  url: str, query_config_file: str, out_folder: str):
         self._url = url
         self._query_config = None
         self._query_config_file = query_config_file
         self._out_folder = out_folder
         self._set_query_config()
-        # TODO make interval match value in cluster
+        self._k8s = kubernetes.KubernetesManager(api)
 
     def query_and_dump_metrics(self):
+        socket.create_connection = self._k8s.create_connection
+
         for metric_dict_item in self._query_config['metrics_to_scrape']:
             metric, column_name = next(iter(metric_dict_item.items()))
             logger.info(f'Querying {metric}')
             promql = self._create_query(metric, self._query_config['scrape_config'])
 
-            match get_query_data(promql):
+            match scrape_utils.get_query_data(promql):
                 case Ok(data):
+                    data = data['data']['result']
                     logger.info(f'Successfully extracted {metric} data from response')
                 case Err(err):
                     logger.info(err)
@@ -77,7 +82,7 @@ class Scrapper:
 
     def _create_dataframe_from_data(self, data: Dict, column_name: str) -> pd.DataFrame:
         final_df = pd.DataFrame()
-        for pod_result_dict in data['result']:
+        for pod_result_dict in data:
             column_name_items = column_name.split('-')
             metric_result_info = pod_result_dict['metric']
             result_string = '_'.join(metric_result_info[key] for key in column_name_items)
@@ -121,3 +126,5 @@ class Scrapper:
         bootstrap.sort(key=get_default_format_id)
 
         return list(chain(others, bootstrap, nodes))
+
+

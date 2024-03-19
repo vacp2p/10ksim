@@ -127,5 +127,3 @@ class Scrapper:
         bootstrap.sort(key=get_default_format_id)
 
         return list(chain(others, bootstrap, nodes))
-
-

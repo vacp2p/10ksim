@@ -1,7 +1,8 @@
 # Python Imports
 import socket
 import logging
-from kubernetes.client import CoreV1Api
+from typing import List, Tuple
+from kubernetes.client import CoreV1Api, V1PodList
 from kubernetes.stream import portforward
 
 
@@ -12,7 +13,7 @@ class KubernetesManager:
     def __init__(self, api: CoreV1Api):
         self._api = api
 
-    def create_connection(self, address, *args, **kwargs):
+    def create_connection(self, address, *args, **kwargs) -> socket.socket:
         dns_name = self._get_dns_name(address)
         if dns_name[-1] != 'kubernetes':
             logger.warning(f'Not a kubernetes DNS name: {dns_name}')
@@ -22,14 +23,15 @@ class KubernetesManager:
         port = address[1]
 
         if len(dns_name) == 4:
-            name, port = self._find_pod_port_in_service(dns_name, name, namespace, port)
+            name, port = self._find_pod_in_service(dns_name, name, namespace, port)
 
+        logger.info(f'Forwarding port {port} from pod {name} in namespace {namespace}')
         pf = portforward(self._api.connect_get_namespaced_pod_portforward,
                          name, namespace, ports=str(port))
 
         return pf.socket(port)
 
-    def _get_dns_name(self, address):
+    def _get_dns_name(self, address: List) -> List:
         dns_name = address[0]
         if isinstance(dns_name, bytes):
             dns_name = dns_name.decode()
@@ -37,7 +39,7 @@ class KubernetesManager:
 
         return dns_name
 
-    def _split_dns(self, dns_name):
+    def _split_dns(self, dns_name: List) -> Tuple[str, str]:
         if len(dns_name) not in (3, 4):
             raise RuntimeError("Unexpected kubernetes DNS name.")
         namespace = dns_name[-2]
@@ -45,7 +47,7 @@ class KubernetesManager:
 
         return namespace, name
 
-    def _find_service_target_port(self, service, port):
+    def _find_service_target_port(self, service, port: int) -> int:
         for service_port in service.spec.ports:
             if service_port.port == port:
                 return service_port.target_port
@@ -53,7 +55,7 @@ class KubernetesManager:
             raise RuntimeError(
                 f"Unable to find service port: {port}")
 
-    def _get_pods_and_name(self, service, namespace):
+    def _get_pods_and_name(self, service, namespace) -> Tuple[V1PodList, str]:
         label_selector = []
         for key, value in service.spec.selector.items():
             label_selector.append(f"{key}={value}")
@@ -66,7 +68,7 @@ class KubernetesManager:
 
         return pods, name
 
-    def _find_service_port_name_in_pods(self, port, pods):
+    def _find_service_port_name_in_pods(self, port, pods) -> int:
         if isinstance(port, str):
             for container in pods.items[0].spec.containers:
                 for container_port in container.ports:
@@ -82,7 +84,7 @@ class KubernetesManager:
 
         return port
 
-    def _find_pod_port_in_service(self, dns_name, name, namespace, port):
+    def _find_pod_in_service(self, dns_name, name, namespace, port) -> Tuple[str, int]:
         if dns_name[1] in ('svc', 'service'):
             service = self._api.read_namespaced_service(name, namespace)
             port = self._find_service_target_port(service, port)

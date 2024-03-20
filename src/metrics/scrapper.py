@@ -1,14 +1,14 @@
 # Python Imports
-import socket
 import logging
+import socket
 from typing import Dict
-from result import Ok, Err
 from kubernetes.client import CoreV1Api
+from result import Ok, Err
 
+from src.data.data_handler import DataHandler
 # Project Imports
 from src.metrics import scrape_utils
 from src.metrics import kubernetes
-from src.data.data_handler import DataHandler
 from src.utils.file_utils import read_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,6 @@ class Scrapper:
         self._k8s = kubernetes.KubernetesManager(api)
 
     def query_and_dump_metrics(self):
-        # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         socket.create_connection = self._k8s.create_connection
 
         for metric_dict_item in self._query_config['metrics_to_scrape']:

@@ -1,13 +1,11 @@
 # Python Imports
 import logging
 import socket
-import pandas as pd
-from itertools import chain
-from typing import List, Dict
-from pathlib import Path
+from typing import Dict
 from kubernetes.client import CoreV1Api
-from result import Ok, Err, Result
+from result import Ok, Err
 
+from src.data.data_handler import DataHandler
 # Project Imports
 from src.metrics import scrape_utils
 from src.metrics import kubernetes
@@ -30,20 +28,23 @@ class Scrapper:
         socket.create_connection = self._k8s.create_connection
 
         for metric_dict_item in self._query_config['metrics_to_scrape']:
-            metric, column_name = next(iter(metric_dict_item.items()))
+            metric, column_name_placeholder = next(iter(metric_dict_item.items()))
             logger.info(f'Querying {metric}')
             promql = self._create_query(metric, self._query_config['scrape_config'])
 
             match scrape_utils.get_query_data(promql):
                 case Ok(data):
-                    data = data['data']['result']
                     logger.info(f'Successfully extracted {metric} data from response')
+                    self._dump_data(metric, column_name_placeholder, data)
                 case Err(err):
                     logger.info(err)
                     continue
 
-            logger.info(f'Dumping {metric} data to .csv')
-            self._dump_data(metric, column_name, data)
+    def _dump_data(self, metric: str, column_name_placeholders: str, data: Dict):
+        logger.info(f'Dumping {metric} data to .csv')
+        data_handler = DataHandler(data)
+        data_handler.create_dataframe_from_request(column_name_placeholders)
+        data_handler.dump_dataframe(self._out_folder, f'{metric}.csv')
 
     def _set_query_config(self):
         self._query_config = read_yaml_file(self._query_config_file)
@@ -57,73 +58,3 @@ class Scrapper:
                                             scrape_config['step'])
 
         return promql
-
-    def _dump_data(self, metric: str, column_name: str, data: Dict):
-        result = self._prepare_path(metric)
-        if result.is_err():
-            logger.error(f'{result.err_value}')
-            exit(1)
-
-        df = self._create_dataframe_from_data(data, column_name)
-        df = self._sort_dataframe(df)
-
-        df.to_csv(result.ok_value)
-        logger.info(f'{metric} data dumped')
-
-    def _prepare_path(self, metric: str) -> Result[Path, str]:
-        output_file = f'{metric}.csv'
-        output_dir = Path(self._out_folder)
-
-        try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            return Err(f'Error creating {output_dir}. {e}')
-
-        return Ok(output_dir / output_file)
-
-    def _create_dataframe_from_data(self, data: Dict, column_name: str) -> pd.DataFrame:
-        final_df = pd.DataFrame()
-        for pod_result_dict in data:
-            column_name_items = column_name.split('-')
-            metric_result_info = pod_result_dict['metric']
-            result_string = '_'.join(metric_result_info[key] for key in column_name_items)
-            values = pod_result_dict['values']
-
-            pod_df = self._create_pod_df(result_string, values)
-
-            final_df = pd.merge(final_df, pod_df, how='outer', left_index=True, right_index=True)
-
-        return final_df
-
-    def _sort_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        columns = self._order(df.columns.tolist())
-        df = df[columns]
-
-        return df
-
-    def _create_pod_df(self, column_name: str, values: List) -> pd.DataFrame:
-        pod_df = pd.DataFrame(values, columns=['Time', column_name])
-        pod_df['Time'] = pd.to_datetime(pod_df['Time'], unit='s')
-        pod_df.set_index('Time', inplace=True)
-
-        return pod_df
-
-    # TODO this depends on pods name assigned in deployment
-    def _order(self, column_names: List) -> List:
-        def get_default_format_id(val):
-            return int(val.split('-')[1].split('_')[0])
-
-        nodes = []
-        bootstrap = []
-        others = []
-        for column in column_names:
-            if column.startswith('nodes'):
-                nodes.append(column)
-            elif column.startswith('bootstrap'):
-                bootstrap.append(column)
-            else:
-                others.append(column)
-        nodes.sort(key=get_default_format_id)
-        bootstrap.sort(key=get_default_format_id)
-
-        return list(chain(others, bootstrap, nodes))

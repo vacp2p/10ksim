@@ -1,14 +1,14 @@
 # Python Imports
-import logging
 import socket
+import logging
 from typing import Dict
-from kubernetes.client import CoreV1Api
 from result import Ok, Err
+from kubernetes.client import CoreV1Api
 
-from src.data.data_handler import DataHandler
 # Project Imports
 from src.metrics import scrape_utils
 from src.metrics import kubernetes
+from src.data.data_handler import DataHandler
 from src.utils.file_utils import read_yaml_file
 
 logger = logging.getLogger(__name__)

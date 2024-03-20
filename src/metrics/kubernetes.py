@@ -22,7 +22,7 @@ class KubernetesManager:
         port = address[1]
 
         if len(dns_name) == 4:
-            port = self._find_pod_port_in_service(dns_name, name, namespace, port)
+            name, port = self._find_pod_port_in_service(dns_name, name, namespace, port)
 
         pf = portforward(self._api.connect_get_namespaced_pod_portforward,
                          name, namespace, ports=str(port))
@@ -89,7 +89,7 @@ class KubernetesManager:
             pods, name = self._get_pods_and_name(service, namespace)
             port = self._find_service_port_name_in_pods(port, pods)
 
-            return port
+            return name, port
         elif dns_name[1] != 'pod':
             raise RuntimeError(
                 f"Unsupported resource type: {dns_name[1]}")

@@ -69,14 +69,13 @@ class KubernetesManager:
         return pods, name
 
     def _find_service_port_name_in_pods(self, port: str, pods: V1PodList) -> int:
-        if isinstance(port, str):
-            for container in pods.items[0].spec.containers:
-                for container_port in container.ports:
-                    if container_port.name == port:
-                        return container_port.container_port
-            else:
-                raise RuntimeError(
-                    f"Unable to find service port name: {port}")
+        for container in pods.items[0].spec.containers:
+            for container_port in container.ports:
+                if container_port.name == port:
+                    return container_port.container_port
+        else:
+            raise RuntimeError(
+                f"Unable to find service port name: {port}")
 
     def _find_pod_in_service(self, dns_name, name, namespace, port) -> Tuple[str, int]:
         if dns_name[1] in ('svc', 'service'):

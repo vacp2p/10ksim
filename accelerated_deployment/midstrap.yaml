@@ -32,14 +32,14 @@ spec:
                       values:
                         - zerotenkay-bootstrap
                 topologyKey: "kubernetes.io/hostname"
-#        nodeAffinity:
-#          requiredDuringSchedulingIgnoredDuringExecution:
-#            nodeSelectorTerms:
-#              - matchExpressions:
-#                  - key: "zerotesting"
-#                    operator: "In"
-#                    values:
-#                      - "fragment"
+       nodeAffinity:
+         requiredDuringSchedulingIgnoredDuringExecution:
+           nodeSelectorTerms:
+             - matchExpressions:
+                 - key: "zerotesting"
+                   operator: "In"
+                   values:
+                     - "fragment"
       dnsConfig:
         searches:
           - zerotesting-service.zerotesting.svc.cluster.local

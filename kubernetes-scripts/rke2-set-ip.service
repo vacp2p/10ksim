@@ -7,7 +7,7 @@ BindsTo=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'sed -i "/^node-ip: /c\\node-ip: $(ip -4 addr show enp6s18 | awk \'/inet/{print $2}\' | cut -d/ -f1)" /etc/rancher/rke2/config.yaml'
+ExecStart=/bin/bash -c 'sed -i "s/^node-ip: .*/node-ip: $(ip -4 addr show enp6s18 | awk '\"'/inet/{print \$2}'\"' | cut -d/ -f1)/" /etc/rancher/rke2/config.yaml'
 RemainAfterExit=yes
 
 [Install]

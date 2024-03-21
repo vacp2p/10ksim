@@ -2,7 +2,7 @@
 import socket
 import logging
 from typing import List, Tuple
-from kubernetes.client import CoreV1Api, V1PodList
+from kubernetes.client import CoreV1Api, V1PodList, V1Service
 from kubernetes.stream import portforward
 
 
@@ -47,7 +47,7 @@ class KubernetesManager:
 
         return namespace, name
 
-    def _find_service_target_port(self, service, port: int) -> int:
+    def _find_service_target_port(self, service: V1Service, port: int) -> str:
         for service_port in service.spec.ports:
             if service_port.port == port:
                 return service_port.target_port
@@ -55,7 +55,7 @@ class KubernetesManager:
             raise RuntimeError(
                 f"Unable to find service port: {port}")
 
-    def _get_pods_and_name(self, service, namespace) -> Tuple[V1PodList, str]:
+    def _get_pods_and_name(self, service: V1Service, namespace: str) -> Tuple[V1PodList, str]:
         label_selector = []
         for key, value in service.spec.selector.items():
             label_selector.append(f"{key}={value}")
@@ -68,21 +68,15 @@ class KubernetesManager:
 
         return pods, name
 
-    def _find_service_port_name_in_pods(self, port, pods) -> int:
+    def _find_service_port_name_in_pods(self, port: str, pods: V1PodList) -> int:
         if isinstance(port, str):
             for container in pods.items[0].spec.containers:
                 for container_port in container.ports:
                     if container_port.name == port:
-                        port = container_port.container_port
-                        break
-                else:
-                    continue
-                break
+                        return container_port.container_port
             else:
                 raise RuntimeError(
                     f"Unable to find service port name: {port}")
-
-        return port
 
     def _find_pod_in_service(self, dns_name, name, namespace, port) -> Tuple[str, int]:
         if dns_name[1] in ('svc', 'service'):

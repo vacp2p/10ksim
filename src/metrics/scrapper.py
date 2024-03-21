@@ -26,6 +26,7 @@ class Scrapper:
         self._k8s = kubernetes.KubernetesManager(api)
 
     def query_and_dump_metrics(self):
+        # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         socket.create_connection = self._k8s.create_connection
 
         for metric_dict_item in self._query_config['metrics_to_scrape']:

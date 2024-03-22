@@ -8,7 +8,7 @@ from kubernetes.client import CoreV1Api
 # Project Imports
 from src.metrics import scrape_utils
 from src.metrics import kubernetes
-from src.data.data_handler import DataHandler
+from src.data.data_request_handler import DataRequestHandler
 from src.utils.file_utils import read_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class Scrapper:
 
     def _dump_data(self, metric: str, column_name_placeholders: str, data: Dict):
         logger.info(f'Dumping {metric} data to .csv')
-        data_handler = DataHandler(data)
+        data_handler = DataRequestHandler(data)
         data_handler.create_dataframe_from_request(column_name_placeholders)
         data_handler.dump_dataframe(self._out_folder, f'{metric}.csv')
 

@@ -1,6 +1,6 @@
 # Python Imports
-import logging
 import os
+import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -11,7 +11,8 @@ from matplotlib import ticker
 from result import Err, Ok
 
 # Project Imports
-from src.utils.file_utils import get_files_from_folder_path, get_file_name_from_path
+from src.data.data_handler import DataHandler
+from src.data.data_file_handler import DataFileHandler
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -37,40 +38,21 @@ class Plotter:
         for i, subplot_path_group in enumerate(subplot_paths_group):
             subplot_title = subplot_path_group[1]
 
-            subplot_df = self._create_subplot_df(subplot_path_group[0])
+            file_data_hanlder = DataFileHandler()
+            match file_data_hanlder.add_dataframes_from_folders_as_mean(subplot_path_group[0]):
+                case Ok(msg):
+                    logger.info(msg)
 
-            self._add_subplot_df_to_axs(subplot_df, i, subplot_title, axs)
+                    subplot_df = file_data_hanlder.get_dataframe()
+                    subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)
+                    self._add_subplot_df_to_axs(subplot_df, i, subplot_title, axs)
+                case Err(msg):
+                    logger.error(msg)
 
     def _save_plot(self, plot_name: str):
         plt.tight_layout()
         plt.savefig(plot_name)
         plt.show()
-
-    def _create_subplot_df(self, subplot_paths_group: List):
-        subplot_df = pd.DataFrame()
-
-        for subplot_path in subplot_paths_group:
-            subplot_df = self._concat_subplot_df(subplot_df, subplot_path)
-
-        subplot_df = pd.melt(subplot_df, id_vars=["class"])
-
-        return subplot_df
-
-    def _concat_subplot_df(self, subplot_df: pd.DataFrame, subplot_path: str):
-        group_df = pd.DataFrame()
-        data_files_path = get_files_from_folder_path(subplot_path)
-
-        for file_path in data_files_path:
-            result = self._dump_file_mean_into_df(subplot_path + "/" + file_path, group_df)
-            if result.is_err():
-                exit(1)
-
-            group_df = result.ok_value
-
-        group_df["class"] = subplot_path.split("/")[-2]
-        subplot_df = pd.concat([subplot_df, group_df])
-
-        return subplot_df
 
     def _add_subplot_df_to_axs(self, df: pd.DataFrame, index: int, subplot_title: str, axs: np.ndarray):
         box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs[index],
@@ -86,20 +68,6 @@ class Plotter:
         box_plot.xaxis.set_tick_params(rotation=45)
 
         self._add_median_labels(box_plot)
-
-    def _dump_file_mean_into_df(self, file_path: str, group_df: pd.DataFrame):
-        if not os.path.exists(file_path):
-            logger.error(f"Missing {file_path}")
-            return Err("")
-
-        file_name = get_file_name_from_path(file_path)
-
-        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
-        df_mean = df.mean()
-        df_mean = pd.DataFrame(df_mean, columns=[file_name])
-        group_df = pd.concat([group_df, df_mean], axis=1)
-
-        return Ok(group_df)
 
     def _create_subplot_paths_group(self, plot_specs: Dict) -> List:
         subplot_path = [

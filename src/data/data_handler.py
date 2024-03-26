@@ -30,11 +30,11 @@ class DataHandler:
     def dataframe(self) -> pd.DataFrame:
         return self._dataframe
 
-    def dump_dataframe(self, out_folder: str, file_name: str):
-        result = path.prepare_path(out_folder, file_name)
+    def dump_dataframe(self, dump_path: str):
+        result = path.prepare_path(dump_path)
         if result.is_err():
             logger.error(f'{result.err_value}')
             exit(1)
 
         self._dataframe.to_csv(result.ok_value)
-        logger.info(f'{file_name} data dumped')
+        logger.info(f'{dump_path} data dumped')

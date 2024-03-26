@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class Scrapper:
-    def __init__(self, api: CoreV1Api,  url: str, query_config_file: str):
+    def __init__(self, api: CoreV1Api, url: str, query_config_file: str):
         self._url = url
         self._query_config = None
         self._query_config_file = query_config_file
@@ -35,18 +35,20 @@ class Scrapper:
 
             match scrape_utils.get_query_data(promql):
                 case Ok(data):
-                    logger.info(f'Successfully extracted {metric} data from response')
-                    self._dump_data(metric, column_name_placeholder, data)
                     logger.info(f'Successfully extracted {scrape_name} data from response')
+                    file_location = (self._query_config['scrape_config']['dump_location'] +
+                                     metric_config['folder_name'] +
+                                     self._query_config['scrape_config']['simulation_name'])
+                    self._dump_data(scrape_name, metric_config['extract_field'], data, file_location)
                 case Err(err):
                     logger.info(err)
                     continue
 
-    def _dump_data(self, metric: str, column_name_placeholders: str, data: Dict):
-        logger.info(f'Dumping {metric} data to .csv')
+    def _dump_data(self, scrape_name: str, extract_field: str, data: Dict, dump_path: str):
+        logger.info(f'Dumping {scrape_name} data to .csv')
         data_handler = DataRequestHandler(data)
-        data_handler.create_dataframe_from_request(column_name_placeholders)
-        data_handler.dump_dataframe(self._out_folder, f'{metric}.csv')
+        data_handler.create_dataframe_from_request(extract_field)
+        data_handler.dump_dataframe(dump_path)
 
     def _set_query_config(self):
         self._query_config = read_yaml_file(self._query_config_file)

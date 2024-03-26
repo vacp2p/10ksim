@@ -7,15 +7,15 @@ scrape_config:
   simulation_name: "3K-test"
 metrics_to_scrape:
   - libp2p_peers:
-    query: "libp2p-peers"
-    extract_field: "instance"
-    file_path : "libp2p-peers/3K-test"
+      query: "libp2p-peers"
+      extract_field: "instance"
+      file_path : "libp2p-peers/3K-test"
   - "libp2p_open_streams": "instance-type-dir"
   #- "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])": "instance-direction"
   - "libp2p_in":
-      query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
-      extract_field: "instance-direction"
-      file_path: "libp2p-in/3K-test"
+        query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
+        extract_field: "instance-direction"
+        file_path: "libp2p-in/3K-test"
   - "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])": "instance-direction"
   - "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
   - "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"

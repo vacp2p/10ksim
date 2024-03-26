@@ -26,10 +26,8 @@ class Scrapper:
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         socket.create_connection = self._k8s.create_connection
 
-        for metric_dict_item in self._query_config['metrics_to_scrape']:
-            scrape_name = list(metric_dict_item.keys())[0]
+        for scrape_name, metric_config in self._query_config['metrics_to_scrape'].items():
             logger.info(f'Querying {scrape_name}')
-            metric_config = metric_dict_item[scrape_name]
             promql = self._create_query(metric_config['query'],
                                         self._query_config['scrape_config'])
 

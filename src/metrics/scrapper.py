@@ -27,14 +27,17 @@ class Scrapper:
         socket.create_connection = self._k8s.create_connection
 
         for metric_dict_item in self._query_config['metrics_to_scrape']:
-            metric, column_name_placeholder = next(iter(metric_dict_item.items()))
-            logger.info(f'Querying {metric}')
-            promql = self._create_query(metric, self._query_config['scrape_config'])
+            scrape_name = list(metric_dict_item.keys())[0]
+            logger.info(f'Querying {scrape_name}')
+            metric_config = metric_dict_item[scrape_name]
+            promql = self._create_query(metric_config['query'],
+                                        self._query_config['scrape_config'])
 
             match scrape_utils.get_query_data(promql):
                 case Ok(data):
                     logger.info(f'Successfully extracted {metric} data from response')
                     self._dump_data(metric, column_name_placeholder, data)
+                    logger.info(f'Successfully extracted {scrape_name} data from response')
                 case Err(err):
                     logger.info(err)
                     continue
@@ -55,5 +58,6 @@ class Scrapper:
                                             scrape_config['start_scrape'],
                                             scrape_config['finish_scrape'],
                                             scrape_config['step'])
+        promql = promql.replace(" ", "%20")
 
         return promql

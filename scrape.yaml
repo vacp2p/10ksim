@@ -3,10 +3,19 @@ scrape_config:
   step: "60s"
   start_scrape: "2024-03-12 16:24:00"
   finish_scrape: "2024-03-12 16:30:00"
+  dump_location: "test/nwaku-vXX/"
+  simulation_name: "3K-test"
 metrics_to_scrape:
-  - "libp2p_peers": "instance"
+  - libp2p_peers:
+    query: "libp2p-peers"
+    extract_field: "instance"
+    file_path : "libp2p-peers/3K-test"
   - "libp2p_open_streams": "instance-type-dir"
-  - "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])": "instance-direction"
+  #- "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])": "instance-direction"
+  - "libp2p_in":
+      query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
+      extract_field: "instance-direction"
+      file_path: "libp2p-in/3K-test"
   - "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])": "instance-direction"
   - "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
   - "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])": "pod-node"
@@ -17,5 +26,5 @@ plotting:
     "folder":
       - "test/nwaku/"
     "data":
-      - "libp2p-rx"
-      - "libp2p-tx"
+      - "libp2p-in"
+      - "libp2p-out"

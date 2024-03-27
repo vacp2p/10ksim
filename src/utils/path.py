@@ -1,14 +1,21 @@
 # Python Imports
+import logging
 from pathlib import Path
 from result import Result, Err, Ok
 
 
-def prepare_path(folder_location: str, file_name: str) -> Result[Path, str]:
-    output_dir = Path(folder_location)
+logger = logging.getLogger(__name__)
+
+
+def prepare_path(file_location: str) -> Result[Path, str]:
+    file_location_path = Path(file_location)
+
+    if file_location_path.exists():
+        logger.warning(f'{file_location_path} is already existing. File will be overwritten.')
 
     try:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_location_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        return Err(f'Error creating {output_dir}. {e}')
+        return Err(f'Error creating {file_location_path.parent}. {e}')
 
-    return Ok(output_dir / file_name)
+    return Ok(file_location_path)

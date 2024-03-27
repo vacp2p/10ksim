@@ -15,11 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 class Scrapper:
-    def __init__(self, api: CoreV1Api,  url: str, query_config_file: str, out_folder: str):
+    def __init__(self, api: CoreV1Api, url: str, query_config_file: str):
         self._url = url
         self._query_config = None
         self._query_config_file = query_config_file
-        self._out_folder = out_folder
         self._set_query_config()
         self._k8s = kubernetes.KubernetesManager(api)
 
@@ -27,24 +26,27 @@ class Scrapper:
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         socket.create_connection = self._k8s.create_connection
 
-        for metric_dict_item in self._query_config['metrics_to_scrape']:
-            metric, column_name_placeholder = next(iter(metric_dict_item.items()))
-            logger.info(f'Querying {metric}')
-            promql = self._create_query(metric, self._query_config['scrape_config'])
+        for scrape_name, metric_config in self._query_config['metrics_to_scrape'].items():
+            logger.info(f'Querying {scrape_name}')
+            promql = self._create_query(metric_config['query'],
+                                        self._query_config['scrape_config'])
 
             match scrape_utils.get_query_data(promql):
                 case Ok(data):
-                    logger.info(f'Successfully extracted {metric} data from response')
-                    self._dump_data(metric, column_name_placeholder, data)
+                    logger.info(f'Successfully extracted {scrape_name} data from response')
+                    file_location = (self._query_config['scrape_config']['dump_location'] +
+                                     metric_config['folder_name'] +
+                                     self._query_config['scrape_config']['simulation_name'])
+                    self._dump_data(scrape_name, metric_config['extract_field'], data, file_location)
                 case Err(err):
                     logger.info(err)
                     continue
 
-    def _dump_data(self, metric: str, column_name_placeholders: str, data: Dict):
-        logger.info(f'Dumping {metric} data to .csv')
+    def _dump_data(self, scrape_name: str, extract_field: str, data: Dict, dump_path: str):
+        logger.info(f'Dumping {scrape_name} data to .csv')
         data_handler = DataRequestHandler(data)
-        data_handler.create_dataframe_from_request(column_name_placeholders)
-        data_handler.dump_dataframe(self._out_folder, f'{metric}.csv')
+        data_handler.create_dataframe_from_request(extract_field)
+        data_handler.dump_dataframe(dump_path)
 
     def _set_query_config(self):
         self._query_config = read_yaml_file(self._query_config_file)
@@ -56,5 +58,6 @@ class Scrapper:
                                             scrape_config['start_scrape'],
                                             scrape_config['finish_scrape'],
                                             scrape_config['step'])
+        promql = promql.replace(" ", "%20")
 
         return promql

@@ -46,7 +46,6 @@ class DataFileHandler(DataHandler):
 
     def _dump_mean_df(self, file_path: Path):
         df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
-        file_name = file_utils.get_file_name_from_path(file_path)
         df_mean = df.mean()
-        df_mean = pd.DataFrame(df_mean, columns=[file_name])
+        df_mean = pd.DataFrame(df_mean, columns=[file_path.name])
         self._dataframe = pd.concat([self._dataframe, df_mean], axis=1)

@@ -29,7 +29,3 @@ def get_files_from_folder_path(path: Path) -> Result[List, str]:
         return Ok(files)
 
     return Err(f"{path} does not exist.")
-
-
-def get_file_name_from_path(file_path: Path) -> str:
-    return file_path.name

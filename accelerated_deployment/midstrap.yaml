@@ -13,7 +13,7 @@ spec:
   template:
     metadata:
       annotations:
-        k8s.v1.cni.cncf.io/networks: zerotesting-ovs-vlan64
+        k8s.v1.cni.cncf.io/networks: calico-default
         v1.multus-cni.io/default-network: zerotesting-ovs-vlan64
       labels:
         app: zerotenkay-bootstrap

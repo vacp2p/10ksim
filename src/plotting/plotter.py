@@ -23,7 +23,7 @@ class Plotter:
 
     def create_plots(self):
         for plot_name, plot_specs in self._config.items():
-            logger.info(f"Plotting \"{plot_name}\"")
+            logger.info(f'Plotting "{plot_name}"')
             self._create_plot(plot_name, plot_specs)
             logger.info(f"Plot \"{plot_name}\" finished")
 

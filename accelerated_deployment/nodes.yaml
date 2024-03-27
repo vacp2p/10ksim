@@ -4,7 +4,7 @@ metadata:
   name: nodes
   namespace: zerotesting
 spec:
-  replicas: 3000
+  replicas: 500
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-service
   selector:
@@ -12,6 +12,9 @@ spec:
       app: zerotenkay
   template:
     metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: zerotesting-ovs-vlan64
+        v1.multus-cni.io/default-network: zerotesting-ovs-vlan64
       labels:
         app: zerotenkay
     spec:

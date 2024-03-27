@@ -45,3 +45,6 @@ plotting:
     "data":
       - "libp2p-in"
       - "libp2p-out"
+    "xlabel_name": "NºNodes-MsgRate"
+    "ylabel_name": "KBytes/s"
+    "scale-x": 1000

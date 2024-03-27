@@ -1,5 +1,4 @@
 # Python Imports
-import os
 import logging
 import numpy as np
 import pandas as pd
@@ -24,28 +23,28 @@ class Plotter:
 
     def create_plots(self):
         for plot_name, plot_specs in self._config.items():
-            logger.debug(f"Plotting \"{plot_name}\"")
+            logger.info(f'Plotting "{plot_name}"')
             self._create_plot(plot_name, plot_specs)
+            logger.info(f"Plot \"{plot_name}\" finished")
 
     def _create_plot(self, plot_name: str, plot_specs: Dict):
-        fig, axs = plt.subplots(nrows=1, ncols=len(plot_specs['data']), sharey='row', figsize=(15,15))
+        fig, axs = plt.subplots(nrows=1, ncols=len(plot_specs['data']), sharey='row',
+                                figsize=(15, 15))
 
         subplot_paths_group = self._create_subplot_paths_group(plot_specs)
-        self._insert_data_in_axs(subplot_paths_group, axs)
+        self._insert_data_in_axs(subplot_paths_group, axs, plot_specs)
         self._save_plot(plot_name)
 
-    def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray):
+    def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray, plot_specs: Dict):
         for i, subplot_path_group in enumerate(subplot_paths_group):
-            subplot_title = subplot_path_group[1]
-
             file_data_hanlder = DataFileHandler()
-            match file_data_hanlder.add_dataframes_from_folders_as_mean(subplot_path_group[0]):
+            match file_data_hanlder.add_dataframes_from_folders_as_mean(subplot_path_group):
                 case Ok(msg):
                     logger.info(msg)
 
                     subplot_df = file_data_hanlder.dataframe
                     subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)
-                    self._add_subplot_df_to_axs(subplot_df, i, subplot_title, axs)
+                    self._add_subplot_df_to_axs(subplot_df, i, axs, plot_specs)
                 case Err(msg):
                     logger.error(msg)
 
@@ -54,15 +53,18 @@ class Plotter:
         plt.savefig(plot_name)
         plt.show()
 
-    def _add_subplot_df_to_axs(self, df: pd.DataFrame, index: int, subplot_title: str, axs: np.ndarray):
+    def _add_subplot_df_to_axs(self, df: pd.DataFrame, index: int, axs: np.ndarray,
+                               plot_specs: Dict):
+        subplot_title = plot_specs['data'][index]
+
         box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs[index],
                                showfliers=False)
 
         # Apply the custom formatter to the x-axis ticks
-        formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / 1000))
+        formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / plot_specs['scale-x']))
         box_plot.yaxis.set_major_formatter(formatter)
 
-        box_plot.set(xlabel='NºNodes-MsgRate', ylabel=f"KBytes/s")
+        box_plot.set(xlabel=plot_specs['xlabel_name'], ylabel=plot_specs['ylabel_name'])
         box_plot.set_title(f'{subplot_title}')
         box_plot.tick_params(labelbottom=True)
         box_plot.xaxis.set_tick_params(rotation=45)
@@ -70,9 +72,8 @@ class Plotter:
         self._add_median_labels(box_plot)
 
     def _create_subplot_paths_group(self, plot_specs: Dict) -> List:
-        subplot_path = [
-            ([f"{folder}{data}" for folder in plot_specs["folder"]], data) for data in plot_specs["data"]
-        ]
+        subplot_path = [[f"{folder}{data}" for folder in plot_specs["folder"]] for data in
+                        plot_specs["data"]]
 
         return subplot_path
 

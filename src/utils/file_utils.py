@@ -22,7 +22,7 @@ def read_yaml_file(file_path: str) -> Dict:
 
 
 def get_files_from_folder_path(path: Path) -> Result[List, str]:
-    if check_if_path_exists(path):
+    if path.exists():
         files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
         logger.info(f"Found {len(files)} in {path}")
         logger.debug(f"Files are: {files}")
@@ -33,7 +33,3 @@ def get_files_from_folder_path(path: Path) -> Result[List, str]:
 
 def get_file_name_from_path(file_path: Path) -> str:
     return file_path.name
-
-
-def check_if_path_exists(path: Path) -> bool:
-    return os.path.exists(path)

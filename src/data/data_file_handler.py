@@ -39,7 +39,7 @@ class DataFileHandler(DataHandler):
                     logger.error(msg)
 
     def add_dataframe_from_file_as_mean(self, file_path: Path) -> Result[str, str]:
-        if file_utils.check_if_path_exists(file_path):
+        if file_path.exists():
             self._dump_mean_df(file_path)
             return Ok(f"{file_path} dumped to memory.")
 
@@ -54,4 +54,3 @@ class DataFileHandler(DataHandler):
         df_mean = df.mean()
         df_mean = pd.DataFrame(df_mean, columns=[file_name])
         self._dataframe = pd.concat([self._dataframe, df_mean], axis=1)
-

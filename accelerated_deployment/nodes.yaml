@@ -4,7 +4,7 @@ metadata:
   name: nodes
   namespace: zerotesting
 spec:
-  replicas: 5000
+  replicas: 500
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-service
   selector:

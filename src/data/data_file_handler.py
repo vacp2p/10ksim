@@ -17,7 +17,7 @@ class DataFileHandler(DataHandler):
         super().__init__()
         self._dataframe = pd.DataFrame()
 
-    def add_dataframes_from_folders_as_mean(self, folder_paths: List) -> Result[str, str]:
+    def add_dataframes_from_folders_as_mean(self, folder_paths: List) -> Result[List, str]:
         for folder in folder_paths:
             folder = Path(folder)
             match file_utils.get_files_from_folder_path(folder):
@@ -25,8 +25,7 @@ class DataFileHandler(DataHandler):
                     self._add_files_as_mean(data_files_names, folder)
                     # TODO: set class with yaml upgrades
                     self._dataframe["class"] = str(folder.parents[0]) + folder.name
-                    msg = f"{folder_paths} added."
-                    return Ok(msg)
+                    return Ok(folder_paths)
                 case Err(error):
                     return Err(error)
 
@@ -38,10 +37,10 @@ class DataFileHandler(DataHandler):
                 case Err(msg):
                     logger.error(msg)
 
-    def add_dataframe_from_file_as_mean(self, file_path: Path) -> Result[str, str]:
+    def add_dataframe_from_file_as_mean(self, file_path: Path) -> Result[Path, str]:
         if file_path.exists():
             self._dump_mean_df(file_path)
-            return Ok(f"{file_path} dumped to memory.")
+            return Ok(file_path)
 
         return Err(f"{file_path} cannot be dumped to memory.")
 

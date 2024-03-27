@@ -1,5 +1,4 @@
 # Python Imports
-import os
 import yaml
 import logging
 from pathlib import Path
@@ -23,7 +22,7 @@ def read_yaml_file(file_path: str) -> Dict:
 
 def get_files_from_folder_path(path: Path) -> Result[List, str]:
     if path.exists():
-        files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        files = [p for p in path.glob("*") if p.is_file()]
         logger.info(f"Found {len(files)} in {path}")
         logger.debug(f"Files are: {files}")
         return Ok(files)

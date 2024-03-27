@@ -44,9 +44,6 @@ class DataFileHandler(DataHandler):
 
         return Err(f"{file_path} cannot be dumped to memory.")
 
-    def get_dataframe(self) -> pd.DataFrame:
-        return self._dataframe
-
     def _dump_mean_df(self, file_path: Path):
         df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
         file_name = file_utils.get_file_name_from_path(file_path)

@@ -43,7 +43,7 @@ class Plotter:
                 case Ok(msg):
                     logger.info(msg)
 
-                    subplot_df = file_data_hanlder.get_dataframe()
+                    subplot_df = file_data_hanlder.dataframe
                     subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)
                     self._add_subplot_df_to_axs(subplot_df, i, subplot_title, axs)
                 case Err(msg):

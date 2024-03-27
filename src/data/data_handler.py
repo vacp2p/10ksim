@@ -26,6 +26,10 @@ class DataHandler:
 
         return prepared_df
 
+    @property
+    def dataframe(self) -> pd.DataFrame:
+        return self._dataframe
+
     def dump_dataframe(self, out_folder: str, file_name: str):
         result = path.prepare_path(out_folder, file_name)
         if result.is_err():

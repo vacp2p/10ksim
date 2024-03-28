@@ -1,5 +1,7 @@
 # Python Imports
 import logging
+from pathlib import Path
+
 import pandas as pd
 
 # Project Imports
@@ -17,6 +19,15 @@ class DataHandler:
         prepared_df = pd.melt(dataframe, class_name)
 
         return prepared_df
+
+    @staticmethod
+    def add_file_as_mean_to_df(target_df: pd.DataFrame, file_path: Path):
+        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
+        df_mean = df.mean()
+        df_mean = pd.DataFrame(df_mean, columns=[file_path.name])
+        target_df = pd.concat([target_df, df_mean], axis=1)
+
+        return target_df
 
     @property
     def dataframe(self) -> pd.DataFrame:

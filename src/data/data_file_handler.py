@@ -38,13 +38,7 @@ class DataFileHandler(DataHandler):
 
     def add_dataframe_from_file_as_mean(self, file_path: Path) -> Result[Path, str]:
         if file_path.exists():
-            self._dump_mean_df(file_path)
-            return Ok(file_path)
+            target_df = self.add_file_as_mean_to_df(target_df, file_path)
+            return Ok(target_df)
 
         return Err(f"{file_path} cannot be dumped to memory.")
-
-    def _dump_mean_df(self, file_path: Path):
-        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
-        df_mean = df.mean()
-        df_mean = pd.DataFrame(df_mean, columns=[file_path.name])
-        self._dataframe = pd.concat([self._dataframe, df_mean], axis=1)

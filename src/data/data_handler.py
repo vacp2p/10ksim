@@ -1,7 +1,6 @@
 # Python Imports
 import logging
 import pandas as pd
-from typing import List
 
 # Project Imports
 from src.utils import path
@@ -12,13 +11,6 @@ logger = logging.getLogger(__name__)
 class DataHandler:
     def __init__(self):
         self._dataframe = None
-
-    @staticmethod
-    def concatenate_dataframes(dataframes: List, vertically: bool = True) -> pd.DataFrame:
-        if vertically:
-            return pd.concat(dataframes)
-
-        return pd.concat(dataframes, axis="columns")
 
     @staticmethod
     def prepare_dataframe_for_boxplot(dataframe: pd.DataFrame, class_name='class') -> pd.DataFrame:

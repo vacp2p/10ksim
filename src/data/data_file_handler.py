@@ -23,7 +23,6 @@ class DataFileHandler(DataHandler):
             match file_utils.get_files_from_folder_path(folder):
                 case Ok(data_files_names):
                     self._add_files_as_mean(data_files_names, folder)
-                    # TODO: set class with yaml upgrades
                     self._dataframe["class"] = str(folder.parents[0]) + folder.name
                     return Ok(folder_paths)
                 case Err(error):

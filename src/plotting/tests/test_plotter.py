@@ -34,11 +34,9 @@ class TestPlotter(unittest.TestCase):
         plotter = Plotter({})
         plotter._add_subplot_df_to_axs = MagicMock()
         plotter._insert_data_in_axs([["path1"], ["path2"]], [0], {"data": ["data1"]})
-        # check add_dataframes_from_folders_as_mean called twice
+
         self.assertEqual(mock_data_file_handler.call_count, 2)
-        # check prepare_dataframe_for_boxplot called twice
         self.assertEqual(mock_data_handler.call_count, 2)
-        # check _add_subplot_df_to_axs called twice
         self.assertEqual(plotter._add_subplot_df_to_axs.call_count, 2)
 
     def test__save_plot(self):

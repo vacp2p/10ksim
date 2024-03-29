@@ -1,8 +1,7 @@
 # Python Imports
 import logging
-from pathlib import Path
-
 import pandas as pd
+from pathlib import Path
 
 # Project Imports
 from src.utils import path

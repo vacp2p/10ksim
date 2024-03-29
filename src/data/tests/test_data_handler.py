@@ -33,16 +33,16 @@ class TestDataHandler(unittest.TestCase):
         can be waku-v25, waku-v26. Allowing us to compare in a single plot, the different
         experiments.
         """
-        data = {'A': [1, 2, 3, 4, 5],
-                'B': [6, 7, 8, 9, 10],
-                'C': ['test', 'test', 'test', 'test', 'test']}
+        data = {'in': [1, 2, 3, 4, 5],
+                'out': [6, 7, 8, 9, 10],
+                'class': ['testv1', 'testv1', 'testv2', 'testv2', 'testv2']}
         df = pd.DataFrame(data)
 
-        prepared_df = DataHandler.prepare_dataframe_for_boxplot(df, 'C')
+        prepared_df = DataHandler.prepare_dataframe_for_boxplot(df, 'class')
 
-        self.assertEqual(prepared_df['C'].unique()[0], "test")
-        self.assertEqual(prepared_df['variable'], ['A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'B'])
-        self.assertEqual(prepared_df['value'], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertEqual(prepared_df['class'].tolist(), ['testv1', 'testv1', 'testv2', 'testv2', 'testv2', 'testv1', 'testv1', 'testv2', 'testv2', 'testv2', ])
+        self.assertEqual(prepared_df['variable'].tolist(), ['in', 'in', 'in', 'in', 'in', 'out', 'out', 'out', 'out', 'out'])
+        self.assertEqual(prepared_df['value'].tolist(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     def test_dataframe(self):
         data_handler = DataHandler()

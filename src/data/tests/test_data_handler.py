@@ -1,7 +1,9 @@
 # Python Imports
 import os
 import unittest
+import numpy as np
 import pandas as pd
+from pathlib import Path
 from unittest.mock import patch
 
 # Project Imports
@@ -43,6 +45,24 @@ class TestDataHandler(unittest.TestCase):
         self.assertEqual(prepared_df['class'].tolist(), ['testv1', 'testv1', 'testv2', 'testv2', 'testv2', 'testv1', 'testv1', 'testv2', 'testv2', 'testv2', ])
         self.assertEqual(prepared_df['variable'].tolist(), ['in', 'in', 'in', 'in', 'in', 'out', 'out', 'out', 'out', 'out'])
         self.assertEqual(prepared_df['value'].tolist(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    def test_add_file_as_mean_to_df(self):
+        df = pd.DataFrame()
+        dfh = DataHandler()
+        file_path = Path(os.path.join(self.current_directory, 'test_folder_1/test1.csv'))
+        df = dfh.add_file_as_mean_to_df(df, file_path)
+        self.assertEqual(df.columns, ['test1.csv'])
+        self.assertTrue(np.array_equal(df['test1.csv'].values, np.array([2.0, 5.0])))
+
+    def test_add_file_as_mean_to_df_with_data(self):
+        df = pd.DataFrame()
+        dfh = DataHandler()
+        file_path_1 = Path(os.path.join(self.current_directory, 'test_folder_1/test1.csv'))
+        file_path_2 = Path(os.path.join(self.current_directory, 'test_folder_1/test2.csv'))
+        df = dfh.add_file_as_mean_to_df(df, file_path_1)
+        df = dfh.add_file_as_mean_to_df(df, file_path_2)
+        self.assertTrue(np.array_equal(df['test1.csv'].values, np.array([2.0, 5.0])))
+        self.assertTrue(np.array_equal(df['test2.csv'].values, np.array([4.0, 20.0])))
 
     def test_dataframe(self):
         data_handler = DataHandler()

@@ -19,17 +19,17 @@ class TestDataFileHandler(unittest.TestCase):
 
     def test_add_dataframes_from_folder_as_mean(self):
         dfh = DataFileHandler()
-        folder = self.current_directory + '/test_folder_1'
+        folder = self.current_directory + '/resources/test_folder_1'
         dfh.add_dataframes_from_folders_as_mean([folder])
         self.assertTrue(np.array_equal(dfh.dataframe['test1.csv'].values, np.array([2.0, 5.0])))
         self.assertTrue(np.array_equal(dfh.dataframe['test2.csv'].values, np.array([4.0, 20.0])))
-        self.assertEqual(dfh.dataframe['class'].values[0], 'tests/test_folder_1')
+        self.assertEqual(dfh.dataframe['class'].values[0], 'resources/test_folder_1')
 
     def test__add_files_as_mean(self):
         dfh = DataFileHandler()
         data_files_path = ['test1.csv', 'test2.csv', 'error']
         df = pd.DataFrame()
-        location = Path(self.current_directory + '/test_folder_1')
+        location = Path(self.current_directory + '/resources/test_folder_1')
 
         df = dfh._add_files_as_mean(df, data_files_path, location)
         self.assertTrue(np.array_equal(df['test1.csv'].values, np.array([2.0, 5.0])))
@@ -49,7 +49,7 @@ class TestDataFileHandler(unittest.TestCase):
 
     @patch('src.data.data_file_handler.DataHandler.add_file_as_mean_to_df')
     def test_add_data_from_file(self, mock_add_file_as_mean_to_df):
-        file_path = Path(os.path.join(self.current_directory, 'test_folder_1/test1.csv'))
+        file_path = Path(os.path.join(self.current_directory, 'resources/test_folder_1/test1.csv'))
 
         mock_add_file_as_mean_to_df.return_value = None
         df = pd.DataFrame()

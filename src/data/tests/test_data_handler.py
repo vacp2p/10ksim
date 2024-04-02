@@ -50,7 +50,7 @@ class TestDataHandler(unittest.TestCase):
     def test_add_file_as_mean_to_df(self):
         df = pd.DataFrame()
         dh = DataHandler()
-        file_path = Path(os.path.join(self.current_directory, 'test_folder_1/test1.csv'))
+        file_path = Path(os.path.join(self.current_directory, 'resources/test_folder_1/test1.csv'))
         df = dh.add_file_as_mean_to_df(df, file_path)
         self.assertEqual(df.columns, ['test1.csv'])
         self.assertTrue(np.array_equal(df['test1.csv'].values, np.array([2.0, 5.0])))
@@ -58,8 +58,8 @@ class TestDataHandler(unittest.TestCase):
     def test_add_file_as_mean_to_df_with_data(self):
         df = pd.DataFrame()
         dh = DataHandler()
-        file_path_1 = Path(os.path.join(self.current_directory, 'test_folder_1/test1.csv'))
-        file_path_2 = Path(os.path.join(self.current_directory, 'test_folder_1/test2.csv'))
+        file_path_1 = Path(os.path.join(self.current_directory, 'resources/test_folder_1/test1.csv'))
+        file_path_2 = Path(os.path.join(self.current_directory, 'resources/test_folder_1/test2.csv'))
         df = dh.add_file_as_mean_to_df(df, file_path_1)
         df = dh.add_file_as_mean_to_df(df, file_path_2)
         self.assertTrue(np.array_equal(df['test1.csv'].values, np.array([2.0, 5.0])))

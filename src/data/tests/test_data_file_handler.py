@@ -13,8 +13,9 @@ from src.data.data_file_handler import DataFileHandler
 
 class TestDataFileHandler(unittest.TestCase):
 
-    def setUp(self):
-        self.current_directory = os.path.dirname(os.path.abspath(__file__))
+    @classmethod
+    def setUpClass(cls):
+        cls.current_directory = os.path.dirname(os.path.abspath(__file__))
 
     def test_add_dataframes_from_folder_as_mean(self):
         dfh = DataFileHandler()

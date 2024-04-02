@@ -12,8 +12,9 @@ from src.data.data_handler import DataHandler
 
 class TestDataHandler(unittest.TestCase):
 
-    def setUp(self):
-        self.current_directory = os.path.dirname(os.path.abspath(__file__))
+    @classmethod
+    def setUpClass(cls):
+        cls.current_directory = os.path.dirname(os.path.abspath(__file__))
 
     def test_prepare_dataframe_for_boxplot(self):
         """This is just making use of the melt method from pandas. But as it is quite confusing

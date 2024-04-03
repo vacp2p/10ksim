@@ -47,7 +47,7 @@ class KubernetesManager:
         path_location_result = path.prepare_path(location + pod_name + ".log")
 
         if path_location_result.is_ok():
-            with open(f"{path_location_result.ok}", "w") as log_file:
+            with open(f"{path_location_result.ok_value}", "w") as log_file:
                 log_file.write(logs)
             logger.debug(f"Logs from pod {pod_name} downloaded successfully.")
         else:

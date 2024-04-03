@@ -1,3 +1,5 @@
+general_config:
+  kubeconfig: "kubeconfig.yaml"
 scrape_config:
   $__rate_interval: "121s"
   step: "60s"

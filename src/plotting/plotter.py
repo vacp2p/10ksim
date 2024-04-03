@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 from typing import List, Dict
 from matplotlib import ticker
-from result import Err, Ok
 
 # Project Imports
 from src.data.data_handler import DataHandler
@@ -37,16 +36,12 @@ class Plotter:
 
     def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray, plot_specs: Dict):
         for i, subplot_path_group in enumerate(subplot_paths_group):
-            file_data_hanlder = DataFileHandler()
-            match file_data_hanlder.add_dataframes_from_folders_as_mean(subplot_path_group):
-                case Ok(msg):
-                    logger.info(msg)
+            file_data_handler = DataFileHandler()
+            file_data_handler.add_dataframes_from_folders_as_mean(subplot_path_group)
+            subplot_df = file_data_handler.dataframe
 
-                    subplot_df = file_data_hanlder.dataframe
-                    subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)
-                    self._add_subplot_df_to_axs(subplot_df, i, axs, plot_specs)
-                case Err(msg):
-                    logger.error(msg)
+            subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)
+            self._add_subplot_df_to_axs(subplot_df, i, axs, plot_specs)
 
     def _save_plot(self, plot_name: str):
         plt.tight_layout()

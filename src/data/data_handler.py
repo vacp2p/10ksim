@@ -1,7 +1,7 @@
 # Python Imports
 import logging
 import pandas as pd
-from typing import List
+from pathlib import Path
 
 # Project Imports
 from src.utils import path
@@ -14,17 +14,19 @@ class DataHandler:
         self._dataframe = None
 
     @staticmethod
-    def concatenate_dataframes(dataframes: List, vertically: bool = True) -> pd.DataFrame:
-        if vertically:
-            return pd.concat(dataframes)
-
-        return pd.concat(dataframes, axis="columns")
-
-    @staticmethod
     def prepare_dataframe_for_boxplot(dataframe: pd.DataFrame, class_name='class') -> pd.DataFrame:
         prepared_df = pd.melt(dataframe, class_name)
 
         return prepared_df
+
+    @staticmethod
+    def add_file_as_mean_to_df(target_df: pd.DataFrame, file_path: Path):
+        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
+        df_mean = df.mean()
+        df_mean = pd.DataFrame(df_mean, columns=[file_path.name])
+        target_df = pd.concat([target_df, df_mean], axis=1)
+
+        return target_df
 
     @property
     def dataframe(self) -> pd.DataFrame:

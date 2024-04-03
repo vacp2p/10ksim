@@ -1,17 +1,22 @@
 # Python Imports
 import socket
 import logging
+import kubernetes
+import multiprocessing
 from typing import List, Tuple
-from kubernetes.client import CoreV1Api, V1PodList, V1Service
+from kubernetes.client import V1PodList, V1Service
 from kubernetes.stream import portforward
 
+from src.utils import path
 
 logger = logging.getLogger(__name__)
 
 
 class KubernetesManager:
-    def __init__(self, api: CoreV1Api):
-        self._api = api
+    def __init__(self, kube_config: str):
+        self._kube_config = kube_config
+        self._kube_client = kubernetes.config.new_client_from_config(self._kube_config)
+        self._api = kubernetes.client.CoreV1Api(self._kube_client)
 
     def create_connection(self, address, *args, **kwargs) -> socket.socket:
         dns_name = self._get_dns_name(address)
@@ -30,6 +35,39 @@ class KubernetesManager:
                          name, namespace, ports=str(port))
 
         return pf.socket(port)
+
+    @staticmethod
+    def download_logs_from_pod_asyncable(kube_config: str, namespace: str, pod_name: str,
+                                         location: str):
+        kube_client = kubernetes.config.new_client_from_config(kube_config)
+        api = kubernetes.client.CoreV1Api(kube_client)
+
+        logs = api.read_namespaced_pod_log(pod_name, namespace=namespace)
+
+        path_location_result = path.prepare_path(location + pod_name + ".log")
+
+        if path_location_result.is_ok():
+            with open(f"{path_location_result.ok}", "w") as log_file:
+                log_file.write(logs)
+            logger.debug(f"Logs from pod {pod_name} downloaded successfully.")
+        else:
+            logger.error(
+                f"Unable to download logs from pod {pod_name}. Error: {path_location_result.err}")
+
+    def download_pod_logs(self, namespace: str, location: str):
+        logger.info(f"Downloading logs from namespace '{namespace}' to {location}")
+        pods = self._api.list_namespaced_pod(namespace)
+
+        pool = multiprocessing.Pool()
+
+        for pod in pods.items:
+            pod_name = pod.metadata.name
+            pool.apply_async(KubernetesManager.download_logs_from_pod_asyncable,
+                             args=(self._kube_config, namespace, pod_name, location))
+
+        pool.close()
+        pool.join()
+        logger.info("Logs downloaded successfully.")
 
     def _get_dns_name(self, address: List) -> List:
         dns_name = address[0]

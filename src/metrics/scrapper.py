@@ -3,7 +3,6 @@ import socket
 import logging
 from typing import Dict
 from result import Ok, Err
-from kubernetes.client import CoreV1Api
 
 # Project Imports
 from src.metrics import scrape_utils
@@ -15,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class Scrapper:
-    def __init__(self, api: CoreV1Api, url: str, query_config_file: str):
+    def __init__(self, kube_config: str, url: str, query_config_file: str):
         self._url = url
         self._query_config = None
         self._query_config_file = query_config_file
         self._set_query_config()
-        self._k8s = kubernetes.KubernetesManager(api)
+        self._k8s = kubernetes.KubernetesManager(kube_config)
 
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py

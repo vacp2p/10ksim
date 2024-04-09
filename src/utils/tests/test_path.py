@@ -1,4 +1,5 @@
 # Python Imports
+import os.path
 import shutil
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ class TestPathUtils(unittest.TestCase):
         result = path.prepare_path(test_path)
         self.assertTrue(result.is_ok())
         self.assertEqual(result_path, result.ok_value)
+        self.assertTrue(os.path.exists('test_folder'))
         shutil.rmtree('test_folder')
 
     @patch('pathlib.Path.mkdir')
@@ -25,3 +27,4 @@ class TestPathUtils(unittest.TestCase):
         result = path.prepare_path(test_path)
         self.assertTrue(result.is_err())
         self.assertEqual('Error creating test_folder. ', result.err_value)
+        self.assertFalse(os.path.exists('test_folder'))

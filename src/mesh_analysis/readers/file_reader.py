@@ -24,13 +24,13 @@ class FileReader(Reader):
         logger.info(f'Reading {self._folder}')
         files_result = file_utils.get_files_from_folder_path(Path(self._folder))
 
-        if files_result.is_ok():
-            parsed_logs = self._read_files(files_result.ok_value)
-            logger.info(f'Tracing {self._folder}')
-            df = self._tracer.trace(parsed_logs)
-        else:
+        if files_result.is_err():
             logger.error(f'Could not read {self._folder}')
             exit()
+
+        parsed_logs = self._read_files(files_result.ok_value)
+        logger.info(f'Tracing {self._folder}')
+        df = self._tracer.trace(parsed_logs)
 
         return df
 

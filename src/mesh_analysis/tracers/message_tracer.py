@@ -1,18 +1,15 @@
 # Python Imports
 import pandas as pd
 from abc import ABC, abstractmethod
-from typing import List
-
+from typing import List, Optional
 
 # Project Imports
 
 
 class MessageTracer(ABC):
 
-    @abstractmethod
     def __init__(self):
-        self._patterns = None
-        pass
+        self._patterns: Optional[List] = None
 
     @property
     def patterns(self) -> List:

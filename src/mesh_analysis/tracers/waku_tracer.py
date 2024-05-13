@@ -3,7 +3,6 @@ import re
 import pandas as pd
 from typing import List
 
-
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
 
@@ -24,10 +23,10 @@ class WakuTracer(MessageTracer):
         return df
 
     def _trace_message_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        parsed_logs = [log for log in parsed_logs if len(log[0]) > 0]
+        parsed_logs = (log for log in parsed_logs if len(log[0]) > 0)
 
         # Merge received message info + own ID
-        res = [message + node[1][0] for node in parsed_logs for message in node[0]]
+        res = (message + node[1][0] for node in parsed_logs for message in node[0])
 
         df = pd.DataFrame(res, columns=['timestamp', 'msg_hash', 'sender_peer_id', 'receiver_peer_id'])
         df['receiver_peer_id'] = df['receiver_peer_id'].apply(lambda x: x.split('/')[-1])

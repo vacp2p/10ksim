@@ -1,7 +1,8 @@
 import pandas as pd
 import networkx as nx
-from datetime import timedelta
 import ipywidgets as widgets
+import matplotlib.pyplot as plt
+from datetime import timedelta
 
 
 def add_elapsed_time(df: pd.DataFrame):
@@ -49,7 +50,7 @@ def get_node_position(df: pd.DataFrame):
 
 
 def display_msg_trace(x, y, g_pos_layout, data_, ax_):
-    # todo maintain limits?
+    # todo maintain limits between display and clear?
     ax_.clear()
     ax_.set_xlim(-2, 2)
     ax_.set_ylim(-2, 2)
@@ -73,6 +74,4 @@ def display_msg_trace(x, y, g_pos_layout, data_, ax_):
 
     nx.draw_networkx_edge_labels(selected_graph, g_pos_layout_selected, edge_labels=edge_labels,
                                  ax=ax_)
-
-
-
+    plt.show()

@@ -30,7 +30,8 @@ class WakuTracer(MessageTracer):
 
         df = pd.DataFrame(res, columns=['timestamp', 'msg_hash', 'sender_peer_id', 'receiver_peer_id'])
         df['receiver_peer_id'] = df['receiver_peer_id'].apply(lambda x: x.split('/')[-1])
-        df.set_index(['timestamp', 'msg_hash'], inplace=True)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index(['msg_hash', 'timestamp'], inplace=True)
         df.sort_index(inplace=True)
 
         return df

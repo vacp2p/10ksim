@@ -31,7 +31,7 @@ class KubernetesManager:
         if len(dns_name) == 4:
             name, port = self._find_pod_in_service(dns_name, name, namespace, port)
 
-        logger.info(f'Forwarding port {port} from pod {name} in namespace {namespace}')
+        logger.debug(f'Forwarding port {port} from pod {name} in namespace {namespace}')
         pf = portforward(self._api.connect_get_namespaced_pod_portforward,
                          name, namespace, ports=str(port))
 

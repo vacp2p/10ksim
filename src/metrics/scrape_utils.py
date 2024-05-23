@@ -30,7 +30,7 @@ def get_query_data(request: str) -> Result[Dict, str]:
         return Err(
             f"Error in query. Status code {response.status}. {response.read().decode('utf-8')}")
 
-    logger.info(f'Response: {response.status}')
+    logger.debug(f'Response: {response.status}')
     json_response = json.loads(str(response.read(), 'utf-8'))
 
     if len(json_response['data']['result']) == 0:

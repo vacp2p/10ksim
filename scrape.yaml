@@ -1,52 +1,67 @@
 general_config:
   kubeconfig: "kubeconfig.yaml"
+  times_names:
+    - [ "2024-05-15 12:31:00", "2024-05-15 12:47:00", "3K-1mgs-s-1KB" ]
+    - [ "2024-05-15 13:10:00", "2024-05-15 13:30:00", "2K-1mgs-s-1KB" ]
+    - [ "2024-05-15 16:34:00", "2024-05-15 16:56:00", "1K-1mgs-s-1KB" ]
+    - [ "2024-05-15 19:34:00", "2024-05-15 19:59:00", "3K-1mgs-5s-1KB" ]
+    - [ "2024-05-15 21:10:00", "2024-05-15 22:10:00", "2K-1mgs-5s-1KB" ]
+    - [ "2024-05-16 11:11:00", "2024-05-16 11:29:00", "1K-1mgs-5s-1KB" ]
+    - [ "2024-05-16 11:54:00", "2024-05-16 12:22:00", "3K-1mgs-10s-1KB" ]
+    - [ "2024-05-16 12:55:00", "2024-05-16 13:19:00", "2K-1mgs-10s-1KB" ]
+    - [ "2024-05-16 16:35:00", "2024-05-16 16:58:00", "1K-1mgs-10s-1KB" ]
 scrape_config:
   $__rate_interval: "121s"
   step: "60s"
-  start_scrape: "2024-03-12 16:24:00"
-  finish_scrape: "2024-03-12 16:30:00"
-  dump_location: "test/nwaku-vXX/"
-  simulation_name: "3K-test"
+  dump_location: "test/nwaku0.26-f/"
 metrics_to_scrape:
-  libp2p_peers:
-    query: "libp2p-peers"
-    extract_field: "instance"
-    folder_name: "libp2p-peers/"
-  libp2p_open_streams:
-    query: "libp2p_open_streams"
-    extract_field: "instance-type-dir"
-    folder_name: "libp2p-open-streams/"
+  # libp2p_peers:
+  #   query: "libp2p-peers"
+  #   extract_field: "instance"
+  #   folder_name: "libp2p-peers/"
+  # libp2p_open_streams:
+  #   query: "libp2p_open_streams"
+  #   extract_field: "instance-type-dir"
+  #   folder_name: "libp2p-open-streams/"
   libp2p_network_in:
     query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
-    extract_field: "instance-direction"
+    extract_field: "instance"
     folder_name: "libp2p-in/"
   libp2p_network_out:
     query: "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])"
-    extract_field: "instance-direction"
+    extract_field: "instance"
     folder_name: "libp2p-out/"
-  container_recv_bytes:
-    query: "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])"
-    extract_field: "pod-node"
-    folder_name: "container-recv/"
-  container_sent_bytes:
-    query: "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])"
-    extract_field: "pod-node"
-    folder_name: "container-sent/"
-  libp2p_low_peers:
-    query: "sum by(job) (libp2p_gossipsub_low_peers_topics)"
-    extract_field: "job"
-    folder_name: "low-peers/"
-  libp2p_high_peers:
-    query: "sum by(job) (libp2p_gossipsub_healthy_peers_topics)"
-    extract_field: "job"
-    folder_name: "high-peers/"
-plotting:
-  "bandwidth":
-    "folder":
-      - "test/nwaku/"
-    "data":
-      - "libp2p-in"
-      - "libp2p-out"
-    "xlabel_name": "NºNodes-MsgRate"
-    "ylabel_name": "KBytes/s"
-    "scale-x": 1000
+  # container_recv_bytes:
+  #   query: "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])"
+  #   extract_field: "pod-node"
+  #   folder_name: "container-recv/"
+  # container_sent_bytes:
+  #   query: "rate(container_network_transmit_bytes_total{namespace='zerotesting'}[$__rate_interval])"
+  #   extract_field: "pod-node"
+  #   folder_name: "container-sent/"
+  # libp2p_low_peers:
+  #   query: "sum by(job) (libp2p_gossipsub_low_peers_topics)"
+  #   extract_field: "job"
+  #   folder_name: "low-peers/"
+  # libp2p_high_peers:
+  #   query: "sum by(job) (libp2p_gossipsub_healthy_peers_topics)"
+  #   extract_field: "job"
+  #   folder_name: "high-peers/"
+  # container_memory_bytes:
+  #   query: "container_memory_usage_bytes{namespace='zerotesting'}"
+  #   extract_field: "pod"
+  #   folder_name: "container-memory/"
+  # nim_gc_memory_bytes:
+  #   query: "rate(nim_gc_mem_bytes{namespace='zerotesting'}[$__rate_interval])"
+  #   extract_field: "pod-node"
+  #   folder_name: "nim-gc-memory/"
+# plotting:
+#   "bandwidth":
+#     "folder":
+#       - "test/nwaku/"
+#     "data":
+#       - "libp2p-in"
+#       - "libp2p-out"
+#     "xlabel_name": "NºNodes-MsgRate"
+#     "ylabel_name": "KBytes/s"
+#     "scale-x": 1000

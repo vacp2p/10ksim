@@ -20,8 +20,13 @@ class DataHandler:
         return prepared_df
 
     @staticmethod
-    def add_file_as_mean_to_df(target_df: pd.DataFrame, file_path: Path):
-        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time')
+    def add_file_as_mean_to_df(target_df: pd.DataFrame, file_path: Path, points: int):
+        logger.info(f'Reading {file_path} with {points} datapoints')
+        df = pd.read_csv(file_path, parse_dates=['Time'], index_col='Time', nrows=points)
+
+        if len(df) < points:
+            logger.warning(f'Not enough datapoints in {file_path}')
+
         df_mean = df.mean()
         df_mean = pd.DataFrame(df_mean, columns=[file_path.name])
         target_df = pd.concat([target_df, df_mean], axis=1)

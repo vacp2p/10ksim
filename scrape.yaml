@@ -55,13 +55,16 @@ metrics_to_scrape:
   #   query: "rate(nim_gc_mem_bytes{namespace='zerotesting'}[$__rate_interval])"
   #   extract_field: "pod-node"
   #   folder_name: "nim-gc-memory/"
-# plotting:
-#   "bandwidth":
-#     "folder":
-#       - "test/nwaku/"
-#     "data":
-#       - "libp2p-in"
-#       - "libp2p-out"
-#     "xlabel_name": "NºNodes-MsgRate"
-#     "ylabel_name": "KBytes/s"
-#     "scale-x": 1000
+plotting:
+  "bandwidth":
+    "data_points": 15
+    "folder":
+      - "test/nwaku0.26-f/"
+    "data":
+      # - "libp2p-in"
+      # - "libp2p-out"
+      - "asd"
+      - "asd2"
+    "xlabel_name": "NºNodes-MsgRate"
+    "ylabel_name": "KBytes/s"
+    "scale-x": 1000

@@ -18,16 +18,23 @@ class DataRequestHandler(DataHandler):
 
     def create_dataframe_from_request(self, extract_placeholder: str):
         data_result = self._raw_data['data']['result']
+        duplicated = 0
+
+        logger.info(f'Dumping {len(data_result)} instances')
 
         for pod_result_dict in data_result:
             final_column_name = self._extract_column_name_from_result(extract_placeholder,
                                                                       pod_result_dict)
-            values = pod_result_dict['values']
+            if final_column_name in self._dataframe:
+                duplicated += 1
 
+            values = pod_result_dict['values']
             pod_df = self._create_pod_df(final_column_name, values)
 
             self._dataframe = pd.merge(self._dataframe, pod_df, how='outer', left_index=True,
                                        right_index=True)
+        if duplicated != 0:
+            logger.warning(f'Duplicated data: {duplicated} of {len(self._dataframe.columns)}')
 
         self._sort_dataframe_columns()
 

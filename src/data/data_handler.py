@@ -39,4 +39,4 @@ class DataHandler:
             exit(1)
 
         self._dataframe.to_csv(result.ok_value)
-        logger.info(f'{dump_path} data dumped')
+        logger.debug(f'{dump_path} data dumped')

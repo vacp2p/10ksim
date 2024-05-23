@@ -26,9 +26,14 @@ def create_promql(address: str, query: str, start_scrape: str, finish_scrape: st
 def get_query_data(request: str) -> Result[Dict, str]:
     response = urllib_request.urlopen(request, timeout=30)
 
-    if response.status == 200:
-        logger.info(f'Response: {response.status}')
-        data = json.loads(str(response.read(), 'utf-8'))
-        return Ok(data)
+    if response.status != 200:
+        return Err(
+            f"Error in query. Status code {response.status}. {response.read().decode('utf-8')}")
 
-    return Err(f"Error in query. Status code {response.status}. {response.read().decode('utf-8')}")
+    logger.info(f'Response: {response.status}')
+    json_response = json.loads(str(response.read(), 'utf-8'))
+
+    if len(json_response['data']['result']) == 0:
+        return Err(f'Returned data is empty.')
+
+    return Ok(json_response)

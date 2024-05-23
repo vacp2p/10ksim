@@ -38,7 +38,7 @@ class Scrapper:
                                      self._query_config['scrape_config']['simulation_name'])
                     self._dump_data(scrape_name, metric_config['extract_field'], data, file_location)
                 case Err(err):
-                    logger.info(err)
+                    logger.error(f'Error in {scrape_name}. {err}')
                     continue
 
     def _dump_data(self, scrape_name: str, extract_field: str, data: Dict, dump_path: str):

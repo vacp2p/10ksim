@@ -16,4 +16,4 @@ spec:
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --debug
+        - /bin/sleep infinity

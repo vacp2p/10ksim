@@ -83,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-s', '--msg-size-kbytes', type=int, help='Message size in kBytes',
                         default=10)
     parser.add_argument('-d', '--delay-seconds', type=float, help='Delay between messages',
-                        default=0.5)
+                        default=1)
     parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
                         default=10)
 

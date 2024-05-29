@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodes
+  namespace: zerotesting-nimlibp2p
+spec:
+  replicas: 100
+  podManagementPolicy: "Parallel"
+  serviceName: nimp2p-service
+  selector:
+    matchLabels:
+      app: zerotenkay-nimlibp2p
+  template:
+    metadata:
+      labels:
+        app: zerotenkay-nimlibp2p
+    spec:
+      dnsConfig:
+        searches:
+          - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
+      containers:
+        - name: container-0
+          image: soutullostatus/dst-test-node:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+            - containerPort: 8000
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: PEERNUMBER
+              value: "0"
+            - name: PEERS
+              value: "100"
+            - name: CONNECTTO
+              value: "20"
+            - name: MSGRATE
+              value: "1000"
+            - name: MSGSIZE
+              value: "1000"
+          command:
+            - 30 12

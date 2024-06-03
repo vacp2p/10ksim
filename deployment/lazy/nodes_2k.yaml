@@ -1,24 +1,23 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: midstrap
+  name: nodes
   namespace: zerotesting
 spec:
-  replicas: 40
+  replicas: 2000
   podManagementPolicy: "Parallel"
-  serviceName: zerotesting-bootstrap
+  serviceName: zerotesting-service
   selector:
     matchLabels:
-      app: zerotenkay-bootstrap
+      app: zerotenkay
   template:
     metadata:
       labels:
-        app: zerotenkay-bootstrap
+        app: zerotenkay
     spec:
       dnsConfig:
         searches:
           - zerotesting-service.zerotesting.svc.cluster.local
-          - zerotesting-bootstrap.zerotesting.svc.cluster.local
       volumes:
         - name: enr-data
           emptyDir: {}
@@ -29,6 +28,10 @@ spec:
           volumeMounts:
             - name: enr-data
               mountPath: /etc/enr
+          command:
+            - /app/getenr.sh
+          args:
+            - "3"
       containers:
         - name: waku
           image: soutullostatus/nwaku-0.27-jq:1
@@ -54,17 +57,17 @@ spec:
                       exit 1;  # failure, unhealthy state
                     }
                   }'
-            successThreshold: 1
+            successThreshold: 5
             initialDelaySeconds: 5
             periodSeconds: 1
-            failureThreshold: 1
+            failureThreshold: 2
             timeoutSeconds: 5
           resources:
             requests:
               memory: "64Mi"
-              cpu: "10m"
+              cpu: "150m"
             limits:
-              memory: "768Mi"
+              memory: "600Mi"
               cpu: "400m"
           env:
             - name: IP
@@ -77,4 +80,4 @@ spec:
             - |
               . /etc/enr/enr.env
               echo ENRs are $ENR1 $ENR2 $ENR3
-              /usr/bin/wakunode --relay-peer-exchange=true --relay=true --max-connections=200 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/default-waku/proto"
+              nice -n 19 /usr/bin/wakunode --relay-peer-exchange=true --relay=true --max-connections=50 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/default-waku/proto"

@@ -57,6 +57,7 @@ metrics_to_scrape:
   #   folder_name: "nim-gc-memory/"
 plotting:
   "bandwidth":
+    "ignore": ["bootstrap", "midstrap"]
     "data_points": 15
     "folder":
       - "test/nwaku0.26-f/"

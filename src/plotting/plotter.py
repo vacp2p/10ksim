@@ -36,9 +36,9 @@ class Plotter:
 
     def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray, plot_specs: Dict):
         for i, subplot_path_group in enumerate(subplot_paths_group):
-            file_data_handler = DataFileHandler()
-            file_data_handler.add_dataframes_from_folders_as_mean(subplot_path_group,
-                                                                  plot_specs['data_points'])
+            file_data_handler = DataFileHandler(plot_specs['ignore'])
+            file_data_handler.concat_dataframes_from_folders_as_mean(subplot_path_group,
+                                                                     plot_specs['data_points'])
             subplot_df = file_data_handler.dataframe
 
             subplot_df = DataHandler.prepare_dataframe_for_boxplot(subplot_df)

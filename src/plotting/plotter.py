@@ -64,6 +64,7 @@ class Plotter:
         box_plot.set_title(f'{subplot_title}')
         box_plot.tick_params(labelbottom=True)
         box_plot.xaxis.set_tick_params(rotation=45)
+        box_plot.legend(loc='upper right', bbox_to_anchor=(1, 1))
 
         self._add_median_labels(box_plot)
 

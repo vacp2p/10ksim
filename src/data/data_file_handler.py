@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class DataFileHandler(DataHandler):
-    def __init__(self, ignore: Optional[List] = None):
-        super().__init__(ignore)
 
     def concat_dataframes_from_folders_as_mean(self, folders: List, points: int):
         for folder in folders:

@@ -52,8 +52,8 @@ class Plotter:
     def _add_subplot_df_to_axs(self, df: pd.DataFrame, index: int, axs: np.ndarray,
                                plot_specs: Dict):
         subplot_title = plot_specs['data'][index]
-
-        box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs[index],
+        axs = axs if type(axs) is not np.ndarray else axs[index]
+        box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs,
                                showfliers=False)
 
         # Apply the custom formatter to the x-axis ticks
@@ -64,6 +64,7 @@ class Plotter:
         box_plot.set_title(f'{subplot_title}')
         box_plot.tick_params(labelbottom=True)
         box_plot.xaxis.set_tick_params(rotation=45)
+        box_plot.legend(loc='upper right', bbox_to_anchor=(1, 1))
 
         self._add_median_labels(box_plot)
 

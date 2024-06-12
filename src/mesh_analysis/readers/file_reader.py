@@ -1,4 +1,5 @@
 # Python Imports
+import re
 import logging
 import multiprocessing
 import pandas as pd
@@ -48,9 +49,9 @@ class FileReader(Reader):
         with open(Path(self._folder + file)) as log_file:
             for line in log_file:
                 for i, pattern in enumerate(self._tracer.patterns):
-                    match = pattern.match(line)
+                    match = re.search(pattern, line)
                     if match:
-                        results[i].append(list(match.groups()))
+                        results[i].append(match.groups())
                         break
 
         return results

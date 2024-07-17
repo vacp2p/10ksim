@@ -26,18 +26,23 @@ class VictoriaReader:
                     self.logs.append(parsed_object['_msg'])
         logger.info(f'Fetched {len(self.logs)} messages')
 
+    def _make_queries(self) -> List:
+        results = [[] for _ in self._tracer.patterns]
+
+        for i, query in enumerate(self._config['params']):
+            self._fetch_data(self._config["headers"], query)
+            for log_line in self.logs:
+                match = re.search(self._tracer.patterns[i], log_line)
+                if match:
+                    results[i].append(match.groups())
+            self.logs.clear()
+
+        return results
+
     def read(self) -> List:
         logger.info(f'Reading {self._config["url"]}')
 
-        self._fetch_data(self._config["headers"], self._config["params"])
-
-        results = [[] for _ in self._tracer.patterns]
-        for log_line in self.logs:
-            for i, pattern in enumerate(self._tracer.patterns):
-                match = re.search(pattern, log_line)
-                if match:
-                    results[i].append(match.groups())
-
+        results = self._make_queries()
         dfs = self._tracer.trace(results)
 
         return dfs

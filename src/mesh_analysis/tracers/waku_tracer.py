@@ -18,8 +18,9 @@ class WakuTracer(MessageTracer):
         self._patterns = []
         self._tracings = []
 
-    def _with_received_pattern(self):
-        self._patterns.append(r'my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)')
+    def with_received_pattern(self):
+        # self._patterns.append(r'my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)')
+        self._patterns.append(r'my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)')
         self._tracings.append(self._trace_received_in_logs)
 
     def trace(self, parsed_logs: List) -> List:
@@ -30,10 +31,8 @@ class WakuTracer(MessageTracer):
         return dfs
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        # parsed_logs = (log for log in parsed_logs if len(log[0]) > 0)
-        # res = (message for node in parsed_logs for message in node[0])
-
         df = pd.DataFrame(parsed_logs, columns=['receiver_peer_id', 'msg_hash', 'sender_peer_id', 'timestamp'])
+        # df = pd.DataFrame(parsed_logs, columns=['receiver_peer_id', 'msg_hash', 'timestamp'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
         df.set_index(['msg_hash', 'timestamp'], inplace=True)

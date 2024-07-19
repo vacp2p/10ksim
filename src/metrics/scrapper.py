@@ -23,7 +23,7 @@ class Scrapper:
 
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
-        socket.create_connection = self._k8s.create_connection
+        # socket.create_connection = self._k8s.create_connection
 
         for time_name in self._query_config['general_config']['times_names']:
             logger.info(f'Querying simulation {time_name[2]}')

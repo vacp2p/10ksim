@@ -23,7 +23,7 @@ class VictoriaReader:
             for line in response.iter_lines():
                 if line:
                     parsed_object = json.loads(line)
-                    self.logs.append(parsed_object['_msg'])
+                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name']))
         logger.info(f'Fetched {len(self.logs)} messages')
 
     def _make_queries(self) -> List:
@@ -32,9 +32,11 @@ class VictoriaReader:
         for i, query in enumerate(self._config['params']):
             self._fetch_data(self._config["headers"], query)
             for log_line in self.logs:
-                match = re.search(self._tracer.patterns[i], log_line)
+                match = re.search(self._tracer.patterns[i], log_line[0])
                 if match:
-                    results[i].append(match.groups())
+                    match_as_list = list(match.groups())
+                    match_as_list.append(log_line[1])
+                    results[i].append(match_as_list)
             self.logs.clear()
 
         return results

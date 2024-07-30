@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import requests
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
@@ -13,17 +13,23 @@ logger = logging.getLogger(__name__)
 
 class VictoriaReader:
 
-    def __init__(self, config: Dict, tracer: MessageTracer):
+    def __init__(self, config: Dict, tracer: Optional[MessageTracer]):
         self._config = config
         self._tracer = tracer
         self.logs = []
 
     def _fetch_data(self, headers: Dict, params: Dict):
+        logger.info(f'Fetching {params}')
         with requests.post(self._config['url'], headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
                 if line:
-                    parsed_object = json.loads(line)
+                    try:
+                        parsed_object = json.loads(line)
+                    except json.decoder.JSONDecodeError as e:
+                        logger.info(line)
+                        exit()
                     self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name']))
+                    logger.debug("line added")
         logger.info(f'Fetched {len(self.logs)} messages')
 
     def _make_queries(self) -> List:
@@ -37,6 +43,7 @@ class VictoriaReader:
                     match_as_list = list(match.groups())
                     match_as_list.append(log_line[1])
                     results[i].append(match_as_list)
+            logger.info('Fetched lines parsed with pattern')
             self.logs.clear()
 
         return results
@@ -48,3 +55,16 @@ class VictoriaReader:
         dfs = self._tracer.trace(results)
 
         return dfs
+
+    def single_query_info(self) -> Dict:
+        # TODO Change it to result
+        response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                return data
+            except json.decoder.JSONDecodeError as e:
+                logger.error(f'Failed to decode JSON: {e}')
+                logger.error(f'Response content: {response.content}')
+        else:
+            logger.error(f'Request failed with status code: {response.status_code}')

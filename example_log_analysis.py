@@ -1,19 +1,17 @@
 # Python Imports
-import pandas as pd
-import src.logger.logger
-from pathlib import Path
-from result import Ok, Err
 
-from src.mesh_analysis.waku_message_log_analyzer import WakuMessageLogAnalyzer
 # Project Imports
-from src.mesh_analysis.readers.victoria_reader import VictoriaReader
-from src.mesh_analysis.tracers.waku_tracer import WakuTracer
-from src.utils import file_utils
+import src.logger.logger
+from src.mesh_analysis.waku_message_log_analyzer import WakuMessageLogAnalyzer
 
 
 if __name__ == '__main__':
     # Timestamp of the simulation
-    timestamp = "[2024-07-30T08:57:00, 2024-07-30T09:02:00]"
+    timestamp = "[2024-08-05T15:45:00, 2024-08-05T15:49:00]"
+    # Example of data analysis from cluster
+    # log_analyzer = WakuMessageLogAnalyzer(timestamp, dump_analysis_dir='test_logs_victoria')
+    # Example of data analysis from local
+    log_analyzer = WakuMessageLogAnalyzer(local_folder_to_analyze='data', dump_analysis_dir='test_logs_victoria')
 
-    log_analyzer = WakuMessageLogAnalyzer(timestamp, 'test_logs_victoria')
     log_analyzer.analyze_message_logs()
+    log_analyzer.analyze_message_timestamps(time_difference_threshold=2)

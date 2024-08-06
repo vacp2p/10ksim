@@ -2,8 +2,11 @@
 import json
 import logging
 import re
+import time
 import requests
 from typing import Dict, List, Optional
+from httpx import Response
+from result import Result, Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
@@ -20,6 +23,7 @@ class VictoriaReader:
 
     def _fetch_data(self, headers: Dict, params: Dict):
         logger.info(f'Fetching {params}')
+        time.sleep(5)
         with requests.post(self._config['url'], headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
                 if line:

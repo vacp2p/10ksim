@@ -20,10 +20,10 @@ def read_yaml_file(file_path: str) -> Dict:
     return data
 
 
-def get_files_from_folder_path(path: Path) -> Result[List, str]:
+def get_files_from_folder_path(path: Path, extension: str = "*") -> Result[List, str]:
     if path.exists():
-        files = [p.name for p in path.glob("*") if p.is_file()]
-        logger.info(f"Found {len(files)} in {path}")
+        files = [p.name for p in path.glob(extension) if p.is_file()]
+        logger.debug(f"Found {len(files)} files in {path}")
         logger.debug(f"Files are: {files}")
         return Ok(files)
 

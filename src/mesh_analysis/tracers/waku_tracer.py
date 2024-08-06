@@ -2,8 +2,8 @@
 import logging
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from typing import List, Tuple
-
 from result import Ok, Err
 
 # Project Imports
@@ -94,7 +94,7 @@ class WakuTracer(MessageTracer):
         for result in result_list:
             logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages} messages received')
 
-    def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame):
+    def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []
         for peer in peers:
             filtered_df = sent_df.loc[missed_messages]
@@ -104,7 +104,7 @@ class WakuTracer(MessageTracer):
         return messages_sent_to_peer
 
     def has_message_reliability_issues(self, msg_identifier: str, peer_identifier: str, received_df: pd.DataFrame,
-                                       sent_df: pd.DataFrame, issue_dump_location: str) -> bool:
+                                       sent_df: pd.DataFrame, issue_dump_location: Path) -> bool:
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
         logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(0).unique())}')
 
@@ -116,7 +116,7 @@ class WakuTracer(MessageTracer):
             for data in msg_sent_data:
                 peer_id = data[0].split('*')[-1]
                 logger.warning(f'Peer {peer_id} message information dumped in {issue_dump_location}')
-                match path.prepare_path(issue_dump_location+"/"+data[0].split('*')[-1]+".csv"):
+                match path.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
                     case Ok(location_path):
                         data[1].to_csv(location_path)
                     case Err(err):

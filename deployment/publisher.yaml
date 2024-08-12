@@ -11,9 +11,9 @@ spec:
       - zerotesting-service.zerotesting.svc.cluster.local
   containers:
     - name: publisher-container
-      image: zorlin/publisher:v0.3.0
+      image: zorlin/publisher:v0.4.0
       imagePullPolicy: Always
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --debug
+        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --messages=4000 --debug -p "/waku/2/default-waku/proto"

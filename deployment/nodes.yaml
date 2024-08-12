@@ -21,6 +21,9 @@ spec:
       volumes:
         - name: enr-data
           emptyDir: {}
+        - name: perflogs
+          persistentVolumeClaim:
+            claimName: perflogs
       initContainers:
         - name: grabenr
           image: zorlin/getenr:v0.3.0
@@ -42,6 +45,11 @@ spec:
           volumeMounts:
             - name: enr-data
               mountPath: /etc/enr
+            - name: perflogs
+              mountPath: /mnt/perflogs
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN"]
           resources:
             requests:
               memory: "64Mi"
@@ -60,4 +68,25 @@ spec:
             - |
               . /etc/enr/enr.env
               echo ENRs are $ENR1 $ENR2 $ENR3
-              nice -n 19 /usr/bin/wakunode --relay=true --max-connections=50 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/kubetopic"
+              HOSTNAME=$(hostname)
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              LOGFILE="/mnt/perflogs/${HOSTNAME}-waku-${TIMESTAMP}.log"
+              perf record -F 10 -o ${LOGFILE} -- \
+                nice -n 19 /usr/bin/wakunode \
+                --relay=true \
+                --max-connections=150 \
+                --rest=true \
+                --rest-admin=true \
+                --rest-private=true \
+                --rest-address=0.0.0.0 \
+                --discv5-discovery=true \
+                --discv5-enr-auto-update=True \
+                --log-level=TRACE \
+                --metrics-server=True \
+                --metrics-server-address=0.0.0.0 \
+                --discv5-bootstrap-node=$ENR1 \
+                --discv5-bootstrap-node=$ENR2 \
+                --discv5-bootstrap-node=$ENR3 \
+                --nat=extip:${IP} \
+                --cluster-id=2 \
+                --pubsub-topic="/waku/2/rs/2/0"

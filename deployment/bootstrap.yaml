@@ -21,7 +21,7 @@ spec:
           - zerotesting-bootstrap.zerotesting.svc.cluster.local
       containers:
         - name: waku
-          image: soutullostatus/nwaku-jq-curl:v0.28.0
+          image: zorlin/waku:debug-extra-nim-libp2p-logs-over-v0.31.0-with-extra-logs-mplex-perf
           imagePullPolicy: IfNotPresent
           readinessProbe:
             exec:

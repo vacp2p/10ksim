@@ -47,6 +47,26 @@ spec:
               mountPath: /etc/enr
             - name: perflogs
               mountPath: /mnt/perflogs
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  curl -s http://127.0.0.1:8008/metrics |
+                  awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{
+                    print "Found gossipsub:", $0;
+                    if ($2 == 1.0) {
+                      exit 0;  # success, healthy state
+                    } else {
+                      exit 1;  # failure, unhealthy state
+                    }
+                  }'
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
           securityContext:
             capabilities:
               add: ["SYS_ADMIN"]

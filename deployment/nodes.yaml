@@ -4,7 +4,7 @@ metadata:
   name: nodes
   namespace: zerotesting
 spec:
-  replicas: 100
+  replicas: 400
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-service
   selector:
@@ -68,6 +68,7 @@ spec:
             failureThreshold: 2
             timeoutSeconds: 5
           securityContext:
+            privileged: true
             capabilities:
               add: ["SYS_ADMIN"]
           resources:

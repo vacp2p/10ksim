@@ -40,7 +40,7 @@ class WakuMessageLogAnalyzer:
                                          "query": f"kubernetes_container_name:waku AND sent relay message AND _time:{self._timestamp}  | sort by (_time)"}]
                                  }
 
-    def _get_affected_node_pod(self, data_file) -> Result[str, str]:
+    def _get_affected_node_pod(self, data_file: str) -> Result[str, str]:
         peer_id = data_file.split('.')[0]
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
@@ -59,6 +59,7 @@ class WakuMessageLogAnalyzer:
         result = self._get_affected_node_pod(data_file)
         if result.is_err():
             logger.warning(result.err_value)
+            return
 
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},

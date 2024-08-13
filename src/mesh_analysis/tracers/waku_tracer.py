@@ -38,10 +38,7 @@ class WakuTracer(MessageTracer):
         self._tracings.append(self._trace_all_logs)
 
     def trace(self, parsed_logs: List) -> List:
-        dfs = []
-        for i, trace in enumerate(self._tracings):
-            if trace is not None:
-                dfs.append(trace(parsed_logs[i]))
+        dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
 
         return dfs
 

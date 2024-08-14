@@ -115,9 +115,13 @@ class WakuMessageLogAnalyzer:
                     case Err(error):
                         logger.error(error)
         else:
-            has_issues = self._has_issues_in_local()
+            _ = self._has_issues_in_local()
 
     def analyze_message_timestamps(self, time_difference_threshold: int):
+        """
+        Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
+        from logs.
+        """
         folder_path = self._local_folder_to_analyze_path or self._dump_analysis_dir_path
         file_logs = file_utils.get_files_from_folder_path(folder_path, '*.log')
         if file_logs.is_err():

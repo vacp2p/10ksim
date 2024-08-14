@@ -28,6 +28,13 @@ def prepare_dropdowns(dataf: pd.DataFrame):
         disabled=False,
         layout={'height': '100px', 'width': '100%'})
 
+    lookup_bar = widgets.Text(
+        value='',
+        placeholder='mgs_hash',
+        description='mgs_hash:',
+        disabled=False
+    )
+
     def update_timestamps(change):
         selected_hashes = change['new']
         timestamps = dataf.loc[selected_hashes[0]].index.get_level_values(
@@ -35,8 +42,9 @@ def prepare_dropdowns(dataf: pd.DataFrame):
         timestamp_dropdown.options = timestamps
 
     msg_dropdown.observe(update_timestamps, names='value')
+    lookup_bar.observe(update_timestamps, names='value')
 
-    return msg_dropdown, timestamp_dropdown
+    return msg_dropdown, timestamp_dropdown, lookup_bar
 
 
 def get_node_position(df: pd.DataFrame):
@@ -49,11 +57,14 @@ def get_node_position(df: pd.DataFrame):
     return g_pos_layout
 
 
-def display_msg_trace(x, y, g_pos_layout, data_, ax_):
+def display_msg_trace(x, y, z, g_pos_layout, data_, ax_):
     # todo maintain limits between display and clear?
     ax_.clear()
     ax_.set_xlim(-2, 2)
     ax_.set_ylim(-2, 2)
+
+    if z != '':
+        x = z
 
     data_ = data_[data_.index.get_level_values(0) == x[0]]
     first_timestamp = data_.index.get_level_values(1)[0]
@@ -74,4 +85,4 @@ def display_msg_trace(x, y, g_pos_layout, data_, ax_):
 
     nx.draw_networkx_edge_labels(selected_graph, g_pos_layout_selected, edge_labels=edge_labels,
                                  ax=ax_)
-    plt.show()
+    # plt.show()

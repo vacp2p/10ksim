@@ -21,9 +21,13 @@ spec:
       volumes:
         - name: enr-data
           emptyDir: {}
+#        - name: perflogs
+#          persistentVolumeClaim:
+#            claimName: perflogs
         - name: perflogs
-          persistentVolumeClaim:
-            claimName: perflogs
+          hostPath:
+            path: /mnt/swfs/services/perflogs
+            type: Directory
       initContainers:
         - name: grabenr
           image: zorlin/getenr:v0.3.0

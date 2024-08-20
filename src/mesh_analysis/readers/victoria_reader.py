@@ -4,7 +4,7 @@ import logging
 import re
 import time
 import requests
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Iterator
 from httpx import Response
 from result import Result, Ok, Err
 
@@ -74,3 +74,16 @@ class VictoriaReader:
             logger.error(f'Failed to decode JSON: {e}')
             logger.error(f'Response content: {response.content}')
 
+    def multi_query_info(self) -> Result[Iterator, Response]:
+        time.sleep(10)
+        response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
+        if response.status_code != 200:
+            logger.error(f'Request failed with status code: {response.status_code}')
+            return Err(response)
+
+        try:
+            data = response.iter_lines()
+            return Ok(data)
+        except json.decoder.JSONDecodeError as e:
+            logger.error(f'Failed to decode JSON: {e}')
+            logger.error(f'Response content: {response.content}')

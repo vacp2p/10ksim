@@ -105,8 +105,22 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
+    def _get_number_nodes(self) -> int:
+        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
+                           "headers": {"Content-Type": "application/json"},
+                           "params": {
+                               "query": f"kubernetes_container_name:waku AND _time:{self._timestamp} AND kubernetes_pod_name:nodes | uniq by (_stream)"}
+                           }
+
+        reader = VictoriaReader(victoria_config, None)
+        result = reader.multi_query_info()
+        n_nodes = len(list(result.ok_value))
+
+        return n_nodes
+
     def analyze_message_logs(self):
         if self._timestamp is not None:
+            n_nodes = self._get_number_nodes()
             has_issues = self._has_issues_in_cluster()
             if has_issues:
                 match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir_path)):

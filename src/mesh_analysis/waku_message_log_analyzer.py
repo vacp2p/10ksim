@@ -1,7 +1,10 @@
 # Python Imports
 import logging
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List
+from typing import List, Dict
+
+import pandas as pd
 from result import Ok, Err, Result
 
 # Project Imports
@@ -19,7 +22,7 @@ class WakuMessageLogAnalyzer:
         self._validate_analysis_location(timestamp_to_analyze, local_folder_to_analyze)
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._timestamp = timestamp_to_analyze
-        self._set_victoria_config()
+        # self._set_victoria_config()
 
     def _validate_analysis_location(self, timestamp_to_analyze: str, local_folder_to_analyze: str):
         if timestamp_to_analyze is None and local_folder_to_analyze is None:
@@ -30,15 +33,25 @@ class WakuMessageLogAnalyzer:
         self._dump_analysis_dir_path = Path(dump_analysis_dir) if dump_analysis_dir else None
         self._local_folder_to_analyze_path = Path(local_folder_to_analyze) if local_folder_to_analyze else None
 
-    def _set_victoria_config(self):
-        self._victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
-                                 "headers": {"Content-Type": "application/json"},
-                                 "params": [
-                                     {
-                                         "query": f"kubernetes_container_name:waku AND received relay message AND _time:{self._timestamp}  | sort by (_time)"},
-                                     {
-                                         "query": f"kubernetes_container_name:waku AND sent relay message AND _time:{self._timestamp}  | sort by (_time)"}]
-                                 }
+    def _get_victoria_config_parallel(self, pod_name: str) -> Dict:
+        return {"url": "https://vmselect.riff.cc/select/logsql/query",
+                "headers": {"Content-Type": "application/json"},
+                "params": [
+                    {
+                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{pod_name} AND received relay message AND _time:{self._timestamp}"},
+                    {
+                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{pod_name} AND sent relay message AND _time:{self._timestamp}"}]
+                }
+
+    def _get_victoria_config_single(self) -> Dict:
+        return {"url": "https://vmselect.riff.cc/select/logsql/query",
+                "headers": {"Content-Type": "application/json"},
+                "params": [
+                    {
+                        "query": f"kubernetes_container_name:waku AND received relay message AND _time:{self._timestamp}"},
+                    {
+                        "query": f"kubernetes_container_name:waku AND sent relay message AND _time:{self._timestamp}"}]
+                }
 
     def _get_affected_node_pod(self, data_file: str) -> Result[str, str]:
         peer_id = data_file.split('.')[0]
@@ -93,12 +106,46 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
-    def _has_issues_in_cluster(self) -> bool:
+    def _has_issues_in_cluster_single(self) -> bool:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
-        reader = VictoriaReader(self._victoria_config, waku_tracer)
+        reader = VictoriaReader(self._get_victoria_config_single(), waku_tracer)
         dfs = reader.read()
+
+        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+                                                                self._dump_analysis_dir_path)
+
+        return has_issues
+
+    @staticmethod
+    def read_logs_for_node(node_index, victoria_config_func, waku_tracer):
+        config = victoria_config_func(node_index)
+        reader = VictoriaReader(config, waku_tracer)
+        data = reader.read()
+        logger.info(f"{node_index} readed")
+
+        return data
+
+    def _has_issues_in_cluster_parallel(self, n_nodes: int) -> bool:
+        waku_tracer = WakuTracer()
+        waku_tracer.with_received_pattern()
+        waku_tracer.with_sent_pattern()
+
+        with ProcessPoolExecutor() as executor:
+            futures = {executor.submit(self.read_logs_for_node, i, self._get_victoria_config_parallel, waku_tracer): i
+                       for i in range(n_nodes)}
+
+            dfs = []
+            for future in as_completed(futures):
+                try:
+                    df = future.result()
+                    dfs.append(df)
+                except Exception as e:
+                    print(f"Error retrieving logs for node {futures[future]}: {e}")
+
+        dfs = list(zip(*dfs))
+        dfs = [pd.concat(tup, axis=0) for tup in dfs]
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
                                                                 self._dump_analysis_dir_path)
@@ -118,10 +165,12 @@ class WakuMessageLogAnalyzer:
 
         return n_nodes
 
-    def analyze_message_logs(self):
+    def analyze_message_logs(self, parallel=False):
         if self._timestamp is not None:
             n_nodes = self._get_number_nodes()
-            has_issues = self._has_issues_in_cluster()
+            logger.info(f"Detected {n_nodes} pods")
+            has_issues = self._has_issues_in_cluster_parallel(
+                n_nodes) if parallel else self._has_issues_in_cluster_single()
             if has_issues:
                 match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir_path)):
                     case Ok(data_files_names):

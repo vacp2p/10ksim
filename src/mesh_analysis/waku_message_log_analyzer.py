@@ -123,7 +123,7 @@ class WakuMessageLogAnalyzer:
         config = victoria_config_func(node_index)
         reader = VictoriaReader(config, waku_tracer)
         data = reader.read()
-        logger.info(f"{node_index} readed")
+        logger.debug(f'Nodes-{node_index} analyzed')
 
         return data
 
@@ -137,12 +137,17 @@ class WakuMessageLogAnalyzer:
                        for i in range(n_nodes)}
 
             dfs = []
+            i = 0
             for future in as_completed(futures):
                 try:
                     df = future.result()
                     dfs.append(df)
+                    i = i + 1
+                    if i % 50 == 0:
+                        logger.info(f'Processed {i}/{n_nodes} nodes')
+
                 except Exception as e:
-                    print(f"Error retrieving logs for node {futures[future]}: {e}")
+                    logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
@@ -167,8 +172,9 @@ class WakuMessageLogAnalyzer:
 
     def analyze_message_logs(self, parallel=False):
         if self._timestamp is not None:
+            logger.info('Analyzing from server')
             n_nodes = self._get_number_nodes()
-            logger.info(f"Detected {n_nodes} pods")
+            logger.info(f'Detected {n_nodes} pods')
             has_issues = self._has_issues_in_cluster_parallel(
                 n_nodes) if parallel else self._has_issues_in_cluster_single()
             if has_issues:
@@ -178,6 +184,7 @@ class WakuMessageLogAnalyzer:
                     case Err(error):
                         logger.error(error)
         else:
+            logger.info('Analyzing from local')
             _ = self._has_issues_in_local()
 
     def analyze_message_timestamps(self, time_difference_threshold: int):

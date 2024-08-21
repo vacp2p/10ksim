@@ -1,10 +1,9 @@
 # Python Imports
 import logging
+import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict
-
-import pandas as pd
 from result import Ok, Err, Result
 
 # Project Imports
@@ -30,8 +29,7 @@ class WakuMessageLogAnalyzer:
             exit(1)
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
-        self._dump_analysis_dir_path = Path(dump_analysis_dir) if dump_analysis_dir else None
-        self._local_folder_to_analyze_path = Path(local_folder_to_analyze) if local_folder_to_analyze else None
+        self._folder_path = Path(dump_analysis_dir) if dump_analysis_dir else Path(local_folder_to_analyze)
 
     def _get_victoria_config_parallel(self, pod_name: str) -> Dict:
         return {"url": "https://vmselect.riff.cc/select/logsql/query",
@@ -98,11 +96,11 @@ class WakuMessageLogAnalyzer:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
-        reader = FileReader(self._local_folder_to_analyze_path, waku_tracer)
+        reader = FileReader(self._folder_path, waku_tracer)
         dfs = reader.read()
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir_path)
+                                                                self._folder_path)
 
         return has_issues
 
@@ -114,7 +112,7 @@ class WakuMessageLogAnalyzer:
         dfs = reader.read()
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir_path)
+                                                                self._folder_path)
 
         return has_issues
 
@@ -149,13 +147,32 @@ class WakuMessageLogAnalyzer:
                 except Exception as e:
                     logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
+        dfs = self._merge_dfs(dfs)
+        result = self._dump_dfs(dfs)
+
+        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+                                                                self._folder_path)
+
+        return has_issues
+
+    def _merge_dfs(self, dfs: List[pd.DataFrame]) -> List[pd.DataFrame]:
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
 
-        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir_path)
+        return dfs
 
-        return has_issues
+    def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+        result = file_utils.dump_df_as_csv(dfs[0], self._folder_path / 'received.csv')
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        result = file_utils.dump_df_as_csv(dfs[1], self._folder_path / 'sent.csv')
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        return Ok(None)
 
     def _get_number_nodes(self) -> int:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
@@ -192,7 +209,6 @@ class WakuMessageLogAnalyzer:
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
         from logs.
         """
-        folder_path = self._local_folder_to_analyze_path or self._dump_analysis_dir_path
         file_logs = file_utils.get_files_from_folder_path(folder_path, '*.log')
         if file_logs.is_err():
             logger.error(file_logs.err_value)

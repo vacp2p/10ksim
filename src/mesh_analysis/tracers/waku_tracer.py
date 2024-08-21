@@ -8,7 +8,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-from src.utils import file_utils, path
+from src.utils import path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class WakuTracer(MessageTracer):
             for data in msg_sent_data:
                 peer_id = data[0].split('*')[-1]
                 logger.warning(f'Peer {peer_id} message information dumped in {issue_dump_location}')
-                match path.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
+                match path_utils.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
                     case Ok(location_path):
                         data[1].to_csv(location_path)
                     case Err(err):

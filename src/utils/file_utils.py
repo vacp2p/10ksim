@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict
 from result import Result, Err, Ok
-from src.utils import path
+from src.utils import path_utils
 
 # Project Imports
 
@@ -37,7 +37,7 @@ def get_files_from_folder_path(path: Path, extension: str = '*') -> Result[List[
 
 
 def dump_df_as_csv(df: pd.DataFrame, file_location: Path) -> Result[pd.DataFrame, str]:
-    result = path.prepare_path(file_location)
+    result = path_utils.prepare_path(file_location)
     if result.is_ok():
         df.to_csv(result.ok_value)
         logger.info(f'Dumped {file_location}')

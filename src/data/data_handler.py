@@ -4,7 +4,7 @@ import pandas as pd
 from typing import List, Optional
 
 # Project Imports
-from src.utils import path
+from src.utils import path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class DataHandler:
         self._dataframe = pd.DataFrame()
 
     def dump_dataframe(self, dump_path: str):
-        result = path.prepare_path(dump_path)
+        result = path_utils.prepare_path(dump_path)
         if result.is_err():
             logger.error(f'{result.err_value}')
             exit(1)

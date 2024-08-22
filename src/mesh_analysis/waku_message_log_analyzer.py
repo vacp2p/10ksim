@@ -166,12 +166,12 @@ class WakuMessageLogAnalyzer:
         return dfs
 
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
-        result = file_utils.dump_df_as_csv(dfs[0], self._folder_path / 'received.csv')
+        result = file_utils.dump_df_as_csv(dfs[0], self._folder_path / 'summary' / 'received.csv')
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
 
-        result = file_utils.dump_df_as_csv(dfs[1], self._folder_path / 'sent.csv')
+        result = file_utils.dump_df_as_csv(dfs[1], self._folder_path / 'summary' / 'sent.csv')
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)

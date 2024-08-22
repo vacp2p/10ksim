@@ -62,15 +62,17 @@ class WakuMessageLogAnalyzer:
         result = reader.single_query_info()
 
         if result.is_ok():
-            return Ok(result.unwrap()['kubernetes_pod_name'])
+            pod_name = result.unwrap()['kubernetes_pod_name']
+            logger.debug(f'Pod name for peer id {peer_id} is {pod_name}')
+            return Ok(pod_name)
 
         return Err(f'Unable to obtain pod name from {peer_id}')
 
-    def _get_affected_node_log(self, data_file: str):
+    def _get_affected_node_log(self, data_file: str) -> Result[Path, str]:
         result = self._get_affected_node_pod(data_file)
         if result.is_err():
             logger.warning(result.err_value)
-            return
+            return Err(result.err_value)
 
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
@@ -86,6 +88,8 @@ class WakuMessageLogAnalyzer:
         with open(self._dump_analysis_dir_path / f'{pod_log[0][0][1]}.log', 'w') as file:
             for element in log_lines:
                 file.write(f"{element}\n")
+
+        return Ok(log_name_path)
 
     def _dump_information(self, data_files: List[str]):
         for data_file in data_files:

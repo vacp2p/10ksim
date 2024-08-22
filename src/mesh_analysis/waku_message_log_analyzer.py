@@ -168,6 +168,9 @@ class WakuMessageLogAnalyzer:
         dfs = self._merge_dfs(dfs)
 
         result = self._dump_dfs(dfs)
+        if result.is_err():
+            logger.warning(f'Issue dumping message summary. {result.err_value}')
+            exit(1)
 
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()

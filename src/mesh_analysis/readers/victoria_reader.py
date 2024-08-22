@@ -74,6 +74,8 @@ class VictoriaReader:
             logger.error(f'Failed to decode JSON: {e}')
             logger.error(f'Response content: {response.content}')
 
+            return Err(response)
+
     def multi_query_info(self) -> Result[Iterator, Response]:
         time.sleep(10)
         response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
@@ -87,3 +89,5 @@ class VictoriaReader:
         except json.decoder.JSONDecodeError as e:
             logger.error(f'Failed to decode JSON: {e}')
             logger.error(f'Response content: {response.content}')
+
+            return Err(response)

@@ -199,7 +199,7 @@ class WakuMessageLogAnalyzer:
             has_issues = self._has_issues_in_cluster_parallel(
                 n_nodes) if parallel else self._has_issues_in_cluster_single()
             if has_issues:
-                match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir_path)):
+                match file_utils.get_files_from_folder_path(Path(self._folder_path), extension="csv"):
                     case Ok(data_files_names):
                         self._dump_information(data_files_names)
                     case Err(error):

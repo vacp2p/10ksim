@@ -131,8 +131,11 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
-    @staticmethod
-    def read_logs_for_node(node_index, victoria_config_func, waku_tracer):
+    def _read_logs_for_node(self, node_index, victoria_config_func):
+        waku_tracer = WakuTracer()
+        waku_tracer.with_received_pattern()
+        waku_tracer.with_sent_pattern()
+
         config = victoria_config_func(node_index)
         reader = VictoriaReader(config, waku_tracer)
         data = reader.read()
@@ -141,12 +144,8 @@ class WakuMessageLogAnalyzer:
         return data
 
     def _has_issues_in_cluster_parallel(self, n_nodes: int) -> bool:
-        waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-
         with ProcessPoolExecutor() as executor:
-            futures = {executor.submit(self.read_logs_for_node, i, self._get_victoria_config_parallel, waku_tracer): i
+            futures = {executor.submit(self._read_logs_for_node, i, self._get_victoria_config_parallel): i
                        for i in range(n_nodes)}
 
             dfs = []

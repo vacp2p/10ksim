@@ -85,7 +85,8 @@ class WakuMessageLogAnalyzer:
         pod_log = reader.read()
 
         log_lines = [inner_list[0] for inner_list in pod_log[0]]
-        with open(self._dump_analysis_dir_path / f'{pod_log[0][0][1]}.log', 'w') as file:
+        log_name_path = self._folder_path / f'{pod_log[0][0][1]}.log'
+        with open(log_name_path, 'w') as file:
             for element in log_lines:
                 file.write(f"{element}\n")
 
@@ -213,7 +214,7 @@ class WakuMessageLogAnalyzer:
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
         from logs.
         """
-        file_logs = file_utils.get_files_from_folder_path(folder_path, '*.log')
+        file_logs = file_utils.get_files_from_folder_path(self._folder_path, '*.log')
         if file_logs.is_err():
             logger.error(file_logs.err_value)
             return
@@ -221,7 +222,7 @@ class WakuMessageLogAnalyzer:
         logger.info(f'Analyzing timestamps from {len(file_logs.ok_value)} files')
         for file in file_logs.ok_value:
             logger.debug(f'Analyzing timestamps for {file}')
-            time_jumps = log_utils.find_time_jumps(folder_path / file, time_difference_threshold)
+            time_jumps = log_utils.find_time_jumps(self._folder_path / file, time_difference_threshold)
 
             for jump in time_jumps:
                 logger.info(f'{jump[0]} to {jump[1]} -> {jump[2]}')

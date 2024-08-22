@@ -143,12 +143,12 @@ class WakuMessageLogAnalyzer:
 
         return data
 
-    def _has_issues_in_cluster_parallel(self, n_nodes: int) -> bool:
+    def _read_logs_concurrently(self, n_nodes: int) -> List[pd.DataFrame]:
+        dfs = []
         with ProcessPoolExecutor() as executor:
             futures = {executor.submit(self._read_logs_for_node, i, self._get_victoria_config_parallel): i
                        for i in range(n_nodes)}
 
-            dfs = []
             i = 0
             for future in as_completed(futures):
                 try:
@@ -161,9 +161,17 @@ class WakuMessageLogAnalyzer:
                 except Exception as e:
                     logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
+        return dfs
+
+    def _has_issues_in_cluster_parallel(self, n_nodes: int) -> bool:
+        dfs = self._read_logs_concurrently(n_nodes)
         dfs = self._merge_dfs(dfs)
+
         result = self._dump_dfs(dfs)
 
+        waku_tracer = WakuTracer()
+        waku_tracer.with_received_pattern()
+        waku_tracer.with_sent_pattern()
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
                                                                 self._folder_path)
 

@@ -37,7 +37,7 @@ class WakuTracer(MessageTracer):
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
 
-    def trace(self, parsed_logs: List) -> List:
+    def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
         dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
 
         return dfs

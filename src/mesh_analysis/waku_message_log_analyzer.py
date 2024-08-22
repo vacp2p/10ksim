@@ -131,7 +131,7 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
-    def _read_logs_for_node(self, node_index, victoria_config_func):
+    def _read_logs_for_node(self, node_index, victoria_config_func) -> List[pd.DataFrame]:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()

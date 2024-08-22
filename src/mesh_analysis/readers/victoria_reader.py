@@ -52,7 +52,7 @@ class VictoriaReader:
 
         return results
 
-    def read(self) -> List:
+    def read(self) -> List[pd.DataFrame]:
         # logger.info(f'Reading {self._config["url"]}')
 
         results = self._make_queries()

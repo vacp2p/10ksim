@@ -93,9 +93,19 @@ class WakuMessageLogAnalyzer:
         return Ok(log_name_path)
 
     def _dump_information(self, data_files: List[str]):
-        for data_file in data_files:
-            logger.info(f'Dumping information for {data_file}')
-            self._get_affected_node_log(data_file)
+        with ProcessPoolExecutor() as executor:
+            futures = {executor.submit(self._get_affected_node_log, data_file): data_file for data_file in data_files}
+
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    match result:
+                        case Ok(log_path):
+                            logger.info(f'{log_path} dumped')
+                        case Err(_):
+                            logger.warning(result.err_value)
+                except Exception as e:
+                    logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
     def _has_issues_in_local(self) -> bool:
         waku_tracer = WakuTracer()

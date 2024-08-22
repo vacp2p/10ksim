@@ -26,7 +26,7 @@ def get_files_from_folder_path(path: Path, extension: str = '*') -> Result[List[
     if not path.exists():
         return Err(f"{path} does not exist.")
 
-    if not extension.startswith('*') and not extension.startswith('.'):
+    if not extension.startswith('*'):
         extension = '*.' + extension
 
     files = [p.name for p in path.glob(extension) if p.is_file()]

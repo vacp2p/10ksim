@@ -36,10 +36,10 @@ def get_files_from_folder_path(path: Path, extension: str = '*') -> Result[List[
     return Ok(files)
 
 
-def dump_df_as_csv(df: pd.DataFrame, file_location: Path) -> Result[pd.DataFrame, str]:
+def dump_df_as_csv(df: pd.DataFrame, file_location: Path, with_index: bool = True) -> Result[pd.DataFrame, str]:
     result = path_utils.prepare_path(file_location)
     if result.is_ok():
-        df.to_csv(result.ok_value)
+        df.to_csv(result.ok_value, index=with_index)
         logger.info(f'Dumped {file_location}')
         return Ok(df)
 

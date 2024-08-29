@@ -214,9 +214,11 @@ class WakuMessageLogAnalyzer:
 
         reader = VictoriaReader(victoria_config, None)
         result = reader.multi_query_info()
-        n_nodes = len(list(result.ok_value))
-
-        return n_nodes
+        if result.is_ok():
+            return len(list(result.ok_value))
+        else:
+            logger.error(result.err_value)
+            exit(1)
 
     def analyze_message_logs(self, parallel=False):
         if self._timestamp is not None:

@@ -203,7 +203,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_container_name:waku AND _time:{self._timestamp} AND kubernetes_pod_name:nodes | uniq by (_stream)"}
+                               "query": f"kubernetes_container_name:waku AND _time:{self._timestamp} AND kubernetes_pod_name:nodes | uniq by (kubernetes_pod_name)"}
                            }
 
         reader = VictoriaReader(victoria_config, None)

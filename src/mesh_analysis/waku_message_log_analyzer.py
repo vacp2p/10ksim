@@ -85,7 +85,7 @@ class WakuMessageLogAnalyzer:
         pod_log = reader.read()
 
         log_lines = [inner_list[0] for inner_list in pod_log[0]]
-        log_name_path = self._folder_path / f'{pod_log[0][0][1]}.log'
+        log_name_path = self._folder_path / f"{data_file.split('.')[0]}.log"
         with open(log_name_path, 'w') as file:
             for element in log_lines:
                 file.write(f"{element}\n")

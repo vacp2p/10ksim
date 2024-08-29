@@ -71,7 +71,6 @@ class WakuMessageLogAnalyzer:
     def _get_affected_node_log(self, data_file: str) -> Result[Path, str]:
         result = self._get_affected_node_pod(data_file)
         if result.is_err():
-            logger.warning(result.err_value)
             return Err(result.err_value)
 
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",

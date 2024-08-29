@@ -34,7 +34,6 @@ class VictoriaReader:
                         logger.info(line)
                         exit()
                     self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name']))
-                    logger.debug("line added")
         logger.debug(f'Fetched {len(self.logs)} messages')
 
     def _make_queries(self) -> List:

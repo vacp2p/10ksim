@@ -76,12 +76,12 @@ class VictoriaReader:
 
             return Err(response)
 
-    def multi_query_info(self) -> Result[Iterator, Response]:
+    def multi_query_info(self) -> Result[Iterator, str]:
         time.sleep(10)
         response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')
-            return Err(response)
+            return Err(response.text)
 
         try:
             data = response.iter_lines()
@@ -90,4 +90,4 @@ class VictoriaReader:
             logger.error(f'Failed to decode JSON: {e}')
             logger.error(f'Response content: {response.content}')
 
-            return Err(response)
+            return Err(response.text)

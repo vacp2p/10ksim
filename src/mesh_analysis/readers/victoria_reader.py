@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import time
+import pandas as pd
 import requests
 from typing import Dict, List, Optional, Iterator
 from httpx import Response

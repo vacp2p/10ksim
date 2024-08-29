@@ -252,4 +252,4 @@ class WakuMessageLogAnalyzer:
             time_jumps = log_utils.find_time_jumps(self._folder_path / file, time_difference_threshold)
 
             for jump in time_jumps:
-                logger.info(f'{jump[0]} to {jump[1]} -> {jump[2]}')
+                logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')

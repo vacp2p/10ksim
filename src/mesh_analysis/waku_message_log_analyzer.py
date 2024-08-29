@@ -183,6 +183,8 @@ class WakuMessageLogAnalyzer:
     def _merge_dfs(self, dfs: List[pd.DataFrame]) -> List[pd.DataFrame]:
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
+        dfs[0].sort_index(inplace=True)
+        dfs[1].sort_index(inplace=True)
 
         return dfs
 

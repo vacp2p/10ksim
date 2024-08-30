@@ -148,12 +148,10 @@ class WakuMessageLogAnalyzer:
             futures = {executor.submit(self._read_logs_for_node, i, self._get_victoria_config_parallel): i
                        for i in range(n_nodes)}
 
-            i = 0
-            for future in as_completed(futures):
+            for i, future in enumerate(as_completed(futures)):
                 try:
                     df = future.result()
                     dfs.append(df)
-                    i = i + 1
                     if i % 50 == 0:
                         logger.info(f'Processed {i}/{n_nodes} nodes')
 

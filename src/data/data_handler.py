@@ -15,7 +15,7 @@ class DataHandler:
         self._dataframe = pd.DataFrame()
 
     def dump_dataframe(self, dump_path: str):
-        result = path_utils.prepare_path(dump_path)
+        result = path_utils.prepare_path_for_file(dump_path)
         if result.is_err():
             logger.error(f'{result.err_value}')
             exit(1)

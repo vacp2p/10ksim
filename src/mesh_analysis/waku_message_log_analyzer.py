@@ -149,6 +149,7 @@ class WakuMessageLogAnalyzer:
                        for i in range(n_nodes)}
 
             for i, future in enumerate(as_completed(futures)):
+                i = i + 1
                 try:
                     df = future.result()
                     dfs.append(df)
@@ -178,6 +179,7 @@ class WakuMessageLogAnalyzer:
         return has_issues
 
     def _merge_dfs(self, dfs: List[pd.DataFrame]) -> List[pd.DataFrame]:
+        logger.info("Merging and sorting information")
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
         dfs[0].sort_index(inplace=True)
@@ -188,6 +190,7 @@ class WakuMessageLogAnalyzer:
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
         received = dfs[0].reset_index()
         received = received.astype(str)
+        logger.info("Dumping received information")
         result = file_utils.dump_df_as_csv(received, self._folder_path / 'summary' / 'received.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
@@ -195,6 +198,7 @@ class WakuMessageLogAnalyzer:
 
         sent = dfs[1].reset_index()
         sent = sent.astype(str)
+        logger.info("Dumping sent information")
         result = file_utils.dump_df_as_csv(sent, self._folder_path / 'summary' / 'sent.csv', False)
         if result.is_err():
             logger.warning(result.err_value)

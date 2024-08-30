@@ -8,7 +8,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-from src.utils import file_utils, path
+from src.utils import path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class WakuTracer(MessageTracer):
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
 
-    def trace(self, parsed_logs: List) -> List:
+    def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
         dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
 
         return dfs
@@ -112,8 +112,8 @@ class WakuTracer(MessageTracer):
             msg_sent_data = self.check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)
             for data in msg_sent_data:
                 peer_id = data[0].split('*')[-1]
-                logger.warning(f'Peer {peer_id} message information dumped in {issue_dump_location}')
-                match path.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
+                logger.info(f'Peer {peer_id} message information dumped in {issue_dump_location}')
+                match path_utils.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
                     case Ok(location_path):
                         data[1].to_csv(location_path)
                     case Err(err):

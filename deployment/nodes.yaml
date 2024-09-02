@@ -39,6 +39,7 @@ spec:
             - /app/getenr.sh
           args:
             - "3"
+      terminationGracePeriodSeconds: 150
       containers:
         - name: waku
           image: zorlin/waku:debug-extra-nim-libp2p-logs-over-v0.31.0-with-extra-logs-mplex-perf
@@ -71,6 +72,10 @@ spec:
             periodSeconds: 1
             failureThreshold: 2
             timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "kill -2 $(pidof wakunode) ; sleep 5 ; $(pidof perf); sleep 150"]
           securityContext:
             privileged: true
             capabilities:
@@ -106,7 +111,7 @@ spec:
                 --rest-address=0.0.0.0 \
                 --discv5-discovery=true \
                 --discv5-enr-auto-update=True \
-                --log-level=TRACE \
+                --log-level=INFO \
                 --metrics-server=True \
                 --metrics-server-address=0.0.0.0 \
                 --discv5-bootstrap-node=$ENR1 \

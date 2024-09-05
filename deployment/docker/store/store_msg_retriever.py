@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def next_cursor(data: Dict) -> str | None:
-    cursor = data.get('cursor')
+    cursor = data.get('paginationCursor')
     if not cursor:
         logging.info("No more messages")
         return None
@@ -55,10 +55,10 @@ def fetch_all_messages(base_url: str, initial_params: Dict, headers: Dict) -> Li
         logging.info(data)
         all_messages.extend([message['messageHash'] for message in data['messages']])
 
-        cursor = next_cursor(params)
+        cursor = next_cursor(data)
         if not cursor:
             break
-        data["cursor"] = cursor
+        params["cursor"] = cursor
 
     return all_messages
 

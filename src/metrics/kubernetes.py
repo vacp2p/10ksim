@@ -45,7 +45,7 @@ class KubernetesManager:
 
         logs = api.read_namespaced_pod_log(pod_name, namespace=namespace)
 
-        path_location_result = path_utils.prepare_path(location + pod_name + ".log")
+        path_location_result = path_utils.prepare_path_for_file(location + pod_name + ".log")
 
         if path_location_result.is_ok():
             with open(f"{path_location_result.ok_value}", "w") as log_file:

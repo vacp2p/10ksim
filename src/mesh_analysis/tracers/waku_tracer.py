@@ -113,7 +113,7 @@ class WakuTracer(MessageTracer):
             for data in msg_sent_data:
                 peer_id = data[0].split('*')[-1]
                 logger.info(f'Peer {peer_id} message information dumped in {issue_dump_location}')
-                match path_utils.prepare_path(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
+                match path_utils.prepare_path_for_file(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
                     case Ok(location_path):
                         data[1].to_csv(location_path)
                     case Err(err):

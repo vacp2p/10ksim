@@ -10,7 +10,7 @@ from result import Ok, Err, Result
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
-from src.utils import file_utils, log_utils
+from src.utils import file_utils, log_utils, path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,12 @@ class WakuMessageLogAnalyzer:
             exit(1)
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
-        self._folder_path = Path(dump_analysis_dir) if dump_analysis_dir else Path(local_folder_to_analyze)
+        self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None
+        self._local_path_to_analyze = Path(local_folder_to_analyze) if local_folder_to_analyze else None
+        result = path_utils.prepare_path_for_folder(self._dump_analysis_dir)
+        if result.is_err():
+            logger.error(result.err_value)
+            exit(1)
 
     def _get_victoria_config_parallel(self, pod_name: str) -> Dict:
         return {"url": "https://vmselect.riff.cc/select/logsql/query",
@@ -84,7 +89,7 @@ class WakuMessageLogAnalyzer:
         pod_log = reader.read()
 
         log_lines = [inner_list[0] for inner_list in pod_log[0]]
-        log_name_path = self._folder_path / f"{data_file.split('.')[0]}.log"
+        log_name_path = self._dump_analysis_dir / f"{data_file.split('.')[0]}.log"
         with open(log_name_path, 'w') as file:
             for element in log_lines:
                 file.write(f"{element}\n")
@@ -110,11 +115,11 @@ class WakuMessageLogAnalyzer:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
-        reader = FileReader(self._folder_path, waku_tracer)
+        reader = FileReader(self._local_path_to_analyze, waku_tracer)
         dfs = reader.read()
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._folder_path)
+                                                                self._dump_analysis_dir)
 
         return has_issues
 
@@ -126,7 +131,7 @@ class WakuMessageLogAnalyzer:
         dfs = reader.read()
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._folder_path)
+                                                                self._dump_analysis_dir)
 
         return has_issues
 
@@ -174,7 +179,7 @@ class WakuMessageLogAnalyzer:
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._folder_path)
+                                                                self._dump_analysis_dir)
 
         return has_issues
 
@@ -191,7 +196,7 @@ class WakuMessageLogAnalyzer:
         received = dfs[0].reset_index()
         received = received.astype(str)
         logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(received, self._folder_path / 'summary' / 'received.csv', False)
+        result = file_utils.dump_df_as_csv(received, self._dump_analysis_dir / 'summary' / 'received.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -199,7 +204,7 @@ class WakuMessageLogAnalyzer:
         sent = dfs[1].reset_index()
         sent = sent.astype(str)
         logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(sent, self._folder_path / 'summary' / 'sent.csv', False)
+        result = file_utils.dump_df_as_csv(sent, self._dump_analysis_dir / 'summary' / 'sent.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -229,7 +234,7 @@ class WakuMessageLogAnalyzer:
             has_issues = self._has_issues_in_cluster_parallel(
                 n_nodes) if parallel else self._has_issues_in_cluster_single()
             if has_issues:
-                match file_utils.get_files_from_folder_path(Path(self._folder_path), extension="csv"):
+                match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
                     case Ok(data_files_names):
                         self._dump_information(data_files_names)
                     case Err(error):
@@ -243,7 +248,7 @@ class WakuMessageLogAnalyzer:
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
         from logs.
         """
-        file_logs = file_utils.get_files_from_folder_path(self._folder_path, '*.log')
+        file_logs = file_utils.get_files_from_folder_path(self._local_path_to_analyze, '*.log')
         if file_logs.is_err():
             logger.error(file_logs.err_value)
             return
@@ -251,7 +256,7 @@ class WakuMessageLogAnalyzer:
         logger.info(f'Analyzing timestamps from {len(file_logs.ok_value)} files')
         for file in file_logs.ok_value:
             logger.debug(f'Analyzing timestamps for {file}')
-            time_jumps = log_utils.find_time_jumps(self._folder_path / file, time_difference_threshold)
+            time_jumps = log_utils.find_time_jumps(self._local_path_to_analyze / file, time_difference_threshold)
 
             for jump in time_jumps:
                 logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')

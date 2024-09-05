@@ -1,4 +1,6 @@
 # Python Imports
+import ast
+import base64
 import logging
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -21,7 +23,7 @@ class WakuMessageLogAnalyzer:
         self._validate_analysis_location(timestamp_to_analyze, local_folder_to_analyze)
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._timestamp = timestamp_to_analyze
-        # self._set_victoria_config()
+        self._message_hashes = []
 
     def _validate_analysis_location(self, timestamp_to_analyze: str, local_folder_to_analyze: str):
         if timestamp_to_analyze is None and local_folder_to_analyze is None:
@@ -170,6 +172,8 @@ class WakuMessageLogAnalyzer:
         dfs = self._read_logs_concurrently(n_nodes)
         dfs = self._merge_dfs(dfs)
 
+        self._message_hashes = dfs[0].index.get_level_values(0).unique().tolist()
+
         result = self._dump_dfs(dfs)
         if result.is_err():
             logger.warning(f'Issue dumping message summary. {result.err_value}')
@@ -242,6 +246,31 @@ class WakuMessageLogAnalyzer:
         else:
             logger.info('Analyzing from local')
             _ = self._has_issues_in_local()
+
+    def check_store_messages(self):
+        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
+                           "headers": {"Content-Type": "application/json"},
+                           "params": {
+                               "query": f"kubernetes_pod_name:get-store-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
+                           }
+
+        reader = VictoriaReader(victoria_config, None)
+        result = reader.single_query_info()
+
+        if result.is_ok():
+            messages_string = result.unwrap()['_msg']
+            messages_list = ast.literal_eval(messages_string)
+            messages_list = ['0x'+base64.b64decode(msg).hex() for msg in messages_list]
+            logger.debug(f'Messages from store: {messages_list}')
+
+            if len(self._message_hashes) != len(messages_list):
+                logger.error('Number of messages does not match')
+            elif set(self._message_hashes) == set(messages_list):
+                logger.info('Messages from store match with received messages')
+            else:
+                logger.error('Messages from store does not match with received messages')
+                logger.error(f'Received messages: {self._message_hashes}')
+                logger.error(f'Store messages: {messages_list}')
 
     def analyze_message_timestamps(self, time_difference_threshold: int):
         """

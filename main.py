@@ -3,22 +3,21 @@
 # Project Imports
 import src.logger.logger
 from src.metrics.scrapper import Scrapper
+from src.plotting.plotter import Plotter
+from src.utils import file_utils
+
 
 
 def main():
-    config.load_kube_config("opal.yaml")
-    url = "http://thanos-query.svc.thanos.kubernetes:9090/api/v1/"
+    url = "https://metrics.riff.cc/select/0/prometheus/api/v1/"
     scrape_config = "scrape.yaml"
 
-    v1 = client.CoreV1Api()
-
-    scrapper = Scrapper(v1, url, scrape_config, "test/")
+    scrapper = Scrapper("rubi.yaml", url, scrape_config)
     scrapper.query_and_dump_metrics()
 
-    # config_dict = file_utils.read_yaml_file("scrape.yaml")
-    # plotter = Plotter(config_dict["plotting"])
-    # plotter.create_plots()
-    # portforward_commands(v1)
+    config_dict = file_utils.read_yaml_file("scrape.yaml")
+    plotter = Plotter(config_dict["plotting"])
+    plotter.create_plots()
 
 
 if __name__ == '__main__':

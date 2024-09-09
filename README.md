@@ -93,6 +93,8 @@ plotting:
     "ylabel_name": "KBytes/s"
     "scale-x": 1000
 ```
+We will have as many plots as keywords under `plotting`.
+Inside each plot, we will have as many subplots as metrics in `data`.
 
 
 ### Main objectives

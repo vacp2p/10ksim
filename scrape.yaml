@@ -1,5 +1,4 @@
 general_config:
-  kubeconfig: "kubeconfig.yaml"
   times_names:
     - [ "2024-05-15 12:31:00", "2024-05-15 12:47:00", "3K-1mgs-s-1KB" ]
     - [ "2024-05-15 13:10:00", "2024-05-15 13:30:00", "2K-1mgs-s-1KB" ]
@@ -62,10 +61,8 @@ plotting:
     "folder":
       - "test/nwaku0.26-f/"
     "data":
-      # - "libp2p-in"
-      # - "libp2p-out"
-      - "asd"
-      - "asd2"
+      - "libp2p-in"
+      - "libp2p-out"
     "xlabel_name": "NºNodes-MsgRate"
     "ylabel_name": "KBytes/s"
     "scale-x": 1000

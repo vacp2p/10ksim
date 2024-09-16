@@ -16,4 +16,4 @@ spec:
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --messages=4000 --debug -p "/waku/2/default-waku/proto"
+        - python /app/traffic.py --msg-size-kbytes=50 --delay-seconds=5 --messages=4000 --debug -p "/waku/2/default-waku/proto"

@@ -21,7 +21,7 @@ spec:
           - zerotesting-bootstrap.zerotesting.svc.cluster.local
       containers:
         - name: waku
-          image: zorlin/waku:debug-extra-nim-libp2p-logs-over-v0.31.0-with-extra-logs-mplex-perf
+          image: zorlin/nwaku:v0.32.0-curl
           imagePullPolicy: Always
           readinessProbe:
             exec:

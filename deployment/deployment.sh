@@ -1,3 +1,5 @@
+# Timestamp
+echo "Started at $(date)"
 # Spawn bootstrap nodes
 kubectl apply -f bootstrap.yaml
 # Wait to see that they're healthy
@@ -9,6 +11,8 @@ echo "We have deployed all nodes, please watch Prometheus or Grafana to see when
 kubectl rollout status --watch --timeout=30000s statefulset/nodes -n zerotesting
 echo "We believe everything has rolled out. Deploying publisher now."
 kubectl apply -f publisher.yaml
+# Timestamp
+echo "Deploying publisher at $(date)"
 echo "We have deployed the publisher, please watch Grafana to see if it's working."
 # 2100 seconds or 35 minutes
 for i in {0..209}
@@ -18,8 +22,12 @@ do
   sleep 10
 done
 # Tear down publisher
+# Timestamp
+echo "We'll stop publishing. Stopped publisher at $(date)"
+
 kubectl delete -f publisher.yaml
 # Wait 60 seconds for publisher to despawn
+echo "Now we'll tear down the whole cluster. Stopped cluster at $(date)"
 # Tear down nodes
 kubectl delete -f nodes-nwaku.yaml
 kubectl delete -f nodes-gowaku.yaml

@@ -90,7 +90,7 @@ spec:
               echo ENRs are $ENR1 $ENR2 $ENR3
               HOSTNAME=$(hostname)
               TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-              /usr/bin/wakunode \
+              /usr/bin/waku \
                 --relay=true \
                 --max-connections=150 \
                 --rest=true \

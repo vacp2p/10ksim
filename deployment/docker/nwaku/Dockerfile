@@ -1,2 +1,2 @@
-FROM harbor.riff.cc/localmirror/wakuorg/nwaku:wakunode_dst
-RUN apk add wget
+FROM wakuorg/nwaku:v0.32.0
+RUN apk add curl

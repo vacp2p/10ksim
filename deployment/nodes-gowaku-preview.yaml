@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodes
+  namespace: zerotesting
+spec:
+  replicas: 1000
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-service
+  selector:
+    matchLabels:
+      app: zerotenkay
+  template:
+    metadata:
+      labels:
+        app: zerotenkay
+    spec:
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+      volumes:
+        - name: enr-data
+          emptyDir: {}
+#        - name: perflogs
+#          persistentVolumeClaim:
+#            claimName: perflogs
+        - name: perflogs
+          hostPath:
+            path: /mnt/swfs/services/perflogs
+            type: Directory
+      initContainers:
+        - name: grabenr
+          image: zorlin/getenr:v0.3.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: enr-data
+              mountPath: /etc/enr
+          command:
+            - /app/getenr.sh
+          args:
+            - "3"
+      terminationGracePeriodSeconds: 150
+      containers:
+        - name: waku
+          image: harbor.status.im/wakuorg/go-waku:bump-golibp2-pubsub
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8545
+            - containerPort: 8008
+          volumeMounts:
+            - name: enr-data
+              mountPath: /etc/enr
+            - name: perflogs
+              mountPath: /mnt/perflogs
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  curl -s http://127.0.0.1:8008/metrics |
+                  awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{
+                    print "Found gossipsub:", $0;
+                    if ($2 == 1.0) {
+                      exit 0;  # success, healthy state
+                    } else {
+                      exit 1;  # failure, unhealthy state
+                    }
+                  }'
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "kill -2 $(pidof wakunode) ; sleep 5 ; $(pidof perf); sleep 150"]
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command:
+            - sh
+            - -c
+            - |
+              . /etc/enr/enr.env
+              echo ENRs are $ENR1 $ENR2 $ENR3
+              HOSTNAME=$(hostname)
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              LOGFILE="/mnt/perflogs/${HOSTNAME}-waku-${TIMESTAMP}.log"
+              perf record -F 10 -o ${LOGFILE} -- \
+                nice -n 19 /usr/bin/wakunode \
+                --relay=true \
+                --max-connections=150 \
+                --rest=true \
+                --rest-admin=true \
+                --rest-private=true \
+                --rest-address=0.0.0.0 \
+                --discv5-discovery=true \
+                --discv5-enr-auto-update=True \
+                --log-level=INFO \
+                --metrics-server=True \
+                --metrics-server-address=0.0.0.0 \
+                --discv5-bootstrap-node=$ENR1 \
+                --discv5-bootstrap-node=$ENR2 \
+                --discv5-bootstrap-node=$ENR3 \
+                --nat=extip:${IP} \
+                --cluster-id=2 \
+                --pubsub-topic="/waku/2/rs/2/0"

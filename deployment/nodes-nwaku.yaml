@@ -4,7 +4,7 @@ metadata:
   name: nodes
   namespace: zerotesting
 spec:
-  replicas: 400
+  replicas: 1000
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-service
   selector:
@@ -101,8 +101,7 @@ spec:
               HOSTNAME=$(hostname)
               TIMESTAMP=$(date +%Y%m%d-%H%M%S)
               LOGFILE="/mnt/perflogs/${HOSTNAME}-waku-${TIMESTAMP}.log"
-              perf record -F 10 -o ${LOGFILE} -- \
-                nice -n 19 /usr/bin/wakunode \
+              /usr/bin/wakunode \
                 --relay=true \
                 --max-connections=150 \
                 --rest=true \

@@ -95,7 +95,6 @@ spec:
                 --max-connections=150 \
                 --rest=true \
                 --rest-admin=true \
-                --rest-private=true \
                 --rest-address=0.0.0.0 \
                 --discv5-discovery=true \
                 --discv5-enr-auto-update=True \

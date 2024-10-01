@@ -56,16 +56,20 @@ metrics_to_scrape:
   #   extract_field: "pod-node"
   #   folder_name: "nim-gc-memory/"
 plotting:
-  "bandwidth":
-    "ignore": ["bootstrap", "midstrap"]
-    "data_points": 15
+  "bandwidth-0-33-3K":
+    "ignore_columns": ["bootstrap", "midstrap"]
+    "data_points": 25
     "folder":
       - "test/nwaku0.26-f/"
     "data":
-      # - "libp2p-in"
-      # - "libp2p-out"
-      - "asd"
-      - "asd2"
-    "xlabel_name": "NºNodes-MsgRate"
+      - "libp2p-in"
+      - "libp2p-out"
+    "include_files":
+      - "3K-1mgs-s-1KB"
+      - "3K-1mgs-5s-1KB"
+      - "3K-1mgs-10s-1KB"
+    "xlabel_name": "Simulation"
     "ylabel_name": "KBytes/s"
+    "show_min_max": false
     "scale-x": 1000
+    "fig_size": [20, 20]

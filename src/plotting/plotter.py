@@ -28,7 +28,7 @@ class Plotter:
 
     def _create_plot(self, plot_name: str, plot_specs: Dict):
         fig, axs = plt.subplots(nrows=1, ncols=len(plot_specs['data']), sharey='row',
-                                figsize=(15, 15))
+                                figsize=plot_specs['fig_size'])
 
         subplot_paths_group = self._create_subplot_paths_group(plot_specs)
         self._insert_data_in_axs(subplot_paths_group, axs, plot_specs)
@@ -36,7 +36,8 @@ class Plotter:
 
     def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray, plot_specs: Dict):
         for i, subplot_path_group in enumerate(subplot_paths_group):
-            file_data_handler = DataFileHandler(plot_specs['ignore'])
+            include_files = plot_specs.get("include_files")
+            file_data_handler = DataFileHandler(plot_specs['ignore_columns'], include_files)
             file_data_handler.concat_dataframes_from_folders_as_mean(subplot_path_group,
                                                                      plot_specs['data_points'])
             subplot_df = file_data_handler.dataframe
@@ -54,7 +55,7 @@ class Plotter:
         subplot_title = plot_specs['data'][index]
         axs = axs if type(axs) is not np.ndarray else axs[index]
         box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs,
-                               showfliers=False)
+                               showfliers=True)
 
         # Apply the custom formatter to the x-axis ticks
         formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / plot_specs['scale-x']))

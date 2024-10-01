@@ -14,11 +14,15 @@ logger = logging.getLogger(__name__)
 
 class DataFileHandler(DataHandler):
 
+    def __init__(self, ignore_columns: Optional[List] = None, include_files: Optional[List] = None):
+        super().__init__(ignore_columns)
+        self._include_files = include_files
+
     def concat_dataframes_from_folders_as_mean(self, folders: List, points: int):
         for folder in folders:
             folder_path = Path(folder)
             folder_df = pd.DataFrame()
-            match file_utils.get_files_from_folder_path(folder_path):
+            match file_utils.get_files_from_folder_path(folder_path, self._include_files):
                 case Ok(data_files_names):
                     folder_df = self._concat_files_as_mean(folder_df, data_files_names, folder_path,
                                                            points)

@@ -49,10 +49,13 @@ def fetch_all_messages(base_url: str, initial_params: Dict, headers: Dict) -> Li
         response = requests.get(base_url, headers=headers, params=params)
         if response.status_code != 200:
             logging.error(f"Error fetching data: {response.status_code}")
+            logging.error(response.text)
             break
 
         data = response.json()
         logging.info(data)
+        paged_messages = [message['messageHash'] for message in data['messages']]
+        logging.info(f"Retrieved {len(paged_messages)} messages")
         all_messages.extend([message['messageHash'] for message in data['messages']])
 
         cursor = next_cursor(data)

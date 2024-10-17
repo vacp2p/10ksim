@@ -9,12 +9,15 @@ from typing import Dict, List
 logging.basicConfig(level=logging.DEBUG)
 
 
-def check_dns_time(node: str) -> str:
+def resolve_dns(node: str) -> str:
     start_time = time.time()
     name, port = node.split(":")
     ip_address = socket.gethostbyname(name)
+    entire_hostname = socket.gethostbyaddr(ip_address)
+    hostname = entire_hostname[0].split('.')[0]
     elapsed = (time.time() - start_time) * 1000
-    logging.info(f"{name} DNS Response took {elapsed} ms")
+    logging.info(f"{node} DNS Response took {elapsed} ms")
+    logging.info(f"Talking with {hostname}, ip address: {ip_address}")
 
     return f"{ip_address}:{port}"
 
@@ -70,8 +73,8 @@ def main():
     args_dict = vars(args)
     logging.info(f"Arguments: {args_dict}")
 
-    service = "zerotesting-service:8645"
-    node = check_dns_time(service)
+    service = "zerotesting-store:8645"
+    node = resolve_dns(service)
     url = f"http://{node}/store/v3/messages"
     logging.info(f"Query to {url}")
     headers = {"accept": "application/json"}

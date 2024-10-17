@@ -12,7 +12,7 @@ from result import Ok, Err, Result
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
-from src.utils import file_utils, log_utils, path_utils
+from src.utils import file_utils, log_utils, path_utils, list_utils
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +271,11 @@ class WakuMessageLogAnalyzer:
                 logger.error('Messages from store does not match with received messages')
                 logger.error(f'Received messages: {self._message_hashes}')
                 logger.error(f'Store messages: {messages_list}')
+
+            result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_dir / 'store_messages.txt')
+            if result.is_ok():
+                logger.info(f'Messages from store saved in {result.ok_value}')
+
 
     def analyze_message_timestamps(self, time_difference_threshold: int):
         """

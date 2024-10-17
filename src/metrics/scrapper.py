@@ -2,7 +2,7 @@
 import socket
 import logging
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 from result import Ok, Err
 
 # Project Imports
@@ -38,16 +38,16 @@ class Scrapper:
                         logger.debug(f'Successfully extracted {scrape_name} data from response')
                         file_location = (self._query_config['scrape_config']['dump_location'] +
                                          metric_config['folder_name'] + time_name[2])
-                        self._dump_data(scrape_name, metric_config['extract_field'], data,
-                                        file_location)
+                        self._dump_data(scrape_name, metric_config['extract_field'],
+                                        metric_config.get('container', None), data, file_location)
                     case Err(err):
                         logger.error(f'Error in {scrape_name}. {err}')
                         continue
 
-    def _dump_data(self, scrape_name: str, extract_field: str, data: Dict, dump_path: str):
+    def _dump_data(self, scrape_name: str, extract_field: str, container_name: Optional[str], data: Dict, dump_path: str):
         logger.debug(f'Dumping {scrape_name} data to .csv')
         data_handler = DataRequestHandler(data)
-        data_handler.create_dataframe_from_request(extract_field)
+        data_handler.create_dataframe_from_request(extract_field, container_name)
         data_handler.dump_dataframe(dump_path)
 
     def _set_query_config(self):

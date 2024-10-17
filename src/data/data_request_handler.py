@@ -1,11 +1,11 @@
 # Python Imports
 import logging
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # Project Imports
 from src.data.data_handler import DataHandler
-from src.utils import list
+from src.utils import list_utils
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,10 @@ class DataRequestHandler(DataHandler):
         self._raw_data = data
         self._dataframe = pd.DataFrame()
 
-    def create_dataframe_from_request(self, extract_placeholder: str):
+    def create_dataframe_from_request(self, extract_placeholder: str, container_name: Optional[str]):
         data_result = self._raw_data['data']['result']
+        if container_name is not None:
+            data_result = [item for item in data_result if item['metric'].get('container', None) == container_name]
         duplicated = 0
 
         logger.info(f'Dumping {len(data_result)} instances')
@@ -53,5 +55,5 @@ class DataRequestHandler(DataHandler):
         return pod_df
 
     def _sort_dataframe_columns(self):
-        columns = list.order_by_groups(self._dataframe.columns.tolist())
+        columns = list_utils.order_by_groups(self._dataframe.columns.tolist())
         self._dataframe = self._dataframe[columns]

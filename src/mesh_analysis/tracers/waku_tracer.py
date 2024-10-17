@@ -8,7 +8,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-from src.utils import path_utils
+from src.utils import path_utils, file_utils
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,17 @@ class WakuTracer(MessageTracer):
 
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(msg_identifier, peer_identifier,
                                                                                  received_df)
+
+        # TODO add result check
+        received = received_df.reset_index()
+        received = received.astype(str)
+        logger.info("Dumping received information")
+        result = file_utils.dump_df_as_csv(received, 'received.csv', False)
+
+        sent = sent_df.reset_index()
+        sent = sent.astype(str)
+        logger.info("Dumping sent information")
+        result = file_utils.dump_df_as_csv(sent, 'sent.csv', False)
 
         if peers_missed_messages:
             msg_sent_data = self.check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)

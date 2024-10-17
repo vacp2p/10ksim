@@ -1,5 +1,4 @@
 general_config:
-  kubeconfig: "kubeconfig.yaml"
   times_names:
     - [ "2024-05-15 12:31:00", "2024-05-15 12:47:00", "3K-1mgs-s-1KB" ]
     - [ "2024-05-15 13:10:00", "2024-05-15 13:30:00", "2K-1mgs-s-1KB" ]

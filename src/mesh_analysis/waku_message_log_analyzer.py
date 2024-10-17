@@ -272,6 +272,11 @@ class WakuMessageLogAnalyzer:
                 logger.error(f'Received messages: {self._message_hashes}')
                 logger.error(f'Store messages: {messages_list}')
 
+            result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_dir / 'store_messages.txt')
+            if result.is_ok():
+                logger.info(f'Messages from store saved in {result.ok_value}')
+
+
     def analyze_message_timestamps(self, time_difference_threshold: int):
         """
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked

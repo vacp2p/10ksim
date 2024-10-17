@@ -1,7 +1,7 @@
 # Python Imports
 import logging
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # Project Imports
 from src.data.data_handler import DataHandler
@@ -16,8 +16,10 @@ class DataRequestHandler(DataHandler):
         self._raw_data = data
         self._dataframe = pd.DataFrame()
 
-    def create_dataframe_from_request(self, extract_placeholder: str):
+    def create_dataframe_from_request(self, extract_placeholder: str, container_name: Optional[str]):
         data_result = self._raw_data['data']['result']
+        if container_name is not None:
+            data_result = [item for item in data_result if item['metric'].get('container', None) == container_name]
         duplicated = 0
 
         logger.info(f'Dumping {len(data_result)} instances')

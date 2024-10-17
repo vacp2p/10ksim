@@ -12,7 +12,7 @@ from result import Ok, Err, Result
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
-from src.utils import file_utils, log_utils, path_utils
+from src.utils import file_utils, log_utils, path_utils, list_utils
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ from typing import List, Dict
 
 # Project Imports
 from src.data.data_handler import DataHandler
-from src.utils import list
+from src.utils import list_utils
 
 logger = logging.getLogger(__name__)
 
@@ -53,5 +53,5 @@ class DataRequestHandler(DataHandler):
         return pod_df
 
     def _sort_dataframe_columns(self):
-        columns = list.order_by_groups(self._dataframe.columns.tolist())
+        columns = list_utils.order_by_groups(self._dataframe.columns.tolist())
         self._dataframe = self._dataframe[columns]

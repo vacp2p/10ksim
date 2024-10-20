@@ -28,8 +28,8 @@ spec:
               {{- end }}
               
               {{- if .Values.publisher.waitForStatefulSet.enabled }}
-              echo "Waiting for StatefulSet {{ .Values.publisher.waitForStatefulSet.name }} to stabilize..."
-              kubectl rollout status statefulset/{{ .Values.publisher.waitForStatefulSet.name }} -n {{ .Release.Namespace }} --timeout=1h
+              echo "Waiting for StatefulSet {{ .Release.Name }}-nodes to stabilize..."
+              kubectl rollout status statefulset/{{ .Release.Name }}-nodes -n {{ .Release.Namespace }} --timeout=1h
               
               echo "StatefulSet stable, waiting additional {{ .Values.publisher.waitForStatefulSet.stabilityMinutes }} minutes..."
               sleep {{ mul .Values.publisher.waitForStatefulSet.stabilityMinutes 60 }}

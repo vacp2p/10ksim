@@ -20,7 +20,6 @@ publisher:
     minutes: 5
   waitForStatefulSet:
     enabled: true
-    name: {{ .Release.Name }}-nodes
     stabilityMinutes: 0
 
 artificialLatency:

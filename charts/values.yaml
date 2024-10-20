@@ -1,6 +1,6 @@
 replicaCount:
   bootstrap: 3
-  nodes: 400
+  nodes: 50
 
 image:
   repository: zorlin/waku
@@ -19,9 +19,9 @@ publisher:
     enabled: false
     minutes: 5
   waitForStatefulSet:
-    enabled: false
+    enabled: true
     name: waku-deployment-nodes
-    stabilityMinutes: 5
+    stabilityMinutes: 0
 
 artificialLatency:
   enabled: false

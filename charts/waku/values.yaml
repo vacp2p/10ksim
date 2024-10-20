@@ -43,7 +43,7 @@ publisher:
     minutes: 5
   waitForStatefulSet:
     enabled: false
-    name: waku-deployment-nodes
+    name: {{ .Release.Name }}-nodes
     stabilityMinutes: 5
 
 artificialLatency:

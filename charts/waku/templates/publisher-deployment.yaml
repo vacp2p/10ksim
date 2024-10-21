@@ -41,9 +41,8 @@ spec:
         - name: publisher
           image: "{{ .Values.publisher.image.repository }}:{{ .Values.publisher.image.tag }}"
           command:
-            - sh
-            - -c
-            - python /app/traffic.py
+            - python
+            - /app/traffic.py
           args:
             - --msg-size-kbytes={{ .Values.publisher.messageSize }}
             - --delay-seconds={{ .Values.publisher.delaySeconds }}

@@ -1,6 +1,6 @@
 replicaCount:
   bootstrap: 3
-  nodes: 50
+  nodes: 3
 
 image:
   repository: zorlin/waku

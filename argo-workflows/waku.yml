@@ -1,0 +1,503 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: waku-deployment-workflow
+  namespace: argo
+spec:
+  entrypoint: waku-deployment-workflow
+  arguments:
+    parameters:
+      - name: repo_name
+        value: vacp2p/vaclab
+  templates:
+    - name: waku-deployment-workflow
+      steps:
+        - - name: find-and-verify-issue
+            template: find-and-verify-issue
+            arguments:
+              parameters:
+                - name: repo_name
+                  value: "{{workflow.parameters.repo_name}}"
+        - - name: handle-verification-result
+            template: handle-verification-result
+            arguments:
+              parameters:
+                - name: verification_result
+                  value: "{{steps.find-and-verify-issue.outputs.parameters.result}}"
+                - name: valid_issue
+                  value: "{{steps.find-and-verify-issue.outputs.parameters.valid_issue}}"
+        - - name: execute-deployment-if-verified
+            template: execute-deployment-if-verified
+            arguments:
+              parameters:
+                - name: verification_result
+                  value: "{{steps.handle-verification-result.outputs.parameters.result}}"
+                - name: valid_issue
+                  value: "{{steps.handle-verification-result.outputs.parameters.valid_issue}}"
+        - - name: wait-for-completion
+            template: wait-for-completion
+            when: "{{steps.execute-deployment-if-verified.outputs.parameters.release_name}} != ''"
+            arguments:
+              parameters:
+                - name: release_name
+                  value: "{{steps.execute-deployment-if-verified.outputs.parameters.release_name}}"
+                - name: duration
+                  value: "{{steps.execute-deployment-if-verified.outputs.parameters.duration}}"
+        - - name: cleanup
+            template: cleanup
+            when: "{{steps.execute-deployment-if-verified.outputs.parameters.release_name}} != ''"
+            arguments:
+              parameters:
+                - name: release_name
+                  value: "{{steps.execute-deployment-if-verified.outputs.parameters.release_name}}"
+
+    - name: find-and-verify-issue
+      inputs:
+        parameters:
+          - name: repo_name
+      script:
+        image: python:3.9
+        command: [bash]
+        source: |
+          set -e
+          pip install requests
+          python << EOF
+          import os
+          import json
+          import requests
+          import sys
+          import base64
+
+          github_token = os.getenv('GITHUB_TOKEN', 'INSERT_YOUR_GITHUB_TOKEN_HERE')
+          repo_name = "{{inputs.parameters.repo_name}}"
+
+          print(f"Checking issues for repository: {repo_name}")
+          url = f"https://api.github.com/repos/{repo_name}/issues"
+          headers = {"Authorization": f"token {github_token}"}
+          response = requests.get(url, headers=headers)
+
+          result = "NOT_VERIFIED"
+          valid_issue = None
+          if response.status_code == 200:
+              issues = response.json()
+              authorized_users = [user.lower() for user in ['zorlin', 'AlbertoSoutullo', 'michatinkers']]
+              
+              for issue in issues:
+                  print(f"\nChecking issue #{issue['number']}: {issue['title']}")
+                  
+                  if "simulation-done" in [label['name'] for label in issue.get('labels', [])]:
+                      print("  Rejected: Has 'simulation-done' label")
+                      continue
+                  
+                  if "needs-scheduling" not in [label['name'] for label in issue.get('labels', [])]:
+                      print("  Rejected: Missing 'needs-scheduling' label")
+                      continue
+                  
+                  events_url = f"https://api.github.com/repos/{repo_name}/issues/{issue['number']}/events"
+                  events_response = requests.get(events_url, headers=headers)
+                  if events_response.status_code == 200:
+                      events = events_response.json()
+                      label_events = [event for event in events if event['event'] == 'labeled' and event['label']['name'] == 'needs-scheduling']
+                      
+                      if label_events:
+                          latest_label_event = label_events[-1]
+                          labeler = latest_label_event['actor']['login'].lower()
+                          if labeler in authorized_users:
+                              print(f"  Accepted: 'needs-scheduling' label applied by authorized user: {latest_label_event['actor']['login']}")
+                              result = "VERIFIED"
+                              valid_issue = issue
+                              break
+                          else:
+                              print(f"  Rejected: 'needs-scheduling' label applied by unauthorized user: {latest_label_event['actor']['login']}")
+                      else:
+                          print("  Rejected: Could not determine who applied 'needs-scheduling' label")
+                  else:
+                      print(f"  Error: Failed to fetch issue events. HTTP Status Code: {events_response.status_code}")
+              
+              if not valid_issue:
+                  print("\nNo valid issues found. Verification failed.")
+          else:
+              print(f"Failed to fetch issues. HTTP Status Code: {response.status_code}")
+
+          print(f"\nFinal result: {result}")
+          if valid_issue:
+              print(f"Valid issue: #{valid_issue['number']} - {valid_issue['title']}")
+          else:
+              print("No valid issue found")
+
+          # Encode the valid issue as base64, handling potential line breaks
+          if valid_issue:
+              valid_issue_json = json.dumps(valid_issue)
+              valid_issue_encoded = base64.b64encode(valid_issue_json.encode()).decode()
+          else:
+              valid_issue_encoded = ""
+
+          # Write outputs to separate files
+          with open('/tmp/result.txt', 'w') as f:
+              f.write(result)
+          with open('/tmp/valid_issue.txt', 'w') as f:
+              f.write(valid_issue_encoded)
+
+          # Exit with appropriate status code
+          sys.exit(0 if result == "VERIFIED" else 1)
+          EOF
+          
+          # Capture the exit code of the Python script
+          exit_code=$?
+          
+          # Output the results (this won't affect the output parameters)
+          cat /tmp/result.txt
+          cat /tmp/valid_issue.txt
+          
+          # Exit the bash script with the same code
+          exit $exit_code
+      outputs:
+        parameters:
+          - name: result
+            valueFrom:
+              path: /tmp/result.txt
+          - name: valid_issue
+            valueFrom:
+              path: /tmp/valid_issue.txt
+
+    - name: handle-verification-result
+      inputs:
+        parameters:
+          - name: verification_result
+          - name: valid_issue
+      script:
+        image: python:3.9
+        command: [bash]
+        source: |
+          set -e
+          python << EOF
+          import json
+          import sys
+          import base64
+
+          result = "{{inputs.parameters.verification_result}}"
+          valid_issue_encoded = '''{{inputs.parameters.valid_issue}}'''
+
+          print(f"Received verification result: {result}")
+          
+          if result == "VERIFIED":
+              print("Verification passed, proceeding with deployment.")
+              if valid_issue_encoded:
+                  try:
+                      valid_issue_json = base64.b64decode(valid_issue_encoded).decode()
+                      valid_issue = json.loads(valid_issue_json)
+                      print(f"Parsed valid issue: {json.dumps(valid_issue, indent=2)}")
+                  except Exception as e:
+                      print(f"Warning: Could not parse valid issue. Error: {e}")
+                      print(f"Raw valid_issue content: {valid_issue_encoded}")
+                      valid_issue = {"error": "Failed to parse", "raw": valid_issue_encoded}
+              else:
+                  print("Warning: No valid issue data found.")
+                  valid_issue = None
+          else:
+              print("Verification failed, halting workflow.")
+              valid_issue = None
+
+          # Write outputs to separate files
+          with open('/tmp/result.txt', 'w') as f:
+              f.write(result)
+          with open('/tmp/valid_issue.json', 'w') as f:
+              f.write(valid_issue_encoded)
+
+          print("Contents of /tmp/result.txt:")
+          with open('/tmp/result.txt', 'r') as f:
+              print(f.read())
+          
+          print("Contents of /tmp/valid_issue.json:")
+          with open('/tmp/valid_issue.json', 'r') as f:
+              print(f.read())
+
+          # Always exit with 0 to allow workflow to continue
+          sys.exit(0)
+          EOF
+          
+          # Capture the exit code of the Python script
+          exit_code=$?
+          
+          # Output the results (this won't affect the output parameters)
+          echo "Final contents of /tmp/result.txt:"
+          cat /tmp/result.txt
+          echo "Final contents of /tmp/valid_issue.json:"
+          cat /tmp/valid_issue.json
+          
+          # Always exit with 0 to allow workflow to continue
+          exit 0
+      outputs:
+        parameters:
+          - name: result
+            valueFrom:
+              path: /tmp/result.txt
+          - name: valid_issue
+            valueFrom:
+              path: /tmp/valid_issue.json
+
+    - name: execute-deployment-if-verified
+      inputs:
+        parameters:
+          - name: verification_result
+          - name: valid_issue
+      outputs:
+        parameters:
+          - name: release_name
+            valueFrom:
+              parameter: "{{steps.deploy-helm-chart.outputs.parameters.release_name}}"
+          - name: duration
+            valueFrom:
+              parameter: "{{steps.deploy-helm-chart.outputs.parameters.duration}}"
+      steps:
+        - - name: deploy-helm-chart
+            template: deploy-helm-chart
+            when: "{{inputs.parameters.verification_result}} == 'VERIFIED'"
+            arguments:
+              parameters:
+                - name: valid_issue
+                  value: "{{inputs.parameters.valid_issue}}"
+
+    - name: deploy-helm-chart
+      inputs:
+        parameters:
+          - name: valid_issue
+      outputs:
+        parameters:
+          - name: release_name
+            valueFrom:
+              path: /tmp/release_name.txt
+          - name: duration
+            valueFrom:
+              path: /tmp/duration.txt
+      script:
+        image: python:3.9-alpine
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache bash helm
+          pip install PyYAML
+          bash << EOF
+          set -e
+          python << PY_EOF
+          import json
+          import subprocess
+          import sys
+          import base64
+          import yaml
+
+          def sanitize_json(input_json):
+              try:
+                  parsed_json = json.loads(input_json)
+                  return parsed_json, "JSON is valid."
+              except json.JSONDecodeError as e:
+                  cleaned_json = input_json.replace("\n", "\\n").replace("\r", "").replace("\t", "\\t")
+                  try:
+                      parsed_cleaned_json = json.loads(cleaned_json)
+                      return parsed_cleaned_json, "Cleaned JSON is valid."
+                  except json.JSONDecodeError as e:
+                      return None, f"Error in cleaned JSON: {e}"
+
+          def parse_github_issue(issue_json):
+              issue = issue_json
+              body = issue['body']
+              
+              lines = body.split('\n')
+              data = {}
+              current_key = None
+              for line in lines:
+                  line = line.strip()
+                  if line.startswith('### '):
+                      current_key = line[4:].strip()
+                      data[current_key] = ""
+                  elif current_key and line and not line.startswith('_'):
+                      data[current_key] += line + "\n"
+              
+              for key in data:
+                  data[key] = data[key].strip()
+              
+              def safe_int(value, default):
+                  try:
+                      return int(value) if value.strip() else default
+                  except ValueError:
+                      return default
+
+              return {
+                  'title': issue['title'],
+                  'labels': [label['name'] for label in issue['labels']],
+                  'docker_image': data.get("Docker image", ""),
+                  'num_nodes': safe_int(data.get("Number of nodes"), 50),
+                  'num_bootstrap': safe_int(data.get("Bootstrap nodes"), 3),
+                  'duration': safe_int(data.get("Duration"), 0),
+                  'publisher_enabled': data.get("Enable Publisher", "").lower() == "yes",
+                  'pubsub_topic': data.get("PubSub Topic", ""),
+                  'publisher_message_size': safe_int(data.get("Publisher Message Size"), 1),
+                  'publisher_delay': safe_int(data.get("Publisher Delay"), 10),
+                  'publisher_message_count': safe_int(data.get("Publisher Message Count"), 1000),
+                  'artificial_latency': data.get("Enable Artificial Latency", "").lower() == "yes",
+                  'latency_ms': safe_int(data.get("Artificial Latency (ms)"), 50),
+                  'custom_command': data.get("Use Custom Command", "").lower() == "yes",
+                  'custom_command_args': data.get("Custom Command Arguments", "").split('\n')
+              }
+
+          def generate_values_yaml(issue_data):
+              values = {
+                  'global': {
+                      'pubSubTopic': issue_data['pubsub_topic'] or "/waku/2/rs/2/0"
+                  },
+                  'replicaCount': {
+                      'bootstrap': issue_data['num_bootstrap'],
+                      'nodes': issue_data['num_nodes']
+                  },
+                  'image': {
+                      'repository': issue_data['docker_image'].split(':')[0],
+                      'tag': issue_data['docker_image'].split(':')[1] if ':' in issue_data['docker_image'] else 'latest',
+                      'pullPolicy': 'IfNotPresent'
+                  },
+                  'bootstrap': {
+                      'resources': {
+                          'requests': {
+                              'memory': "64Mi",
+                              'cpu': "50m"
+                          },
+                          'limits': {
+                              'memory': "768Mi",
+                              'cpu': "400m"
+                          }
+                      }
+                  },
+                  'nodes': {
+                      'resources': {
+                          'requests': {
+                              'memory': "64Mi",
+                              'cpu': "150m"
+                          },
+                          'limits': {
+                              'memory': "600Mi",
+                              'cpu': "500m"
+                          }
+                      }
+                  },
+                  'publisher': {
+                      'enabled': issue_data['publisher_enabled'],
+                      'image': {
+                          'repository': 'zorlin/publisher',
+                          'tag': 'v0.5.0'
+                      },
+                      'messageSize': issue_data['publisher_message_size'],
+                      'delaySeconds': issue_data['publisher_delay'],
+                      'messageCount': issue_data['publisher_message_count'],
+                      'startDelay': {
+                          'enabled': False,
+                          'minutes': 5
+                      },
+                      'waitForStatefulSet': {
+                          'enabled': True,
+                          'stabilityMinutes': 1
+                      }
+                  },
+                  'artificialLatency': {
+                      'enabled': issue_data['artificial_latency'],
+                      'latencyMs': issue_data['latency_ms']
+                  },
+                  'customCommand': {
+                      'enabled': issue_data['custom_command'],
+                      'command': [],
+                      'args': issue_data['custom_command_args'] if issue_data['custom_command'] else []
+                  }
+              }
+              
+              return yaml.dump(values, default_flow_style=False)
+
+          # Parse the valid issue JSON
+          valid_issue = '''{{inputs.parameters.valid_issue}}'''
+          try:
+              valid_issue_decoded = base64.b64decode(valid_issue).decode()
+              issue_data, status = sanitize_json(valid_issue_decoded)
+              if issue_data is None:
+                  print(f"Error in sanitized JSON: {status}")
+                  sys.exit(1)
+              issue_number = issue_data['number']
+              issue_title = issue_data['title']
+
+              # Parse GitHub issue and generate values.yaml
+              parsed_issue_data = parse_github_issue(issue_data)
+              # Output duration
+              duration = parsed_issue_data['duration']
+              with open('/tmp/duration.txt', 'w') as f:
+                  f.write(str(duration))
+              values_yaml = generate_values_yaml(parsed_issue_data)
+
+              # Write values.yaml to a file
+              with open('values.yaml', 'w') as f:
+                  f.write(values_yaml)
+          except Exception as e:
+              print(f"Error parsing valid issue: {e}")
+              sys.exit(1)
+
+          # Define a Helm release name using the issue number
+          release_name = f"dstdeploywaku{issue_number}"
+          print(f"Deploying Helm chart for issue #{issue_number}: {issue_title}")
+          print(f"Release name: {release_name}")
+
+          # Run Helm upgrade/install
+          helm_command = [
+              "helm", "upgrade", "--install", release_name,
+              "https://github.com/vacp2p/10ksim/raw/refs/heads/zorlin/helm10k/charts/waku-deployment-0.1.0.tgz",
+              "-f", "values.yaml",
+              "--namespace", "zerotesting"
+          ]
+          
+          result = subprocess.run(helm_command, capture_output=True, text=True)
+          print(result.stdout)
+          if result.returncode != 0:
+              print(f"Error during Helm deployment: {result.stderr}")
+              sys.exit(1)
+
+          # Check deployment status
+          status_command = ["helm", "status", release_name, "--namespace", "zerotesting"]
+          status_result = subprocess.run(status_command, capture_output=True, text=True)
+          print(status_result.stdout)
+
+          # Write output to a file
+          with open('/tmp/release_name.txt', 'w') as f:
+              f.write(release_name)
+
+          # Exit successfully
+          sys.exit(0)
+          PY_EOF
+          
+          # Capture the exit code of the Python script
+          exit_code=$?
+          
+          # Output the result (this won't affect the output parameter)
+          cat /tmp/release_name.txt
+          cat /tmp/duration.txt
+          
+          # Exit the bash script with the same code
+          exit $exit_code
+          EOF
+
+    - name: wait-for-completion
+      inputs:
+        parameters:
+          - name: release_name
+          - name: duration
+      script:
+        image: alpine
+        command: [sh]
+        source: |
+          echo "Deployment {{inputs.parameters.release_name}} is running."
+          echo "Waiting for {{inputs.parameters.duration}} minutes..."
+          sleep $(({{inputs.parameters.duration}} * 60))
+
+    - name: cleanup
+      inputs:
+        parameters:
+          - name: release_name
+      script:
+        image: alpine/helm:3.11.1
+        command: [sh]
+        source: |
+          helm uninstall {{inputs.parameters.release_name}} --namespace zerotesting
+          echo "Deployment {{inputs.parameters.release_name}} has been cleaned up."

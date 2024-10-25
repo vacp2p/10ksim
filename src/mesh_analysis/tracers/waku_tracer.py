@@ -39,6 +39,8 @@ class WakuTracer(MessageTracer):
 
     def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
         dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
+        logger.warning("Filtering pods that are not 'nodes' (relay)")
+        dfs[0] = dfs[0][dfs[0]['pod-name'].str.startswith('nodes')]
 
         return dfs
 

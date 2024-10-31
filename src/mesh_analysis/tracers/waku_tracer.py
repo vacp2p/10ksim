@@ -33,6 +33,12 @@ class WakuTracer(MessageTracer):
             r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)')
         self._tracings.append(self._trace_sent_in_logs)
 
+    def with_store_sync_pattern(self):
+        self._patterns.append(
+            r'^.*?message archived.*?msg_hash=(0x[\da-f]+).*?pubsubTopic=([\w\/]+).*?contentTopic=([\w\/]+).*?timestamp=(\d+)'
+        )
+        self._tracings.append(self._trace_store_sync_in_logs)
+
     def with_wildcard_pattern(self):
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
@@ -55,6 +61,16 @@ class WakuTracer(MessageTracer):
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
                           columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name'])
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df.set_index(['msg_hash', 'timestamp'], inplace=True)
+        df.sort_index(inplace=True)
+
+        return df
+
+    def _trace_store_sync_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        df = pd.DataFrame(parsed_logs,
+                          columns=['msg_hash', 'pubsubTopic', 'contentTopic', 'timestamp', 'file-name'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
         df.set_index(['msg_hash', 'timestamp'], inplace=True)

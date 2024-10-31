@@ -105,8 +105,8 @@ Inside each plot, we will have as many subplots as metrics in `data`.
 ### Secondary objectives
 - [X] Add QoS parameter support to the 10k tool
 - [ ] Run further Waku protocols:
-  - [ ] Filter
-  - [ ] Lightpush
+  - [X] Filter
+  - [X] Lightpush
   - [X] Store
   - [ ] Peer exchange
 

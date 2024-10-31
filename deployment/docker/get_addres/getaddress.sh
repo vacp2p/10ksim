@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Number of addrs to process, default to 3 if not specified
+# Number of addrs to process, default to 1 if not specified
 num_addrs=${1:-1}
 
 # Service name to query, default to "zerotesting-bootstrap.zerotesting" if not specified

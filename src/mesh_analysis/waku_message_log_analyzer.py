@@ -230,6 +230,31 @@ class WakuMessageLogAnalyzer:
             logger.error(result.err_value)
             exit(1)
 
+    def analyze_store_sync_logs(self) -> Result[None, str]:
+        waku_tracer = WakuTracer()
+        waku_tracer.with_store_sync_pattern()
+        reader = FileReader(self._local_path_to_analyze, waku_tracer)
+        dfs = reader.read()
+        store_sync_df = dfs[0]
+        file_name_counts = store_sync_df.groupby(['msg_hash', 'file-name']).size()
+        inconsistent_file_names = file_name_counts[file_name_counts != 1]
+
+        if not inconsistent_file_names.empty:
+            logger.warning('There are missing/duplicated file-names for a msg_hash')
+            logger.warning(inconsistent_file_names)
+        else:
+            logger.info("All nodes archived all msg_hashes")
+
+        store_sync_df = store_sync_df.reset_index()
+        store_sync_df = store_sync_df.astype(str)
+        logger.info("Dumping store sync information")
+        result = file_utils.dump_df_as_csv(store_sync_df, self._dump_analysis_dir / 'summary' / 'store_sync.csv', False)
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        return Ok(None)
+
     def analyze_message_logs(self, parallel=False):
         if self._timestamp is not None:
             logger.info('Analyzing from server')

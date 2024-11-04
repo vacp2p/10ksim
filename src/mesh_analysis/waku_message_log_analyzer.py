@@ -63,7 +63,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
+                               "query": f"kubernetes_pod_name:nodes AND kubernetes_container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
 
         reader = VictoriaReader(victoria_config, None)
         result = reader.single_query_info()
@@ -219,7 +219,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_container_name:waku AND _time:{self._timestamp} AND kubernetes_pod_name:nodes | uniq by (kubernetes_pod_name)"}
+                               "query": f"kubernetes_pod_name:nodes AND kubernetes_container_name:waku AND _time:{self._timestamp} | uniq by (kubernetes_pod_name)"}
                            }
 
         reader = VictoriaReader(victoria_config, None)
@@ -276,6 +276,23 @@ class WakuMessageLogAnalyzer:
             if result.is_ok():
                 logger.info(f'Messages from store saved in {result.ok_value}')
 
+    def check_filter_messages(self):
+        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
+                           "headers": {"Content-Type": "application/json"},
+                           "params": {
+                               "query": f"kubernetes_pod_name:get-filter-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
+                           }
+
+        reader = VictoriaReader(victoria_config, None)
+        result = reader.single_query_info()
+
+        if result.is_ok():
+            messages_string = result.unwrap()['_msg']
+            all_ok = ast.literal_eval(messages_string)
+            if all_ok:
+                logger.info("Messages from filter match in length.")
+            else:
+                logger.error("Messages from filter do not match.")
 
     def analyze_message_timestamps(self, time_difference_threshold: int):
         """

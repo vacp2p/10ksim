@@ -2,7 +2,7 @@ FROM alpine:latest
 
 # Update the package repository and install bind-tools and wget
 RUN apk update && \
-    apk add bind-tools wget bash && \
+    apk add bind-tools bash curl && \
     # Create /app directory
     mkdir /app
 

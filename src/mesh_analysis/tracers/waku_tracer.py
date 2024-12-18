@@ -46,7 +46,8 @@ class WakuTracer(MessageTracer):
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
-                          columns=['receiver_peer_id', 'msg_hash', 'sender_peer_id', 'timestamp', 'pod-name', 'kubernetes-worker'])
+                          columns=['receiver_peer_id', 'msg_hash', 'sender_peer_id', 'timestamp', 'pod-name',
+                                   'kubernetes-worker'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
         df.set_index(['msg_hash', 'timestamp'], inplace=True)
@@ -56,7 +57,8 @@ class WakuTracer(MessageTracer):
 
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
-                          columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name', 'kubernetes-worker'])
+                          columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name',
+                                   'kubernetes-worker'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
         df.set_index(['msg_hash', 'timestamp'], inplace=True)

@@ -118,6 +118,16 @@ class WakuTracer(MessageTracer):
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(shard_identifier, msg_identifier,
                                                                                  peer_identifier, received_df)
 
+        received_df = received_df.reset_index()
+        shard_groups = received_df.groupby('msg_hash')['shard'].nunique()
+        violations = shard_groups[shard_groups > 1]
+
+        if violations.empty:
+            logger.info("All msg_hash values appear in only one shard.")
+        else:
+            logger.warning("These msg_hash values appear in multiple shards:")
+            logger.warning(violations)
+
         if peers_missed_messages:
             msg_sent_data = self.check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)
             for data in msg_sent_data:

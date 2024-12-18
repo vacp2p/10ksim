@@ -80,7 +80,7 @@ class WakuTracer(MessageTracer):
             missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
 
             if not peers_missed_msg:
-                logger.info(f'All peers received all messages')
+                logger.info(f'All peers received all messages for shard {shard}')
             else:
                 logger.warning(f'Peers missed messages on shard {shard}')
                 logger.warning(f'Peers who missed messages: {peers_missed_msg}')

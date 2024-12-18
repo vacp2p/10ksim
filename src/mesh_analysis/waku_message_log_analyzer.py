@@ -304,7 +304,7 @@ class WakuMessageLogAnalyzer:
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
         from logs.
         """
-        file_logs = file_utils.get_files_from_folder_path(self._local_path_to_analyze, '*.log')
+        file_logs = file_utils.get_files_from_folder_path(self._local_path_to_analyze, extension='*.log')
         if file_logs.is_err():
             logger.error(file_logs.err_value)
             return

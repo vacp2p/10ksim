@@ -175,7 +175,7 @@ class WakuMessageLogAnalyzer:
         dfs = self._read_logs_concurrently()
         dfs = self._merge_dfs(dfs)
 
-        self._message_hashes = dfs[0].index.get_level_values(0).unique().tolist()
+        self._message_hashes = dfs[0].index.get_level_values(1).unique().tolist()
 
         result = self._dump_dfs(dfs)
         if result.is_err():
@@ -185,7 +185,7 @@ class WakuMessageLogAnalyzer:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
-        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
                                                                 self._dump_analysis_dir)
 
         return has_issues
@@ -194,8 +194,11 @@ class WakuMessageLogAnalyzer:
         logger.info("Merging and sorting information")
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
-        dfs[0].sort_index(inplace=True)
-        dfs[1].sort_index(inplace=True)
+
+        dfs = [df.assign(shard=df['pod-name'].str.extract(r'nodes-(\d+)-').astype(int))
+               .set_index(['shard', 'msg_hash', 'timestamp'])
+               .sort_index()
+               for df in dfs]
 
         return dfs
 

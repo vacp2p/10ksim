@@ -9,7 +9,7 @@ if __name__ == '__main__':
     # Timestamp of the simulation
     timestamp = "[2024-08-14T11:11:00, 2024-08-14T12:05:00]"
     # Example of data analysis from cluster
-    log_analyzer = WakuMessageLogAnalyzer(timestamp, dump_analysis_dir='store')
+    log_analyzer = WakuMessageLogAnalyzer(2, timestamp, dump_analysis_dir='local_data/shard_tests/')
     # Example of data analysis from local
     # log_analyzer = WakuMessageLogAnalyzer(local_folder_to_analyze='lpt_duptest_debug', dump_analysis_dir='lpt_duptest_debug/notion')
 

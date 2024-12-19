@@ -1,4 +1,4 @@
-FROM python:3.9.18-alpine3.18
+FROM python:3.10.16-alpine3.21
 
 ADD ./traffic.py /app/traffic.py
 

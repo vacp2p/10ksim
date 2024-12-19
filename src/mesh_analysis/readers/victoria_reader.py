@@ -33,7 +33,7 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name']))
+                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name'], parsed_object['kubernetes_host']))
         logger.debug(f'Fetched {len(self.logs)} messages')
 
     def _make_queries(self) -> List:
@@ -46,6 +46,7 @@ class VictoriaReader:
                 if match:
                     match_as_list = list(match.groups())
                     match_as_list.append(log_line[1])
+                    match_as_list.append(log_line[2])
                     results[i].append(match_as_list)
             # logger.debug('Fetched lines parsed with pattern')
             self.logs.clear()

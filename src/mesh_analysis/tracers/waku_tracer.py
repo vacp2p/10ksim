@@ -46,45 +46,52 @@ class WakuTracer(MessageTracer):
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
-                          columns=['receiver_peer_id', 'msg_hash', 'sender_peer_id', 'timestamp', 'pod-name'])
+                          columns=['receiver_peer_id', 'msg_hash', 'sender_peer_id', 'timestamp', 'pod-name',
+                                   'kubernetes-worker'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
-        df.set_index(['msg_hash', 'timestamp'], inplace=True)
-        df.sort_index(inplace=True)
 
         return df
 
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
-                          columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name'])
+                          columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name',
+                                   'kubernetes-worker'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
-        df.set_index(['msg_hash', 'timestamp'], inplace=True)
-        df.sort_index(inplace=True)
 
         return df
 
     def _trace_all_logs(self, parsed_logs: List) -> List:
         return parsed_logs
 
-    def _get_peers_missed_messages(self, msg_identifier: str, peer_identifier: str, df: pd.DataFrame) -> Tuple[
-        List, List]:
-        unique_messages = len(df.index.get_level_values(0).unique())
-        grouped = df.groupby([msg_identifier, peer_identifier]).size().reset_index(name='count')
-        pivot_df = grouped.pivot_table(index=msg_identifier, columns=peer_identifier, values='count',
-                                       fill_value=0)
+    def _get_peers_missed_messages(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
+                                   df: pd.DataFrame) -> Tuple[List, List]:
+        all_peers_missed_messages = []
+        all_missing_messages = []
 
-        peers_missed_msg = pivot_df.loc[:, pivot_df.sum() != unique_messages].columns.to_list()
-        missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
+        for shard, df_shard in df.groupby(level=shard_identifier):
+            unique_messages = len(df_shard.index.get_level_values(msg_identifier).unique())
 
-        if not peers_missed_msg:
-            logger.info(f'All peers received all messages')
-        else:
-            logger.warning(f'Some peers missed messages: {peers_missed_msg}')
-            logger.warning(f'Missing messages: {missing_messages}')
-            self._log_received_messages(pivot_df, unique_messages)
+            grouped = df_shard.groupby([msg_identifier, peer_identifier]).size().reset_index(name='count')
+            pivot_df = grouped.pivot_table(index=msg_identifier, columns=peer_identifier, values='count', fill_value=0)
 
-        return peers_missed_msg, missing_messages
+            peers_missed_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
+            missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
+
+            if not peers_missed_msg:
+                logger.info(f'All peers received all messages for shard {shard}')
+            else:
+                logger.warning(f'Peers missed messages on shard {shard}')
+                logger.warning(f'Peers who missed messages: {peers_missed_msg}')
+                logger.warning(f'Missing messages: {missing_messages}')
+
+                all_peers_missed_messages.extend(peers_missed_msg)
+                all_missing_messages.extend(missing_messages)
+
+                self._log_received_messages(pivot_df, unique_messages)
+
+        return all_peers_missed_messages, all_missing_messages
 
     def _log_received_messages(self, df: pd.DataFrame, unique_messages: int):
         column_sums = df.sum()
@@ -102,24 +109,24 @@ class WakuTracer(MessageTracer):
 
         return messages_sent_to_peer
 
-    def has_message_reliability_issues(self, msg_identifier: str, peer_identifier: str, received_df: pd.DataFrame,
-                                       sent_df: pd.DataFrame, issue_dump_location: Path) -> bool:
+    def has_message_reliability_issues(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
+                                       received_df: pd.DataFrame, sent_df: pd.DataFrame,
+                                       issue_dump_location: Path) -> bool:
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
-        logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(0).unique())}')
+        logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
 
-        peers_missed_messages, missed_messages = self._get_peers_missed_messages(msg_identifier, peer_identifier,
-                                                                                 received_df)
+        peers_missed_messages, missed_messages = self._get_peers_missed_messages(shard_identifier, msg_identifier,
+                                                                                 peer_identifier, received_df)
 
-        # TODO add result check
-        received = received_df.reset_index()
-        received = received.astype(str)
-        logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(received, 'received.csv', False)
+        received_df = received_df.reset_index()
+        shard_groups = received_df.groupby('msg_hash')['shard'].nunique()
+        violations = shard_groups[shard_groups > 1]
 
-        sent = sent_df.reset_index()
-        sent = sent.astype(str)
-        logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(sent, 'sent.csv', False)
+        if violations.empty:
+            logger.info("All msg_hash values appear in only one shard.")
+        else:
+            logger.warning("These msg_hash values appear in multiple shards:")
+            logger.warning(violations)
 
         if peers_missed_messages:
             msg_sent_data = self.check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)

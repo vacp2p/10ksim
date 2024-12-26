@@ -96,7 +96,10 @@ class WakuTracer(MessageTracer):
         filtered_sums = column_sums[column_sums != unique_messages]
         result_list = list(filtered_sums.items())
         for result in result_list:
-            logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages} messages received')
+            peer_id, count = result
+            missing_hashes = df[df[peer_id] == 0].index.tolist()
+            missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
+            logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []

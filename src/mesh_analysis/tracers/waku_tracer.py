@@ -39,8 +39,6 @@ class WakuTracer(MessageTracer):
 
     def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
         dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
-        logger.warning("Filtering pods that are not 'nodes' (relay)")
-        dfs[0] = dfs[0][dfs[0]['pod-name'].str.startswith('nodes')]
 
         return dfs
 
@@ -103,9 +101,12 @@ class WakuTracer(MessageTracer):
     def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []
         for peer in peers:
-            filtered_df = sent_df.loc[missed_messages]
-            filtered_df = filtered_df[filtered_df['receiver_peer_id'] == peer]
-            messages_sent_to_peer.append((peer, filtered_df))
+            try:
+                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
+                filtered_df = filtered_df[filtered_df['receiver_peer_id'] == peer]
+                messages_sent_to_peer.append((peer, filtered_df))
+            except KeyError as _:
+                logger.warning(f'Message {missed_messages} has not ben sent to {peer} by any other node.')
 
         return messages_sent_to_peer
 

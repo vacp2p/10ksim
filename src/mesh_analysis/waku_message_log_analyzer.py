@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class WakuMessageLogAnalyzer:
-    def __init__(self, num_shards: int, timestamp_to_analyze: str = None, dump_analysis_dir: str = None,
-                 local_folder_to_analyze: str = None):
-        self._num_shards = num_shards
-        self._num_nodes = None
+    def __init__(self, stateful_sets: List[str], timestamp_to_analyze: str = None,
+                 dump_analysis_dir: str = None, local_folder_to_analyze: str = None):
+        self._stateful_sets = stateful_sets
+        self._num_nodes: List[int] = []
         self._validate_analysis_location(timestamp_to_analyze, local_folder_to_analyze)
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._timestamp = timestamp_to_analyze
@@ -40,15 +40,14 @@ class WakuMessageLogAnalyzer:
             logger.error(result.err_value)
             exit(1)
 
-    def _get_victoria_config_parallel(self, node_index: int, num_nodes: int, num_shards: int) -> Dict:
-        shard = int(node_index // (num_nodes / num_shards))
+    def _get_victoria_config_parallel(self, stateful_set_name: str, node_index: int) -> Dict:
         return {"url": "https://vmselect.riff.cc/select/logsql/query",
                 "headers": {"Content-Type": "application/json"},
                 "params": [
                     {
-                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:nodes-{shard}-{node_index} AND received relay message AND _time:{self._timestamp}"},
+                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set_name}-{node_index} AND received relay message AND _time:{self._timestamp}"},
                     {
-                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:nodes-{shard}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
+                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
                 }
 
     def _get_victoria_config_single(self) -> Dict:
@@ -66,7 +65,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_pod_name:nodes AND kubernetes_container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
+                               "query": f"kubernetes_container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
 
         reader = VictoriaReader(victoria_config, None)
         result = reader.single_query_info()
@@ -123,7 +122,7 @@ class WakuMessageLogAnalyzer:
         reader = FileReader(self._local_path_to_analyze, waku_tracer)
         dfs = reader.read()
 
-        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
                                                                 self._dump_analysis_dir)
 
         return has_issues
@@ -140,34 +139,36 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
-    def _read_logs_for_node(self, node_index, victoria_config_func) -> List[pd.DataFrame]:
+    def _read_logs_for_node(self, stateful_set_name: str, node_index: int, victoria_config_func) -> List[pd.DataFrame]:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_pattern()
         waku_tracer.with_sent_pattern()
 
-        config = victoria_config_func(node_index, self._num_nodes, self._num_shards)
+        config = victoria_config_func(stateful_set_name, node_index)
         reader = VictoriaReader(config, waku_tracer)
         data = reader.read()
-        logger.debug(f'Nodes-{node_index} analyzed')
+        logger.debug(f'{stateful_set_name}-{node_index} analyzed')
 
         return data
 
     def _read_logs_concurrently(self) -> List[pd.DataFrame]:
         dfs = []
-        with ProcessPoolExecutor() as executor:
-            futures = {executor.submit(self._read_logs_for_node, i, self._get_victoria_config_parallel): i
-                       for i in range(self._num_nodes)}
+        for stateful_set_name, num_nodes_in_stateful_set in zip(self._stateful_sets, self._num_nodes):
+            with ProcessPoolExecutor(8) as executor:
+                futures = {executor.submit(self._read_logs_for_node, stateful_set_name, node_index,
+                                           self._get_victoria_config_parallel):
+                               node_index for node_index in range(num_nodes_in_stateful_set)}
 
-            for i, future in enumerate(as_completed(futures)):
-                i = i + 1
-                try:
-                    df = future.result()
-                    dfs.append(df)
-                    if i % 50 == 0:
-                        logger.info(f'Processed {i}/{self._num_nodes} nodes')
+                for i, future in enumerate(as_completed(futures)):
+                    i = i + 1
+                    try:
+                        df = future.result()
+                        dfs.append(df)
+                        if i % 50 == 0:
+                            logger.info(f'Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>')
 
-                except Exception as e:
-                    logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
+                    except Exception as e:
+                        logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
         return dfs
 

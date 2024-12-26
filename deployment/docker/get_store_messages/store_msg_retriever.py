@@ -73,7 +73,7 @@ def main():
     args_dict = vars(args)
     logging.info(f"Arguments: {args_dict}")
 
-    service = "zerotesting-store:8645"
+    service = "zerotesting-service:8645"
     node = resolve_dns(service)
     url = f"http://{node}/store/v3/messages"
     logging.info(f"Query to {url}")

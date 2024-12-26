@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Waku filter message retriever")
     parser.add_argument('-c', '--contentTopic', type=str, help='Content topic', default="/my-app/1/dst/proto")
     parser.add_argument('-n', '--numNodes', type=int, help='Number of filter nodes to get messages from', default=1)
+    parser.add_argument('-s', '--numShards', type=int, help='Number of shards in the cluster', default=1)
 
     return parser.parse_args()
 
@@ -59,15 +60,18 @@ def main():
     args_dict = vars(args)
     logging.info(f"Arguments: {args_dict}")
 
-    hostname = "filter"
+    hostname = "fclient"
     port = "8645"
 
-    addresses = [f"{hostname}-{i}:{port}" for i in range(args.numNodes)]
-    content_topic = args.contentTopic
+    addresses = [
+        f"{hostname}-{shard}-{node}:{port}"
+        for shard in range(args.numShards)
+        for node in range(args.numNodes)
+    ]
 
     all_messages = []
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(process_node_messages, address, content_topic) for address in addresses]
+        futures = [executor.submit(process_node_messages, address, args.contentTopic) for address in addresses]
 
         for future in as_completed(futures):
             result = future.result()

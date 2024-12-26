@@ -8,7 +8,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-from src.utils import path_utils, file_utils
+from src.utils import path_utils
 
 logger = logging.getLogger(__name__)
 

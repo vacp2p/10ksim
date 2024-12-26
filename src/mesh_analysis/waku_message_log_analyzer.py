@@ -196,7 +196,7 @@ class WakuMessageLogAnalyzer:
         dfs = list(zip(*dfs))
         dfs = [pd.concat(tup, axis=0) for tup in dfs]
 
-        dfs = [df.assign(shard=df['pod-name'].str.extract(r'nodes-(\d+)-').astype(int))
+        dfs = [df.assign(shard=df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
                .set_index(['shard', 'msg_hash', 'timestamp'])
                .sort_index()
                for df in dfs]
@@ -222,26 +222,31 @@ class WakuMessageLogAnalyzer:
 
         return Ok(None)
 
-    def _get_number_nodes(self) -> int:
-        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
-                           "headers": {"Content-Type": "application/json"},
-                           "params": {
-                               "query": f"kubernetes_pod_name:nodes AND kubernetes_container_name:waku AND _time:{self._timestamp} | uniq by (kubernetes_pod_name)"}
-                           }
+    def _get_number_nodes(self) -> List[int]:
+        num_nodes_per_stateful_set = []
 
-        reader = VictoriaReader(victoria_config, None)
-        result = reader.multi_query_info()
-        if result.is_ok():
-            return len(list(result.ok_value))
-        else:
-            logger.error(result.err_value)
-            exit(1)
+        for stateful_set in self._stateful_sets:
+            victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
+                               "headers": {"Content-Type": "application/json"},
+                               "params": {
+                                   "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set} AND _time:{self._timestamp} | uniq by (kubernetes_pod_name)"}
+                               }
 
-    def analyze_message_logs(self, parallel=False):
+            reader = VictoriaReader(victoria_config, None)
+            result = reader.multi_query_info()
+            if result.is_ok():
+                num_nodes_per_stateful_set.append(len(list(result.ok_value)))
+            else:
+                logger.error(result.err_value)
+                exit(1)
+
+        return num_nodes_per_stateful_set
+
+    def analyze_message_logs(self, parallel: bool = False):
         if self._timestamp is not None:
             logger.info('Analyzing from server')
             self._num_nodes = self._get_number_nodes()
-            logger.info(f'Detected {self._num_nodes} pods')
+            logger.info(f'Detected {self._num_nodes} pods in {self._stateful_sets}')
             has_issues = self._has_issues_in_cluster_parallel() if parallel else self._has_issues_in_cluster_single()
             if has_issues:
                 match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
@@ -266,7 +271,7 @@ class WakuMessageLogAnalyzer:
         if result.is_ok():
             messages_string = result.unwrap()['_msg']
             messages_list = ast.literal_eval(messages_string)
-            messages_list = ['0x'+base64.b64decode(msg).hex() for msg in messages_list]
+            messages_list = ['0x' + base64.b64decode(msg).hex() for msg in messages_list]
             logger.debug(f'Messages from store: {messages_list}')
 
             if len(self._message_hashes) != len(messages_list):

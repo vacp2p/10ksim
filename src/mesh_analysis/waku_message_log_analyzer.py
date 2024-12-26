@@ -322,3 +322,28 @@ class WakuMessageLogAnalyzer:
 
             for jump in time_jumps:
                 logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')
+
+
+    def plot_message_distribution(self):
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        sns.set_theme()
+
+        df = pd.read_csv('local_data/mixed_enviroment/summary/received.csv', parse_dates=['timestamp'])
+        df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+
+        time_ranges = df.groupby(level='msg_hash').apply(
+            lambda x: (x.index.get_level_values('timestamp').max() - x.index.get_level_values(
+                'timestamp').min()).total_seconds()
+        )
+
+        time_ranges_df = time_ranges.reset_index(name='time_to_reach')
+
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue')
+
+        plt.xlabel('Time to Reach All Nodes (seconds)')
+        plt.title('210 Nodes - 1msg/s - 1KB - 600 messages \n Message time distribution')
+
+        plt.savefig("distribution-mixed")
+        plt.show()

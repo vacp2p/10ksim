@@ -8,7 +8,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-from src.utils import path_utils, file_utils
+from src.utils import path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,6 @@ class WakuTracer(MessageTracer):
 
     def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
         dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
-        logger.warning("Filtering pods that are not 'nodes' (relay)")
-        dfs[0] = dfs[0][dfs[0]['pod-name'].str.startswith('nodes')]
 
         return dfs
 
@@ -98,14 +96,20 @@ class WakuTracer(MessageTracer):
         filtered_sums = column_sums[column_sums != unique_messages]
         result_list = list(filtered_sums.items())
         for result in result_list:
-            logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages} messages received')
+            peer_id, count = result
+            missing_hashes = df[df[peer_id] == 0].index.tolist()
+            missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
+            logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []
         for peer in peers:
-            filtered_df = sent_df.loc[missed_messages]
-            filtered_df = filtered_df[filtered_df['receiver_peer_id'] == peer]
-            messages_sent_to_peer.append((peer, filtered_df))
+            try:
+                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
+                filtered_df = filtered_df[filtered_df['receiver_peer_id'] == peer]
+                messages_sent_to_peer.append((peer, filtered_df))
+            except KeyError as _:
+                logger.warning(f'Message {missed_messages} has not ben sent to {peer} by any other node.')
 
         return messages_sent_to_peer
 

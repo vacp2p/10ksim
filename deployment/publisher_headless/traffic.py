@@ -13,20 +13,19 @@ from typing import Tuple, Dict
 logging.basicConfig(level=logging.INFO)
 
 
-async def check_dns_time(service: str, num_nodes: int, num_shards: int) -> tuple[str, str, str]:
+async def check_dns_time(service: str) -> tuple[str, str, str]:
     start_time = time.time()
     ip_address = socket.gethostbyname(service)
     elapsed = (time.time() - start_time) * 1000
     entire_hostname = socket.gethostbyaddr(ip_address)
     hostname = entire_hostname[0].split('.')[0]
-    node_shard = int(int(hostname.split('-')[1]) % (num_nodes / num_shards))
+    node_shard = int(hostname.split('-')[1])
     logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname} with shard {node_shard}.')
     return f'{ip_address}', hostname, f'{node_shard}'
 
 
 async def send_to_relay(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
-    node_address, node_hostname, node_shard = await check_dns_time('zerotesting-service', args.number_nodes,
-                                                                   args.shards)
+    node_address, node_hostname, node_shard = await check_dns_time('zerotesting-service')
     topic = urllib.parse.quote(args.pubsub_topic + node_shard, safe='')
     url = f'http://{node_address}:{args.port}/relay/v1/messages/{topic}'
 
@@ -38,8 +37,7 @@ async def send_to_relay(args: argparse.Namespace) -> Tuple[str, Dict[str, str], 
 
 
 async def send_to_lightpush(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, dict[str, str | int]], str]:
-    node_address, node_hostname, shard = await check_dns_time('zerotesting-service', args.number_nodes,
-                                                              args.shards)
+    node_address, node_hostname, shard = await check_dns_time('zerotesting-lightpush-client')
     url = f'http://{node_address}:{args.port}/lightpush/v1/message'
 
     payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode('ascii').rstrip("=")
@@ -121,10 +119,6 @@ def parse_args() -> argparse.Namespace:
                         default=1)
     parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
                         default=10)
-    parser.add_argument('-sh', '--shards', type=int, help='Number of shards',
-                        default=1)
-    parser.add_argument('-n', '--number-nodes', type=int,
-                        help='Number of waku nodes. Needed with more than 1 shard')
     parser.add_argument('-ps', '--protocols', nargs='+', default=['relay'],
                         help='Protocols used inject messages')
     parser.add_argument('-p', '--port', type=int, default=8645, help='Waku REST port')
@@ -134,8 +128,5 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    if args.shards > 1 and not args.number_nodes:
-        logging.error('Number of nodes needs to be specified if there are multiple shards')
-        exit(1)
     logging.info(f'{args}')
     asyncio.run(main(args))

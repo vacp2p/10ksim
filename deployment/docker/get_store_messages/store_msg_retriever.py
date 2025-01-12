@@ -24,7 +24,7 @@ def resolve_dns(node: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Waku storage retriever")
-    parser.add_argument('-c', '--contentTopics', type=str, help='Content topic', default="kubekube")
+    parser.add_argument('-c', '--contentTopics', type=str, help='Content topic', default="/my-app/1/dst/proto")
     parser.add_argument('-p', '--pubsubTopic', type=str, help='Pubsub topic',
                         default="/waku/2/rs/2/0")
     parser.add_argument('-ps', '--pageSize', type=int,
@@ -73,7 +73,7 @@ def main():
     args_dict = vars(args)
     logging.info(f"Arguments: {args_dict}")
 
-    service = "zerotesting-store:8645"
+    service = "zerotesting-service:8645"
     node = resolve_dns(service)
     url = f"http://{node}/store/v3/messages"
     logging.info(f"Query to {url}")

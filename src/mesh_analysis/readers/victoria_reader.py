@@ -2,7 +2,6 @@
 import json
 import logging
 import re
-import time
 import pandas as pd
 import requests
 from typing import Dict, List, Optional, Iterator
@@ -62,7 +61,6 @@ class VictoriaReader:
         return dfs
 
     def single_query_info(self) -> Result[Dict, Response]:
-        time.sleep(10)
         response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')
@@ -78,7 +76,6 @@ class VictoriaReader:
             return Err(response)
 
     def multi_query_info(self) -> Result[Iterator, str]:
-        time.sleep(10)
         response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')

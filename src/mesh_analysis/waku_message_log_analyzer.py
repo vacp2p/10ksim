@@ -3,6 +3,10 @@ import ast
 import base64
 import logging
 import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
+import numpy as np
+import seaborn as sns
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict
@@ -12,6 +16,7 @@ from result import Ok, Err, Result
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
+from src.plotting.utils import add_boxplot_stat_labels
 from src.utils import file_utils, log_utils, path_utils, list_utils
 
 logger = logging.getLogger(__name__)
@@ -324,12 +329,19 @@ class WakuMessageLogAnalyzer:
                 logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')
 
 
-    def plot_message_distribution(self):
-        import matplotlib.pyplot as plt
-        import seaborn as sns
+    def plot_message_distribution(self, received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+        """
+        Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
+        from logs.
+        """
+        if not received_summary_path.exists():
+            error = f'Received summary file {received_summary_path} does not exist'
+            logger.error(error)
+            return Err(error)
+
         sns.set_theme()
 
-        df = pd.read_csv('local_data/mixed_enviroment/summary/received.csv', parse_dates=['timestamp'])
+        df = pd.read_csv(received_summary_path, parse_dates=['timestamp'])
         df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
 
         time_ranges = df.groupby(level='msg_hash').apply(
@@ -340,10 +352,32 @@ class WakuMessageLogAnalyzer:
         time_ranges_df = time_ranges.reset_index(name='time_to_reach')
 
         plt.figure(figsize=(12, 6))
-        sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue')
+        ax = sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue', whis=(0,100))
+
+        add_boxplot_stat_labels(ax, value_type="min")
+        add_boxplot_stat_labels(ax, value_type="max")
+        add_boxplot_stat_labels(ax, value_type="median")
+
+        q1 = np.percentile(time_ranges_df['time_to_reach'], 25)
+        q3 = np.percentile(time_ranges_df['time_to_reach'], 75)
+
+        text = ax.text(y=-0.1, x=q1, s=f'{q1:.3f}', ha='center', va='center',
+                       fontweight='bold', color='white', size=10)
+        text.set_path_effects([
+            path_effects.Stroke(linewidth=3, foreground=ax.get_lines()[0].get_color()),
+            path_effects.Normal(),
+        ])
+        text = ax.text(y=-0.1, x=q3, s=f'{q3:.3f}', ha='center', va='center',
+                       fontweight='bold', color='white', size=10)
+        text.set_path_effects([
+            path_effects.Stroke(linewidth=3, foreground=ax.get_lines()[0].get_color()),
+            path_effects.Normal(),
+        ])
 
         plt.xlabel('Time to Reach All Nodes (seconds)')
-        plt.title('210 Nodes - 1msg/s - 1KB - 600 messages \n Message time distribution')
+        plt.title(plot_title)
 
-        plt.savefig("distribution-mixed")
+        plt.savefig(dump_path)
         plt.show()
+
+        return Ok(None)

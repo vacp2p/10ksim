@@ -36,3 +36,15 @@ def prepare_path_for_folder(folder_location: Union[str, Path]) -> Result[Path, s
         return Err(f'Error creating {folder_location.parent}. {e}')
 
     return Ok(folder_location)
+
+
+def check_path_exists(func):
+    def wrapper(self, path: Path, *args, **kwargs):
+        if not path.exists():
+            error = f'Path {args[0]} does not exist'
+            logger.error(error)
+            return Err(error)
+        return func(self, path, *args, **kwargs)
+
+    return wrapper
+

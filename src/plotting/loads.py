@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 sns.set_theme()
 
 language = ["Nim", "Rust", "Go"]
-server = ["metal-01.he-eu-hel1.vacdst.misc", "metal-01.he-eu-fsn1.vacdst.misc"]
+server = ["metal-01.he-eu-hel1.misc.vacdst"]
 
 folders_grouped = [("../gossipsubdata_2nd/load/109/", "../gossipsubdatarust/load/109/", "../gossipsubdatago/load/109/"),
                    ("../gossipsubdata_2nd/load/198/", "../gossipsubdatarust/load/198/", "../gossipsubdatago/load/198/")]

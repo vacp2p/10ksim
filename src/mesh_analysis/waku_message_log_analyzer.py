@@ -51,9 +51,9 @@ class WakuMessageLogAnalyzer:
                 "headers": {"Content-Type": "application/json"},
                 "params": [
                     {
-                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set_name}-{node_index} AND received relay message AND _time:{self._timestamp}"},
+                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND received relay message AND _time:{self._timestamp}"},
                     {
-                        "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
+                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
                 }
 
     def _get_victoria_config_single(self) -> Dict:
@@ -61,9 +61,9 @@ class WakuMessageLogAnalyzer:
                 "headers": {"Content-Type": "application/json"},
                 "params": [
                     {
-                        "query": f"kubernetes_container_name:waku AND received relay message AND _time:{self._timestamp}"},
+                        "query": f"kubernetes.container_name:waku AND received relay message AND _time:{self._timestamp}"},
                     {
-                        "query": f"kubernetes_container_name:waku AND sent relay message AND _time:{self._timestamp}"}]
+                        "query": f"kubernetes.container_name:waku AND sent relay message AND _time:{self._timestamp}"}]
                 }
 
     def _get_affected_node_pod(self, data_file: str) -> Result[str, str]:
@@ -71,13 +71,13 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
+                               "query": f"kubernetes.container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:{self._timestamp} | limit 1"}}
 
         reader = VictoriaReader(victoria_config, None)
         result = reader.single_query_info()
 
         if result.is_ok():
-            pod_name = result.unwrap()['kubernetes_pod_name']
+            pod_name = result.unwrap()['kubernetes.pod_name']
             logger.debug(f'Pod name for peer id {peer_id} is {pod_name}')
             return Ok(pod_name)
 
@@ -91,7 +91,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": [{
-                               "query": f"kubernetes_pod_name:{result.ok_value} AND _time:{self._timestamp} | sort by (_time)"}]}
+                               "query": f"kubernetes.pod_name:{result.ok_value} AND _time:{self._timestamp} | sort by (_time)"}]}
 
         waku_tracer = WakuTracer()
         waku_tracer.with_wildcard_pattern()
@@ -235,7 +235,7 @@ class WakuMessageLogAnalyzer:
             victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                                "headers": {"Content-Type": "application/json"},
                                "params": {
-                                   "query": f"kubernetes_container_name:waku AND kubernetes_pod_name:{stateful_set} AND _time:{self._timestamp} | uniq by (kubernetes_pod_name)"}
+                                   "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set} AND _time:{self._timestamp} | uniq by (kubernetes.pod_name)"}
                                }
 
             reader = VictoriaReader(victoria_config, None)
@@ -268,7 +268,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_pod_name:get-store-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
+                               "query": f"kubernetes.pod_name:get-store-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
                            }
 
         reader = VictoriaReader(victoria_config, None)
@@ -297,7 +297,7 @@ class WakuMessageLogAnalyzer:
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
                            "headers": {"Content-Type": "application/json"},
                            "params": {
-                               "query": f"kubernetes_pod_name:get-filter-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
+                               "query": f"kubernetes.pod_name:get-filter-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
                            }
 
         reader = VictoriaReader(victoria_config, None)

@@ -18,9 +18,10 @@ from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
 from src.plotting.utils import add_boxplot_stat_labels
 from src.utils import file_utils, log_utils, path_utils, list_utils
+from src.utils.path_utils import check_path_exists
 
 logger = logging.getLogger(__name__)
-
+sns.set_theme()
 
 class WakuMessageLogAnalyzer:
     def __init__(self, stateful_sets: List[str], timestamp_to_analyze: str = None,
@@ -377,6 +378,28 @@ class WakuMessageLogAnalyzer:
         plt.xlabel('Time to Reach All Nodes (seconds)')
         plt.title(plot_title)
 
+        plt.savefig(dump_path)
+        plt.show()
+
+        return Ok(None)
+
+
+    @check_path_exists
+    def check_time_to_reach_value_plot(self, file_data_path: Path, threshold_value: int, value_name: str,
+                                       dump_path: Path) -> Result[None, str]:
+        df = pd.read_csv(file_data_path)
+        df['Time'] = pd.to_datetime(df['Time'])
+        df.set_index('Time', inplace=True)
+
+        mask = df >= threshold_value
+        first_reach = mask.idxmax()
+        first_reach[~mask.any()] = pd.NaT  # Set to NaT if the target is never reached
+        time_to_target = (first_reach - df.index[0]).dt.total_seconds() / 60
+
+        plt.figure(figsize=(10, 6))
+        plt.boxplot(time_to_target.dropna(), vert=False)
+        plt.title(f'Time to Reach {value_name} - {time_to_target.dropna().shape[0]}/{df.shape[1]}')
+        plt.xlabel('Time to Reach Target (minutes)')
         plt.savefig(dump_path)
         plt.show()
 

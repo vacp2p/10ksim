@@ -32,7 +32,7 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes_pod_name'], parsed_object['kubernetes_host']))
+                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes.pod_name'], parsed_object['kubernetes.pod_node_name']))
         logger.debug(f'Fetched {len(self.logs)} messages')
 
     def _make_queries(self) -> List:

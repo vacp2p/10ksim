@@ -1,7 +1,8 @@
 # Python Imports
 import logging
+from functools import wraps
 from pathlib import Path
-from typing import Union
+from typing import Union, Callable
 from result import Result, Err, Ok
 
 
@@ -56,7 +57,19 @@ def _validate_path(param):
             return Err(error)
     return None
 
-    return wrapper
+
+def check_params_path_exists_by_position(arg_position: int = 0) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            param = args[arg_position]
+            error = _validate_path(param)
+            if error:
+                return error
+            return func(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
 
         return wrapper
 

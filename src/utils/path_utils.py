@@ -38,10 +38,6 @@ def prepare_path_for_folder(folder_location: Union[str, Path]) -> Result[Path, s
     return Ok(folder_location)
 
 
-def check_path_exists(func):
-    def wrapper(self, path: Path, *args, **kwargs):
-        if not path.exists():
-            error = f'Path {args[0]} does not exist'
 def _validate_path(param):
     if isinstance(param, Path):
         if not param.exists():

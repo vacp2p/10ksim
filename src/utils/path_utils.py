@@ -71,6 +71,20 @@ def check_params_path_exists_by_position(arg_position: int = 0) -> Callable:
     return decorator
 
 
+def check_params_path_exists_by_position_or_kwargs(arg_position: int, karg_name: str) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            param = None
+            if arg_position < len(args):
+                param = args[arg_position]
+            elif karg_name in kwargs:
+                param = kwargs[karg_name]
+
+            error = _validate_path(param)
+            if error:
+                return error
+            return func(self, *args, **kwargs)
         return wrapper
 
     return decorator

@@ -1,7 +1,8 @@
 # Python Imports
 import logging
+from functools import wraps
 from pathlib import Path
-from typing import Union
+from typing import Union, Callable
 from result import Result, Err, Ok
 
 
@@ -38,13 +39,52 @@ def prepare_path_for_folder(folder_location: Union[str, Path]) -> Result[Path, s
     return Ok(folder_location)
 
 
-def check_path_exists(func):
-    def wrapper(self, path: Path, *args, **kwargs):
-        if not path.exists():
-            error = f'Path {args[0]} does not exist'
+def _validate_path(param):
+    if isinstance(param, Path):
+        if not param.exists():
+            error = f'Path {param} does not exist'
             logger.error(error)
             return Err(error)
-        return func(self, path, *args, **kwargs)
+    elif isinstance(param, list):
+        if not all(isinstance(p, Path) for p in param):
+            error = 'All elements in the list must be Path objects'
+            logger.error(error)
+            return Err(error)
+        if not all(p.exists() for p in param):
+            non_existing = [str(p) for p in param if not p.exists()]
+            error = f'The following paths do not exist: {", ".join(non_existing)}'
+            logger.error(error)
+            return Err(error)
+    return None
 
-    return wrapper
 
+def check_params_path_exists_by_position(arg_position: int = 0) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            param = args[arg_position]
+            error = _validate_path(param)
+            if error:
+                return error
+            return func(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def check_params_path_exists_by_position_or_kwargs(arg_position: int, karg_name: str) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            param = None
+            if arg_position < len(args):
+                param = args[arg_position]
+            elif karg_name in kwargs:
+                param = kwargs[karg_name]
+
+            error = _validate_path(param)
+            if error:
+                return error
+            return func(self, *args, **kwargs)
+        return wrapper
+
+    return decorator

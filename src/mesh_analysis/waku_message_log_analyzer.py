@@ -9,7 +9,7 @@ import numpy as np
 import seaborn as sns
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from result import Ok, Err, Result
 
 # Project Imports
@@ -18,7 +18,7 @@ from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
 from src.plotting.utils import add_boxplot_stat_labels
 from src.utils import file_utils, log_utils, path_utils, list_utils
-from src.utils.path_utils import check_path_exists
+from src.utils.path_utils import check_params_path_exists_by_position, check_params_path_exists_by_position_or_kwargs
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -384,23 +384,70 @@ class WakuMessageLogAnalyzer:
         return Ok(None)
 
 
-    @check_path_exists
-    def check_time_to_reach_value_plot(self, file_data_path: Path, threshold_value: int, value_name: str,
-                                       dump_path: Path) -> Result[None, str]:
-        df = pd.read_csv(file_data_path)
-        df['Time'] = pd.to_datetime(df['Time'])
-        df.set_index('Time', inplace=True)
+    @check_params_path_exists_by_position()
+    @check_params_path_exists_by_position_or_kwargs(1, 'file_path_2')
+    def check_time_to_reach_value_plot(
+            self,
+            file_path_1: Path,
+            file_path_2: Optional[Path] = None,
+            dump_path: Optional[Path] = None,
+            threshold_value: Optional[int] = None,
+            value_name: Optional[str] = None
+    ) -> Result[None, str]:
+        """
+        Plot the distribution of a variable to reach a target value for one or two datasets.
+        Index column should be a timestamp.
 
-        mask = df >= threshold_value
-        first_reach = mask.idxmax()
-        first_reach[~mask.any()] = pd.NaT  # Set to NaT if the target is never reached
-        time_to_target = (first_reach - df.index[0]).dt.total_seconds() / 60
+        Parameters:
+            file_path_1 (Path): Path to the first CSV file containing data.
+            file_path_2 (Optional[Path]): Path to the second CSV file containing data (if any).
+            dump_path (Path): Path to save the generated plot.
+            threshold_value (Optional[int]): Target value threshold to reach.
+            value_name (Optional[str]): Name of the value for plot title.
+        """
 
-        plt.figure(figsize=(10, 6))
-        plt.boxplot(time_to_target.dropna(), vert=False)
-        plt.title(f'Time to Reach {value_name} - {time_to_target.dropna().shape[0]}/{df.shape[1]}')
-        plt.xlabel('Time to Reach Target (minutes)')
-        plt.savefig(dump_path)
+        def calculate_time_to_target(file_path: Path, threshold_value: float) -> pd.Series:
+            """Calculate time to reach the target value for a given dataset."""
+            df = pd.read_csv(file_path)
+            df['Time'] = pd.to_datetime(df['Time'])
+            df.set_index('Time', inplace=True)
+
+            mask = df >= threshold_value
+            first_reach = mask.idxmax()
+            first_reach[~mask.any()] = pd.NaT  # Set to NaT if the target is never reached
+            time_to_target = (first_reach - df.index[0]).dt.total_seconds()
+            if time_to_target.isna().any():
+                logger.warning(f'There are values in {file_path} that never reach {threshold_value}.')
+
+            return time_to_target.dropna()
+
+        time_to_target_1 = calculate_time_to_target(file_path_1, threshold_value)
+        df_1 = pd.DataFrame({
+            'Time to Target': time_to_target_1,
+            'Dataset': [file_path_1.name] * len(time_to_target_1)
+        })
+
+        if file_path_2:
+            time_to_target_2 = calculate_time_to_target(file_path_2, threshold_value)
+            df_2 = pd.DataFrame({
+                'Time to Target': time_to_target_2,
+                'Dataset': [file_path_2.name] * len(time_to_target_2)
+            })
+            df = pd.concat([df_1, df_2])
+        else:
+            df = df_1
+
+        plt.figure()
+        if file_path_2:
+            sns.violinplot(x=['Data']*len(df), y="Time to Target", data=df, hue="Dataset", split=True, inner="quart")
+        else:
+            sns.boxplot(x=['Data']*len(df), y="Time to Target", data=df)
+        plt.title(f'Time to Reach Target Value: {value_name or "Target Value"}')
+        plt.ylabel('Time to Reach Target (seconds)')
+        plt.tight_layout()
+
+        if dump_path:
+            plt.savefig(dump_path)
         plt.show()
 
         return Ok(None)

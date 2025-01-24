@@ -60,6 +60,9 @@ spec:
           securityContext:
             capabilities:
               add: ["NET_RAW", "NET_ADMIN"]
+            privileged: true
+            runAsUser: 0
+            allowPrivilegeEscalation: true
           ports:
             - containerPort: 8009
               name: metrics

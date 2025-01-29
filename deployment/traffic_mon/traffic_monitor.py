@@ -96,26 +96,35 @@ def packet_callback(packet):
     packet_length = len(packet)
     
     if TCP in packet:
+        src_port = packet[TCP].sport
+        dst_port = packet[TCP].dport
         for port in PORTS:
-            if packet[TCP].dport == port:
+            if dst_port == port:  # If it's going to our port, it's incoming
                 stats.tcp_in[port] += packet_length
                 BYTES_TCP_IN[port].inc(packet_length)
                 BYTES_TOTAL_IN[port].inc(packet_length)
-            elif packet[TCP].sport == port:
+            elif src_port == port:  # If it's coming from our port, it's outgoing
                 stats.tcp_out[port] += packet_length
                 BYTES_TCP_OUT[port].inc(packet_length)
                 BYTES_TOTAL_OUT[port].inc(packet_length)
     
     elif UDP in packet:
-        for port in PORTS:
-            if packet[UDP].dport == port:
-                stats.udp_in[port] += packet_length
-                BYTES_UDP_IN[port].inc(packet_length)
-                BYTES_TOTAL_IN[port].inc(packet_length)
-            elif packet[UDP].sport == port:
-                stats.udp_out[port] += packet_length
-                BYTES_UDP_OUT[port].inc(packet_length)
-                BYTES_TOTAL_OUT[port].inc(packet_length)
+        src_port = packet[UDP].sport
+        dst_port = packet[UDP].dport
+        
+        # Add debug logging
+        logger.debug(f"UDP packet: src_port={src_port}, dst_port={dst_port}, length={packet_length}")
+        
+        # Only count each packet once in the appropriate direction
+        if dst_port in PORTS:
+            stats.udp_in[dst_port] += packet_length
+            BYTES_UDP_IN[dst_port].inc(packet_length)
+            BYTES_TOTAL_IN[dst_port].inc(packet_length)
+        
+        if src_port in PORTS:
+            stats.udp_out[src_port] += packet_length
+            BYTES_UDP_OUT[src_port].inc(packet_length)
+            BYTES_TOTAL_OUT[src_port].inc(packet_length)
 
 def main():
     # Start Prometheus HTTP server
@@ -127,8 +136,9 @@ def main():
     
     # Start packet capture
     logger.info("Starting packet capture for ports 8545, 9000, and 60000...")
+    ports = " or ".join([f"(dst port {port} or src port {port})" for port in PORTS])
     sniff(
-        filter="port 8545 or port 9000 or port 60000",
+        filter=ports,
         prn=packet_callback,
         store=0  # Don't store packets in memory
     )

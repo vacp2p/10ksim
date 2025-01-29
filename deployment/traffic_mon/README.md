@@ -41,6 +41,11 @@ Add the following stanza to your pod spec:
 
 It's important that the container is privileged, runs as root, and has the `NET_RAW` and `NET_ADMIN` capabilities.
 
+## Grafana dashboard
+* Import the Nwaku dashboard from "nWaku Raw bandwidth"
+* Spawn simulations listening on port http://localhost:8009/metrics and update your Prometheus or VictoriaMetrics config to scrape these.
+* Simulations will appear in the dashboard.
+
 ## Prometheus output
 The container will output metrics to Prometheus via port 8009 and a `/metrics` endpoint.
 

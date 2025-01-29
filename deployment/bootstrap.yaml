@@ -65,7 +65,6 @@ spec:
             allowPrivilegeEscalation: true
           ports:
             - containerPort: 8009
-              name: metrics
           resources:
             requests:
               memory: "64Mi"
@@ -73,14 +72,3 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
-          startupProbe:
-            httpGet:
-              path: /metrics
-              port: metrics
-            failureThreshold: 30
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /metrics
-              port: metrics
-            periodSeconds: 10

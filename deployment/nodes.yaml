@@ -21,13 +21,6 @@ spec:
       volumes:
         - name: enr-data
           emptyDir: {}
-#        - name: perflogs
-#          persistentVolumeClaim:
-#            claimName: perflogs
-        - name: perflogs
-          hostPath:
-            path: /mnt/swfs/services/perflogs
-            type: Directory
       initContainers:
         - name: grabenr
           image: zorlin/getenr:v0.3.0
@@ -50,8 +43,6 @@ spec:
           volumeMounts:
             - name: enr-data
               mountPath: /etc/enr
-            - name: perflogs
-              mountPath: /mnt/perflogs
           readinessProbe:
             exec:
               command:
@@ -100,9 +91,7 @@ spec:
               echo ENRs are $ENR1 $ENR2 $ENR3
               HOSTNAME=$(hostname)
               TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-              LOGFILE="/mnt/perflogs/${HOSTNAME}-waku-${TIMESTAMP}.log"
-              perf record -F 10 -o ${LOGFILE} -- \
-                nice -n 19 /usr/bin/wakunode \
+              nice -n 19 /usr/bin/wakunode \
                 --relay=true \
                 --max-connections=150 \
                 --rest=true \
@@ -131,7 +120,6 @@ spec:
             allowPrivilegeEscalation: true
           ports:
             - containerPort: 8009
-              name: metrics
           resources:
             requests:
               memory: "64Mi"
@@ -139,14 +127,3 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
-          startupProbe:
-            httpGet:
-              path: /metrics
-              port: metrics
-            failureThreshold: 30
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /metrics
-              port: metrics
-            periodSeconds: 10

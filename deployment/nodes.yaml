@@ -81,3 +81,21 @@ spec:
               . /etc/enr/enr.env
               echo ENRs are $ENR1 $ENR2 $ENR3
               nice -n 19 /usr/bin/wakunode --relay-peer-exchange=true --peer-exchange=true --relay=true --max-connections=800 --rest=true --rest-admin=true --rest-private=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --pubsub-topic="/waku/2/kubetopic"
+        - name: traffic-monitor
+          image: docker.io/zorlin/traffic-monitor
+          imagePullPolicy: Always
+          securityContext:
+            capabilities:
+              add: ["NET_RAW", "NET_ADMIN"]
+            privileged: true
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+          ports:
+            - containerPort: 8009
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

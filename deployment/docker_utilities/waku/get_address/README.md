@@ -14,12 +14,12 @@ to set up waku protocols like
 or 
 [lightpush](https://docs.waku.org/guides/nwaku/config-options/#light-push-config).
 In order to grab random multiaddress, we rely on kubernetes services.
-We assign every store node to a service for store nodes, 
+For example, we assign every store node to a service for store nodes, 
 and then we use this container to retrieve their multiaddresses.
 
 ### Usage:
 ```
-./script.sh [NUM_ADDRS] [SERVICE_NAME]
+./getaddress.sh [NUM_ADDRS] [SERVICE_NAME]
 ```
 
 ### Arguments:

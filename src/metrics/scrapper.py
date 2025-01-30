@@ -1,7 +1,8 @@
 # Python Imports
 import socket
 import logging
-from typing import Dict, List
+import time
+from typing import Dict, List, Optional
 from result import Ok, Err
 
 # Project Imports
@@ -23,7 +24,7 @@ class Scrapper:
 
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
-        socket.create_connection = self._k8s.create_connection
+        # socket.create_connection = self._k8s.create_connection
 
         for time_name in self._query_config['general_config']['times_names']:
             logger.info(f'Querying simulation {time_name[2]}')
@@ -31,22 +32,22 @@ class Scrapper:
                 logger.info(f'Querying metric {scrape_name}')
                 promql = self._create_query(metric_config['query'],
                                             self._query_config['scrape_config'], time_name)
-
+                time.sleep(5)
                 match scrape_utils.get_query_data(promql):
                     case Ok(data):
                         logger.debug(f'Successfully extracted {scrape_name} data from response')
                         file_location = (self._query_config['scrape_config']['dump_location'] +
                                          metric_config['folder_name'] + time_name[2])
-                        self._dump_data(scrape_name, metric_config['extract_field'], data,
-                                        file_location)
+                        self._dump_data(scrape_name, metric_config['extract_field'],
+                                        metric_config.get('container', None), data, file_location)
                     case Err(err):
                         logger.error(f'Error in {scrape_name}. {err}')
                         continue
 
-    def _dump_data(self, scrape_name: str, extract_field: str, data: Dict, dump_path: str):
+    def _dump_data(self, scrape_name: str, extract_field: str, container_name: Optional[str], data: Dict, dump_path: str):
         logger.debug(f'Dumping {scrape_name} data to .csv')
         data_handler = DataRequestHandler(data)
-        data_handler.create_dataframe_from_request(extract_field)
+        data_handler.create_dataframe_from_request(extract_field, container_name)
         data_handler.dump_dataframe(dump_path)
 
     def _set_query_config(self):

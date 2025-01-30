@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as path_effects
 from typing import List, Dict
 from matplotlib import ticker
 
 # Project Imports
 from src.data.data_handler import DataHandler
 from src.data.data_file_handler import DataFileHandler
+from src.plotting.utils import add_boxplot_stat_labels
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -28,7 +28,7 @@ class Plotter:
 
     def _create_plot(self, plot_name: str, plot_specs: Dict):
         fig, axs = plt.subplots(nrows=1, ncols=len(plot_specs['data']), sharey='row',
-                                figsize=(15, 15))
+                                figsize=plot_specs['fig_size'])
 
         subplot_paths_group = self._create_subplot_paths_group(plot_specs)
         self._insert_data_in_axs(subplot_paths_group, axs, plot_specs)
@@ -36,7 +36,8 @@ class Plotter:
 
     def _insert_data_in_axs(self, subplot_paths_group: List, axs: np.ndarray, plot_specs: Dict):
         for i, subplot_path_group in enumerate(subplot_paths_group):
-            file_data_handler = DataFileHandler(plot_specs['ignore'])
+            include_files = plot_specs.get("include_files")
+            file_data_handler = DataFileHandler(plot_specs['ignore_columns'], include_files)
             file_data_handler.concat_dataframes_from_folders_as_mean(subplot_path_group,
                                                                      plot_specs['data_points'])
             subplot_df = file_data_handler.dataframe
@@ -54,7 +55,7 @@ class Plotter:
         subplot_title = plot_specs['data'][index]
         axs = axs if type(axs) is not np.ndarray else axs[index]
         box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs,
-                               showfliers=False)
+                               showfliers=True)
 
         # Apply the custom formatter to the x-axis ticks
         formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / plot_specs['scale-x']))
@@ -66,7 +67,19 @@ class Plotter:
         box_plot.xaxis.set_tick_params(rotation=45)
         box_plot.legend(loc='upper right', bbox_to_anchor=(1, 1))
 
-        self._add_median_labels(box_plot)
+        result = add_boxplot_stat_labels(box_plot)
+        if result.is_err():
+            logger.error(result.err_value)
+
+        show_min_max = plot_specs.get("show_min_max", False)
+        if show_min_max:
+            result = add_boxplot_stat_labels(box_plot, value_type="min")
+            if result.is_err():
+                logger.error(result.err_value)
+
+            result = add_boxplot_stat_labels(box_plot, value_type="max")
+            if result.is_err():
+                logger.error(result.err_value)
 
     def _create_subplot_paths_group(self, plot_specs: Dict) -> List:
         subplot_path = [[f"{folder}{data}" for folder in plot_specs["folder"]] for data in
@@ -74,29 +87,4 @@ class Plotter:
 
         return subplot_path
 
-    def _add_median_labels(self, ax: plt.Axes, fmt: str = ".3f") -> None:
-        # https://stackoverflow.com/a/63295846
-        """Add text labels to the median lines of a seaborn boxplot.
 
-        Args:
-            ax: plt.Axes, e.g. the return value of sns.boxplot()
-            fmt: format string for the median value
-        """
-        lines = ax.get_lines()
-        boxes = [c for c in ax.get_children() if "Patch" in str(c)]
-        start = 4
-        if not boxes:  # seaborn v0.13 => fill=False => no patches => +1 line
-            boxes = [c for c in ax.get_lines() if len(c.get_xdata()) == 5]
-            start += 1
-        lines_per_box = len(lines) // len(boxes)
-        for median in lines[start::lines_per_box]:
-            x, y = (data.mean() for data in median.get_data())
-            # choose value depending on horizontal or vertical plot orientation
-            value = x if len(set(median.get_xdata())) == 1 else y
-            text = ax.text(x, y, f'{value/1000:{fmt}}', ha='center', va='center',
-                           fontweight='bold', color='white')
-            # create median-colored border around white text for contrast
-            text.set_path_effects([
-                path_effects.Stroke(linewidth=3, foreground=median.get_color()),
-                path_effects.Normal(),
-            ])

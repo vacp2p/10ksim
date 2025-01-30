@@ -3,8 +3,11 @@
 # Number of ENRs to process, default to 3 if not specified
 num_enrs=${1:-3}
 
+# Service name to query, default to "zerotesting-bootstrap.zerotesting" if not specified
+service_name=${2:-zerotesting-bootstrap.zerotesting}
+
 # Find the IPv4 IPs of "zerotesting-bootstrap.zerotesting" using nslookup
-readarray -t pod_ips < <(nslookup zerotesting-bootstrap.zerotesting | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
+readarray -t pod_ips < <(nslookup "$service_name" | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
 
 # Shuffle the IPs before processing them to help randomise which nodes we connect to and peer with
 # Disabled for now
@@ -30,7 +33,7 @@ valid_enr_count=0
 # Get and validate the ENR data from up to the specified number of IPs
 for pod_ip in "${pod_ips[@]}"; do
     echo "Querying IP: $pod_ip"
-    enr=$(wget -O - --post-data='{"jsonrpc":"2.0","method":"get_waku_v2_debug_v1_info","params":[],"id":1}' --header='Content-Type:application/json' "$pod_ip:8545" 2>/dev/null | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
+    enr=$(curl -X GET "http://$pod_ip:8645/debug/v1/info" -H "accept: application/json" | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
 
     # Validate the ENR
     validate_enr "$enr"

@@ -16,5 +16,5 @@ class MessageTracer(ABC):
         return self._patterns
 
     @abstractmethod
-    def trace(self, parsed_logs: List) -> pd.DataFrame:
+    def trace(self, parsed_logs: List) -> List:
         pass

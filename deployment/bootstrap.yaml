@@ -21,8 +21,8 @@ spec:
           - zerotesting-bootstrap.zerotesting.svc.cluster.local
       containers:
         - name: waku
-          image: zorlin/nwaku-jq:v0.26.0
-          imagePullPolicy: IfNotPresent
+          image: zorlin/waku:debug-extra-nim-libp2p-logs-over-v0.31.0-with-extra-logs-mplex-perf
+          imagePullPolicy: Always
           readinessProbe:
             exec:
               command:
@@ -53,4 +53,4 @@ spec:
             - sh
             - -c
             - |
-              /usr/bin/wakunode --rest=true --rest-address=0.0.0.0 --peer-exchange=true --relay=true --keep-alive=true --max-connections=18000 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --nat=extip:$IP --pubsub-topic="/waku/2/kubetopic"
+              /usr/bin/wakunode --relay=false --rest=true --rest-address=0.0.0.0 --max-connections=500 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=TRACE --metrics-server=True --metrics-server-address=0.0.0.0 --nat=extip:$IP --cluster-id=2 --pubsub-topic="/waku/2/rs/2/0"

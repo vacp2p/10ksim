@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations: {}
+  name: perflogs-pv
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 1Pi
+  csi:
+    driver: seaweedfs-csi-driver
+    readOnly: false
+    volumeAttributes:
+      collection: "default"
+      path: "/services/perflogs"
+      replication: "002"
+    volumeHandle: "perflogs-pv"
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations: {}
+  name: perflogs
+  namespace: zerotesting
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Pi
+  storageClassName: ""
+  volumeName: perflogs-pv

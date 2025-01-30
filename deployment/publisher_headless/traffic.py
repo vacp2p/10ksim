@@ -119,14 +119,17 @@ def parse_args() -> argparse.Namespace:
                         default=1)
     parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
                         default=10)
+    parser.add_argument('--serviceurl', type=str, help='Service URL', default="zerotesting-service:8645")
+
     parser.add_argument('-ps', '--protocols', nargs='+', default=['relay'],
                         help='Protocols used inject messages')
     parser.add_argument('-p', '--port', type=int, default=8645, help='Waku REST port')
-
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+    service = args.serviceurl
+    print(f"Starting message injection to {service}. {args}")
     logging.info(f'{args}')
-    asyncio.run(main(args))
+    asyncio.run(main(service, args))

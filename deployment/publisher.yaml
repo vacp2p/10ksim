@@ -16,4 +16,5 @@ spec:
       command:
         - sh
         - -c
-        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --messages=4000 --debug -p "{{ .Values.global.pubSubTopic }}"
+        - python /app/traffic.py --msg-size-kbytes=1 --delay-seconds=10 --messages=4000 --debug -p "/waku/2/rs/2/0"
+

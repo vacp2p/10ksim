@@ -9,10 +9,6 @@ service_name=${2:-zerotesting-bootstrap.zerotesting}
 # Find the IPv4 IPs of "zerotesting-bootstrap.zerotesting" using nslookup
 readarray -t pod_ips < <(nslookup "$service_name" | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
 
-# Shuffle the IPs before processing them to help randomise which nodes we connect to and peer with
-# Disabled for now
-#readarray -t pod_ips < <(printf "%s\n" "${pod_ips[@]}" | shuf)
-
 # Prepare the directory for ENR data
 mkdir -p /etc/enr
 enr_file="/etc/enr/enr.env"

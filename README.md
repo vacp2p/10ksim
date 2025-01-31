@@ -99,17 +99,16 @@ Inside each plot, we will have as many subplots as metrics in `data`.
 
 ### Main objectives
 - [X] Automatic deployment of any P2P utils
-  - [X] Deployment of 10k Gossipsub / Waku relay nodes
+  - [X] Waku
   - [X] Bandwidth usage per node
   - [X] Log data for analysis
 ### Secondary objectives
 - [X] Add QoS parameter support to the 10k tool
-- [ ] Run further Waku protocols:
+- [X] Run further Waku protocols:
   - [X] Filter
   - [X] Lightpush
   - [X] Store
-  - [ ] Peer exchange
-
+  - [X] Peer exchange
 
 
 ## Acknowledgment

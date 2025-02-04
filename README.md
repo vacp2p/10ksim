@@ -119,4 +119,4 @@ Inspired in the [Codex](https://codex.storage/) framework https://github.com/cod
 - [Ben Bierens](https://github.com/benbierens)
 - [Slava Doina](https://github.com/veaceslavdoina)
 - [Shaun Orssaud](https://github.com/Shorssaud)
-- [Eric Mastro](https://github.com/Shorssaud)
+- [Eric Mastro](https://github.com/emizzle)

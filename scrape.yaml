@@ -70,5 +70,6 @@ plotting:
     "xlabel_name": "Simulation"
     "ylabel_name": "KBytes/s"
     "show_min_max": false
+    "outliers": true
     "scale-x": 1000
     "fig_size": [20, 20]

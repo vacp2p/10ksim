@@ -55,7 +55,7 @@ class Plotter:
         subplot_title = plot_specs['data'][index]
         axs = axs if type(axs) is not np.ndarray else axs[index]
         box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs,
-                               showfliers=True)
+                               showfliers=plot_specs.get('outliers', False))
 
         # Apply the custom formatter to the x-axis ticks
         formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / plot_specs['scale-x']))

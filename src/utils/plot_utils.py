@@ -1,12 +1,13 @@
 # Python Imports
-import matplotlib.pyplot as plt
-import matplotlib.patheffects as path_effects
-from result import Err, Result, Ok
+from matplotlib import pyplot as plt, patheffects as path_effects
+from result import Result, Err, Ok
 
 # Project Imports
 
 
-def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "median") -> Result[None, str]:
+
+def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "median",
+                            scale_by: float = 1.0) -> Result[None, str]:
     # Refactor from https://stackoverflow.com/a/63295846
     """
     Add text labels to the median, minimum, or maximum lines of a seaborn boxplot.
@@ -15,6 +16,7 @@ def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "m
         ax: plt.Axes, e.g., the return value of sns.boxplot()
         fmt: Format string for the value (e.g., min/max/median).
         value_type: The type of value to label. Can be 'median', 'min', or 'max'.
+        scale_by: Scales the written value of the value type by this factor.
     """
     lines = ax.get_lines()
     boxes = [c for c in ax.get_children() if "Patch" in str(c)]  # Get box patches
@@ -37,7 +39,7 @@ def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "m
         x, y = (data.mean() for data in value_line.get_data())
         # choose value depending on horizontal or vertical plot orientation
         value = x if len(set(value_line.get_xdata())) == 1 else y
-        text = ax.text(x, y, f'{value / 1000:{fmt}}', ha='center', va='center',
+        text = ax.text(x, y, f'{value*scale_by:{fmt}}', ha='center', va='center',
                        fontweight='bold', color='white', size=10)
         # create colored border around white text for contrast
         text.set_path_effects([

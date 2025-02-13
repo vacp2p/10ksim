@@ -170,7 +170,7 @@ class WakuMessageLogAnalyzer:
                     try:
                         df = future.result()
                         dfs.append(df)
-                        if i % 50 == 0:
+                        if i % 50 == 0 or i == num_nodes_in_stateful_set:
                             logger.info(f'Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>')
 
                     except Exception as e:

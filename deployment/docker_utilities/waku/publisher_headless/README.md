@@ -26,7 +26,7 @@ The results, including response times and success rates, are logged.
 ```
 containers:
   - name: publisher-container
-    image: <your-registry>/publisher:v1.0.0
+    image: <your-registry>/publisher:v1.0.1
     imagePullPolicy: IfNotPresent
     command:
       - sh
@@ -58,3 +58,9 @@ Logs the response status, elapsed time, and success/failure rates.
 
 4. **Concurrency Handling**:
 Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
+
+### Changelog
+
+- `v1.0.1`:
+  - Log url, headers and body when injecting a message
+  - Log url, headers and body when raising an exception

@@ -57,6 +57,7 @@ spec:
         - name: traffic-monitor
           image: docker.io/zorlin/traffic-monitor
           imagePullPolicy: Always
+          command: ["python", "traffic_monitor.py", "--ports", "8545", "9000", "60000"]
           securityContext:
             capabilities:
               add: ["NET_RAW", "NET_ADMIN"]

@@ -4,29 +4,35 @@ from threading import Thread
 from scapy.all import sniff, IP, TCP, UDP
 from prometheus_client import start_http_server, Counter, Gauge
 import socket
+import argparse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Prometheus metrics setup
-BYTES_TCP_IN = {}
-BYTES_TCP_OUT = {}
-BYTES_UDP_IN = {}
-BYTES_UDP_OUT = {}
-BYTES_TOTAL_IN = {}
-BYTES_TOTAL_OUT = {}
+def setup_metrics(ports):
+    bytes_tcp_in = {}
+    bytes_tcp_out = {}
+    bytes_udp_in = {}
+    bytes_udp_out = {}
+    bytes_total_in = {}
+    bytes_total_out = {}
 
-for port, name in PORTS.items():
-    # Primary metrics
-    BYTES_TOTAL_IN[port] = Counter(f'network_bytes_in_total_port_{port}', f'Total incoming bytes on port {port}')
-    BYTES_TOTAL_OUT[port] = Counter(f'network_bytes_out_total_port_{port}', f'Total outgoing bytes on port {port}')
+    for port in ports:
+        # Primary metrics
+        bytes_total_in[port] = Counter(f'network_bytes_in_total_port_{port}', f'Total incoming bytes on port {port}')
+        bytes_total_out[port] = Counter(f'network_bytes_out_total_port_{port}', f'Total outgoing bytes on port {port}')
 
-    # Secondary, optional metrics
-    BYTES_TCP_IN[port] = Counter(f'network_bytes_in_total_port_{port}_tcp', f'Total TCP incoming bytes on port {port}')
-    BYTES_TCP_OUT[port] = Counter(f'network_bytes_out_total_port_{port}_tcp', f'Total TCP outgoing bytes on port {port}')
-    BYTES_UDP_IN[port] = Counter(f'network_bytes_in_total_port_{port}_udp', f'Total UDP incoming bytes on port {port}')
-    BYTES_UDP_OUT[port] = Counter(f'network_bytes_out_total_port_{port}_udp', f'Total UDP outgoing bytes on port {port}')
+        # Secondary, optional metrics
+        bytes_tcp_in[port] = Counter(f'network_bytes_in_total_port_{port}_tcp', f'Total TCP incoming bytes on port {port}')
+        bytes_tcp_out[port] = Counter(f'network_bytes_out_total_port_{port}_tcp', f'Total TCP outgoing bytes on port {port}')
+        bytes_udp_in[port] = Counter(f'network_bytes_in_total_port_{port}_udp', f'Total UDP incoming bytes on port {port}')
+        bytes_udp_out[port] = Counter(f'network_bytes_out_total_port_{port}_udp', f'Total UDP outgoing bytes on port {port}')
+
+    return (bytes_tcp_in, bytes_tcp_out, bytes_udp_in, bytes_udp_out, bytes_total_in, bytes_total_out)
+
+
+PORTS = {}
 
 class Stats:
     def __init__(self):
@@ -35,8 +41,6 @@ class Stats:
         self.udp_in = {port: 0 for port in PORTS}
         self.udp_out = {port: 0 for port in PORTS}
         self.last_log = time.time()
-
-stats = Stats()
 
 def packet_callback(packet):
     if IP not in packet:
@@ -108,7 +112,7 @@ def packet_callback(packet):
 
 def log_stats():
     while True:
-        time.sleep(2)
+        time.sleep(5)
         now = time.time()
         elapsed = now - stats.last_log
         
@@ -120,18 +124,10 @@ def log_stats():
             total_in_rate = tcp_in_rate + udp_in_rate
             total_out_rate = tcp_out_rate + udp_out_rate
             
-            logger.info(f"{name} (:{port}) - "
+            logger.info(f"Port {name} - "
                       f"Total In: {total_in_rate:.2f} B/s, Total Out: {total_out_rate:.2f} B/s, "
                       f"TCP In: {tcp_in_rate:.2f} B/s, TCP Out: {tcp_out_rate:.2f} B/s, "
                       f"UDP In: {udp_in_rate:.2f} B/s, UDP Out: {udp_out_rate:.2f} B/s")
-            
-            # Update Prometheus gauges
-            RATE_TCP_IN[port].set(tcp_in_rate)
-            RATE_TCP_OUT[port].set(tcp_out_rate)
-            RATE_UDP_IN[port].set(udp_in_rate)
-            RATE_UDP_OUT[port].set(udp_out_rate)
-            RATE_TOTAL_IN[port].set(total_in_rate)
-            RATE_TOTAL_OUT[port].set(total_out_rate)
             
             # Reset counters
             stats.tcp_in[port] = 0
@@ -142,6 +138,22 @@ def log_stats():
         stats.last_log = now
 
 def main():
+    parser = argparse.ArgumentParser(description='Monitor network traffic on specified ports')
+    parser.add_argument('--ports', type=int, nargs='+', required=True,
+                       help='List of ports to monitor')
+    args = parser.parse_args()
+    
+    # Setup metrics with provided ports
+    global BYTES_TCP_IN, BYTES_TCP_OUT, BYTES_UDP_IN, BYTES_UDP_OUT, BYTES_TOTAL_IN, BYTES_TOTAL_OUT
+    global PORTS
+    
+    PORTS = {port: str(port) for port in args.ports}
+    
+    (BYTES_TCP_IN, BYTES_TCP_OUT, BYTES_UDP_IN, BYTES_UDP_OUT, BYTES_TOTAL_IN, BYTES_TOTAL_OUT) = setup_metrics(args.ports)
+    
+    global stats
+    stats = Stats()
+    
     # Start Prometheus HTTP server
     start_http_server(8009)
     logger.info("Started Prometheus metrics server on port 8009")
@@ -150,7 +162,8 @@ def main():
     Thread(target=log_stats, daemon=True).start()
     
     # Start packet capture
-    logger.info("Starting packet capture for ports 8545, 9000, and 60000...")
+    ports_str = ', '.join(map(str, args.ports))
+    logger.info(f"Starting packet capture for ports: {ports_str}...")
     sniff(prn=packet_callback, store=0)
 
 if __name__ == "__main__":

@@ -4,13 +4,12 @@ This is a simple traffic monitor sidecar for Kubernetes pods.
 
 ![alt text](image.png)
 
-It will log traffic speeds on the following ports:
+It will log traffic speeds on the following ports by default:
 - 8545: "json-rpc"
 - 9000: "discv5"
 - 60000: "libp2p"
 
-Future improvements:
-- Exclude overhead traffic (TCP, UDP, wire protocol, etc.)
+If it is given custom ports via the --ports flag, it will log the traffic speeds for those ports.
 
 ## Usage
 Build and push the image:

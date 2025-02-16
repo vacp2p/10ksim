@@ -18,12 +18,15 @@ BYTES_TOTAL_IN = {}
 BYTES_TOTAL_OUT = {}
 
 for port, name in PORTS.items():
-    BYTES_TCP_IN[port] = Counter(f'network_tcp_bytes_in_total_port_{port}', f'Total TCP incoming bytes on port {port}')
-    BYTES_TCP_OUT[port] = Counter(f'network_tcp_bytes_out_total_port_{port}', f'Total TCP outgoing bytes on port {port}')
-    BYTES_UDP_IN[port] = Counter(f'network_udp_bytes_in_total_port_{port}', f'Total UDP incoming bytes on port {port}')
-    BYTES_UDP_OUT[port] = Counter(f'network_udp_bytes_out_total_port_{port}', f'Total UDP outgoing bytes on port {port}')
+    # Primary metrics
     BYTES_TOTAL_IN[port] = Counter(f'network_bytes_in_total_port_{port}', f'Total incoming bytes on port {port}')
     BYTES_TOTAL_OUT[port] = Counter(f'network_bytes_out_total_port_{port}', f'Total outgoing bytes on port {port}')
+
+    # Secondary, optional metrics
+    BYTES_TCP_IN[port] = Counter(f'network_bytes_in_total_port_{port}_tcp', f'Total TCP incoming bytes on port {port}')
+    BYTES_TCP_OUT[port] = Counter(f'network_bytes_out_total_port_{port}_tcp', f'Total TCP outgoing bytes on port {port}')
+    BYTES_UDP_IN[port] = Counter(f'network_bytes_in_total_port_{port}_udp', f'Total UDP incoming bytes on port {port}')
+    BYTES_UDP_OUT[port] = Counter(f'network_bytes_out_total_port_{port}_udp', f'Total UDP outgoing bytes on port {port}')
 
 class Stats:
     def __init__(self):

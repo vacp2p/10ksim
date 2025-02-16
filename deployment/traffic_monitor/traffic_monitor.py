@@ -9,13 +9,6 @@ import socket
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Port definitions
-PORTS = {
-    8545: "json-rpc",
-    9000: "discv5",
-    60000: "libp2p"
-}
-
 # Prometheus metrics setup
 BYTES_TCP_IN = {}
 BYTES_TCP_OUT = {}
@@ -23,12 +16,6 @@ BYTES_UDP_IN = {}
 BYTES_UDP_OUT = {}
 BYTES_TOTAL_IN = {}
 BYTES_TOTAL_OUT = {}
-RATE_TCP_IN = {}
-RATE_TCP_OUT = {}
-RATE_UDP_IN = {}
-RATE_UDP_OUT = {}
-RATE_TOTAL_IN = {}
-RATE_TOTAL_OUT = {}
 
 for port, name in PORTS.items():
     BYTES_TCP_IN[port] = Counter(f'network_tcp_bytes_in_total_port_{port}', f'Total TCP incoming bytes on port {port}')
@@ -37,12 +24,6 @@ for port, name in PORTS.items():
     BYTES_UDP_OUT[port] = Counter(f'network_udp_bytes_out_total_port_{port}', f'Total UDP outgoing bytes on port {port}')
     BYTES_TOTAL_IN[port] = Counter(f'network_bytes_in_total_port_{port}', f'Total incoming bytes on port {port}')
     BYTES_TOTAL_OUT[port] = Counter(f'network_bytes_out_total_port_{port}', f'Total outgoing bytes on port {port}')
-    RATE_TCP_IN[port] = Gauge(f'network_tcp_bytes_in_per_second_port_{port}', f'TCP incoming bytes per second on port {port}')
-    RATE_TCP_OUT[port] = Gauge(f'network_tcp_bytes_out_per_second_port_{port}', f'TCP outgoing bytes per second on port {port}')
-    RATE_UDP_IN[port] = Gauge(f'network_udp_bytes_in_per_second_port_{port}', f'UDP incoming bytes per second on port {port}')
-    RATE_UDP_OUT[port] = Gauge(f'network_udp_bytes_out_per_second_port_{port}', f'UDP outgoing bytes per second on port {port}')
-    RATE_TOTAL_IN[port] = Gauge(f'network_bytes_in_per_second_port_{port}', f'Total incoming bytes per second on port {port}')
-    RATE_TOTAL_OUT[port] = Gauge(f'network_bytes_out_per_second_port_{port}', f'Total outgoing bytes per second on port {port}')
 
 class Stats:
     def __init__(self):
@@ -170,4 +151,4 @@ def main():
     sniff(prn=packet_callback, store=0)
 
 if __name__ == "__main__":
-    main() 
+    main()

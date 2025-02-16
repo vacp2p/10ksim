@@ -20,7 +20,7 @@ Add the following stanza to your pod spec:
 ```
 - name: traffic-monitor
     image: docker.io/zorlin/traffic-monitor
-    imagePullPolicy: Always
+    imagePullPolicy: IfNotPresent
     securityContext:
     capabilities:
         add: ["NET_RAW", "NET_ADMIN"]

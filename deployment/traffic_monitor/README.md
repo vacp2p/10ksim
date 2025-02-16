@@ -21,6 +21,7 @@ Add the following stanza to your pod spec:
   - name: traffic-monitor
     image: docker.io/zorlin/traffic-monitor:v0.1.0
     imagePullPolicy: IfNotPresent
+    command: ["python", "traffic_monitor.py", "--ports", "8545", "9000", "60000"]
     securityContext:
     capabilities:
         add: ["NET_RAW", "NET_ADMIN"]

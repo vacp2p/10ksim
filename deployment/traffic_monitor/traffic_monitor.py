@@ -1,6 +1,6 @@
 import time
 import logging
-from threading import Thread
+from threading import Thread, Lock
 from scapy.all import sniff, IP, TCP, UDP
 from prometheus_client import start_http_server, Counter, Gauge
 import socket
@@ -42,6 +42,7 @@ PORTS = {}
 
 class Stats:
     def __init__(self):
+        self.lock = Lock()
         self.tcp_in = {port: 0 for port in PORTS}
         self.tcp_out = {port: 0 for port in PORTS}
         self.udp_in = {port: 0 for port in PORTS}
@@ -60,96 +61,100 @@ def packet_callback(packet):
         src_port = packet[UDP].sport
         dst_port = packet[UDP].dport
         
-        # If either IP is our pod IP
-        if src_ip == pod_ip or dst_ip == pod_ip:
-            if src_ip == pod_ip and src_port in PORTS:  # Outgoing
-                stats.udp_out[src_port] += packet_length
-                BYTES_UDP_OUT[src_port].inc(packet_length)
-                BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
-            elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
-                stats.udp_in[dst_port] += packet_length
-                BYTES_UDP_IN[dst_port].inc(packet_length)
-                BYTES_TOTAL_IN[dst_port].inc(packet_length)
-                BYTES_OVERALL_IN.inc(packet_length)
-        # If neither IP is our pod IP but involves our ports, it's outgoing
-        else:
-            if src_port in PORTS:
-                stats.udp_out[src_port] += packet_length
-                BYTES_UDP_OUT[src_port].inc(packet_length)
-                BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
-            if dst_port in PORTS:
-                stats.udp_out[dst_port] += packet_length
-                BYTES_UDP_OUT[dst_port].inc(packet_length)
-                BYTES_TOTAL_OUT[dst_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
+        with stats.lock:
+            # If either IP is our pod IP
+            if src_ip == pod_ip or dst_ip == pod_ip:
+                if src_ip == pod_ip and src_port in PORTS:  # Outgoing
+                    stats.udp_out[src_port] += packet_length
+                    BYTES_UDP_OUT[src_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
+                elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
+                    stats.udp_in[dst_port] += packet_length
+                    BYTES_UDP_IN[dst_port].inc(packet_length)
+                    BYTES_TOTAL_IN[dst_port].inc(packet_length)
+                    BYTES_OVERALL_IN.inc(packet_length)
+            # If neither IP is our pod IP but involves our ports, it's outgoing
+            else:
+                if src_port in PORTS:
+                    stats.udp_out[src_port] += packet_length
+                    BYTES_UDP_OUT[src_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
+                if dst_port in PORTS:
+                    stats.udp_out[dst_port] += packet_length
+                    BYTES_UDP_OUT[dst_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[dst_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
 
     elif TCP in packet:
         src_port = packet[TCP].sport
         dst_port = packet[TCP].dport
         
-        # If either IP is our pod IP
-        if src_ip == pod_ip or dst_ip == pod_ip:
-            if src_ip == pod_ip and src_port in PORTS:  # Outgoing
-                stats.tcp_out[src_port] += packet_length
-                BYTES_TCP_OUT[src_port].inc(packet_length)
-                BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
-            elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
-                stats.tcp_in[dst_port] += packet_length
-                BYTES_TCP_IN[dst_port].inc(packet_length)
-                BYTES_TOTAL_IN[dst_port].inc(packet_length)
-                BYTES_OVERALL_IN.inc(packet_length)
-        # If neither IP is our pod IP but involves our ports, it's outgoing
-        else:
-            if src_port in PORTS:
-                stats.tcp_out[src_port] += packet_length
-                BYTES_TCP_OUT[src_port].inc(packet_length)
-                BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
-            if dst_port in PORTS:
-                stats.tcp_out[dst_port] += packet_length
-                BYTES_TCP_OUT[dst_port].inc(packet_length)
-                BYTES_TOTAL_OUT[dst_port].inc(packet_length)
-                BYTES_OVERALL_OUT.inc(packet_length)
+        with stats.lock:
+            # If either IP is our pod IP
+            if src_ip == pod_ip or dst_ip == pod_ip:
+                if src_ip == pod_ip and src_port in PORTS:  # Outgoing
+                    stats.tcp_out[src_port] += packet_length
+                    BYTES_TCP_OUT[src_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
+                elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
+                    stats.tcp_in[dst_port] += packet_length
+                    BYTES_TCP_IN[dst_port].inc(packet_length)
+                    BYTES_TOTAL_IN[dst_port].inc(packet_length)
+                    BYTES_OVERALL_IN.inc(packet_length)
+            # If neither IP is our pod IP but involves our ports, it's outgoing
+            else:
+                if src_port in PORTS:
+                    stats.tcp_out[src_port] += packet_length
+                    BYTES_TCP_OUT[src_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
+                if dst_port in PORTS:
+                    stats.tcp_out[dst_port] += packet_length
+                    BYTES_TCP_OUT[dst_port].inc(packet_length)
+                    BYTES_TOTAL_OUT[dst_port].inc(packet_length)
+                    BYTES_OVERALL_OUT.inc(packet_length)
 
 def log_stats():
     while True:
         time.sleep(5)
         now = time.time()
-        elapsed = now - stats.last_log
         
-        # Calculate totals across all ports
-        total_in = sum(stats.tcp_in[port] + stats.udp_in[port] for port in PORTS)
-        total_out = sum(stats.tcp_out[port] + stats.udp_out[port] for port in PORTS)
-        
-        # Calculate rates
-        total_in_rate = total_in / elapsed if elapsed > 0 else 0
-        total_out_rate = total_out / elapsed if elapsed > 0 else 0
-        
-        logger.info(f"Overall Total In: {total_in_rate:.2f} B/s, Overall Total Out: {total_out_rate:.2f} B/s")
-        
-        for port, name in PORTS.items():
-            tcp_in_rate = stats.tcp_in[port] / elapsed if elapsed > 0 else 0
-            tcp_out_rate = stats.tcp_out[port] / elapsed if elapsed > 0 else 0
-            udp_in_rate = stats.udp_in[port] / elapsed if elapsed > 0 else 0
-            udp_out_rate = stats.udp_out[port] / elapsed if elapsed > 0 else 0
-            total_in_rate = tcp_in_rate + udp_in_rate
-            total_out_rate = tcp_out_rate + udp_out_rate
+        with stats.lock:
+            elapsed = now - stats.last_log
             
-            logger.info(f"Port {name} - "
-                      f"Total In: {total_in_rate:.2f} B/s, Total Out: {total_out_rate:.2f} B/s, "
-                      f"TCP In: {tcp_in_rate:.2f} B/s, TCP Out: {tcp_out_rate:.2f} B/s, "
-                      f"UDP In: {udp_in_rate:.2f} B/s, UDP Out: {udp_out_rate:.2f} B/s")
+            # Calculate totals across all ports
+            total_in = sum(stats.tcp_in[port] + stats.udp_in[port] for port in PORTS)
+            total_out = sum(stats.tcp_out[port] + stats.udp_out[port] for port in PORTS)
             
-            # Reset counters
-            stats.tcp_in[port] = 0
-            stats.tcp_out[port] = 0
-            stats.udp_in[port] = 0
-            stats.udp_out[port] = 0
-        
-        stats.last_log = now
+            # Calculate rates
+            total_in_rate = total_in / elapsed if elapsed > 0 else 0
+            total_out_rate = total_out / elapsed if elapsed > 0 else 0
+            
+            logger.info(f"Overall Total In: {total_in_rate:.2f} B/s, Overall Total Out: {total_out_rate:.2f} B/s")
+            
+            for port, name in PORTS.items():
+                tcp_in_rate = stats.tcp_in[port] / elapsed if elapsed > 0 else 0
+                tcp_out_rate = stats.tcp_out[port] / elapsed if elapsed > 0 else 0
+                udp_in_rate = stats.udp_in[port] / elapsed if elapsed > 0 else 0
+                udp_out_rate = stats.udp_out[port] / elapsed if elapsed > 0 else 0
+                total_in_rate = tcp_in_rate + udp_in_rate
+                total_out_rate = tcp_out_rate + udp_out_rate
+                
+                logger.info(f"Port {name} - "
+                          f"Total In: {total_in_rate:.2f} B/s, Total Out: {total_out_rate:.2f} B/s, "
+                          f"TCP In: {tcp_in_rate:.2f} B/s, TCP Out: {tcp_out_rate:.2f} B/s, "
+                          f"UDP In: {udp_in_rate:.2f} B/s, UDP Out: {udp_out_rate:.2f} B/s")
+                
+                # Reset counters
+                stats.tcp_in[port] = 0
+                stats.tcp_out[port] = 0
+                stats.udp_in[port] = 0
+                stats.udp_out[port] = 0
+            
+            stats.last_log = now
 
 class PodIPDetectionError(Exception):
     """Raised when pod IP detection fails"""

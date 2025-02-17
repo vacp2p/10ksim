@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  waku:
+    image: wakuorg/nwaku:latest
+    entrypoint: []  # Clear the default entrypoint
+    command: [
+      "wakunode2",
+      "--rest=true",
+      "--rest-address=0.0.0.0",
+      "--peer-exchange=true",
+      "--relay=true",
+      "--keep-alive=true",
+      "--max-connections=18000",
+      "--discv5-discovery=true",
+      "--discv5-enr-auto-update=True",
+      "--log-level=INFO",
+      "--metrics-server=True",
+      "--metrics-server-address=0.0.0.0",
+      "--nat=extip:10.20.30.40",
+      "--pubsub-topic=/waku/2/rs"
+    ]
+    ports:
+      - "8545:8545"
+      - "9000:9000"
+      - "60000:60000"
+    environment:
+      - IP
+
+  traffic-monitor:
+    image: zorlin/traffic-monitor:latest
+    network_mode: "service:waku"  # Share waku's network namespace
+    command: ["python", "traffic_monitor.py", "--ports", "8545", "9000", "60000"]
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - waku 

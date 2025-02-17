@@ -56,7 +56,7 @@ spec:
               /usr/bin/wakunode --rest=true --rest-address=0.0.0.0 --peer-exchange=true --relay=true --keep-alive=true --max-connections=18000 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --nat=extip:$IP --pubsub-topic="/waku/2/kubetopic"
         - name: traffic-monitor
           image: docker.io/zorlin/traffic-monitor
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: ["python", "traffic_monitor.py", "--ports", "8545", "9000", "60000"]
           securityContext:
             capabilities:

@@ -16,7 +16,7 @@ from result import Ok, Err, Result
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.tracers.waku_tracer import WakuTracer
-from src.plotting.utils import add_boxplot_stat_labels
+from src.utils.plot_utils import add_boxplot_stat_labels
 from src.utils import file_utils, log_utils, path_utils, list_utils
 from src.utils.path_utils import check_params_path_exists_by_position, check_params_path_exists_by_position_or_kwargs
 
@@ -355,9 +355,9 @@ class WakuMessageLogAnalyzer:
         plt.figure(figsize=(12, 6))
         ax = sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue', whis=(0,100))
 
-        add_boxplot_stat_labels(ax, value_type="min")
-        add_boxplot_stat_labels(ax, value_type="max")
-        add_boxplot_stat_labels(ax, value_type="median")
+        add_boxplot_stat_labels(ax, value_type="min", scale_by=0.001)
+        add_boxplot_stat_labels(ax, value_type="max", scale_by=0.001)
+        add_boxplot_stat_labels(ax, value_type="median", scale_by=0.001)
 
         q1 = np.percentile(time_ranges_df['time_to_reach'], 25)
         q3 = np.percentile(time_ranges_df['time_to_reach'], 75)

@@ -64,3 +64,5 @@ Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
 - `v1.0.1`:
   - Log url, headers and body when injecting a message
   - Log url, headers and body when raising an exception
+- `v1.0.2`:
+  - Fixed wrong calculation of success_rate when logging information.

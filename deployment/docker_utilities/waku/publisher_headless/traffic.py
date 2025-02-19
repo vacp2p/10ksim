@@ -68,7 +68,6 @@ async def send_waku_msg(args: argparse.Namespace, stats: Dict[str, int], i: int)
             async with session.post(url, json=body, headers=headers) as response:
                 elapsed_time = (time.time() - start_time) * 1000
                 response_text = await response.text()
-                success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
                 log_line = f"Response from message {i + 1} sent to {node_hostname} status:{response.status}, {response_text},\n"
 
                 if response.status == 200:
@@ -78,6 +77,7 @@ async def send_waku_msg(args: argparse.Namespace, stats: Dict[str, int], i: int)
                     log_line += f"Url: {url}, headers: {headers}, body: {body},\n"
                 stats['total'] += 1
 
+                success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
                 logging.info(f"{log_line}"
                     f"Time: [{elapsed_time:.4f} ms], "
                     f"Success: {stats['success']}, Failure: {stats['failure']}, "

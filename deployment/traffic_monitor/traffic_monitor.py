@@ -162,6 +162,34 @@ def log_stats():
             
             stats.last_log = now
 
+def update_prometheus_metrics():
+    while True:
+        time.sleep(5)  # Update prometheus metrics every 5 seconds
+        
+        with stats.lock:
+            # Update all prometheus counters
+            for port in PORTS:
+                BYTES_TCP_IN[port].inc(stats.prometheus_tcp_in[port])
+                BYTES_TCP_OUT[port].inc(stats.prometheus_tcp_out[port])
+                BYTES_UDP_IN[port].inc(stats.prometheus_udp_in[port])
+                BYTES_UDP_OUT[port].inc(stats.prometheus_udp_out[port])
+                BYTES_TOTAL_IN[port].inc(stats.prometheus_tcp_in[port] + stats.prometheus_udp_in[port])
+                BYTES_TOTAL_OUT[port].inc(stats.prometheus_tcp_out[port] + stats.prometheus_udp_out[port])
+                
+                # Reset prometheus accumulators
+                stats.prometheus_tcp_in[port] = 0
+                stats.prometheus_tcp_out[port] = 0
+                stats.prometheus_udp_in[port] = 0
+                stats.prometheus_udp_out[port] = 0
+                stats.prometheus_total_in[port] = 0
+                stats.prometheus_total_out[port] = 0
+            
+            # Update overall metrics
+            BYTES_OVERALL_IN.inc(stats.prometheus_overall_in)
+            BYTES_OVERALL_OUT.inc(stats.prometheus_overall_out)
+            stats.prometheus_overall_in = 0
+            stats.prometheus_overall_out = 0
+
 class PodIPDetectionError(Exception):
     """Raised when pod IP detection fails"""
     pass
@@ -208,6 +236,9 @@ def main():
     # Start Prometheus HTTP server
     start_http_server(8009)
     logger.info("Started Prometheus metrics server on port 8009")
+    
+    # Start prometheus metrics update thread
+    Thread(target=update_prometheus_metrics, daemon=True).start()
     
     # Start stats logging thread
     Thread(target=log_stats, daemon=True).start()

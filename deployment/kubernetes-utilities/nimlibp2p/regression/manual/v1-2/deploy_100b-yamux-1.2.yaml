@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pod
+  namespace: zerotesting-nimlibp2p
+spec:
+  replicas: 1000
+  podManagementPolicy: "Parallel"
+  serviceName: nimp2p-service
+  selector:
+    matchLabels:
+      app: zerotenkay
+  template:
+    metadata:
+      labels:
+        app: zerotenkay
+    spec:
+      dnsConfig:
+        searches:
+          - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
+      initContainers:
+        - name: slowyourroll
+          image: soutullostatus/tc-container:1
+          securityContext:
+            capabilities:
+              add: [ "NET_ADMIN" ]
+          command:
+            - sh
+            - -c
+            - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+      containers:
+        - name: container-0
+          image: soutullostatus/dst-test-node:v1.2.0-yamux
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+            - containerPort: 8008
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: PEERNUMBER
+              value: "0"
+            - name: PEERS
+              value: "1000"
+            - name: CONNECTTO
+              value: "10"
+            - name: MSGRATE
+              value: "1000"
+            - name: MSGSIZE
+              value: "100"
+          args:
+            - "10"
+            - "16"

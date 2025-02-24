@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bootstrap
+  namespace: zerotesting
+spec:
+  replicas: 3
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-bootstrap
+  selector:
+    matchLabels:
+      app: zerotenkay-bootstrap
+  template:
+    metadata:
+      labels:
+        app: zerotenkay-bootstrap
+    spec:
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+          - zerotesting-bootstrap.zerotesting.svc.cluster.local
+      containers:
+        - name: waku
+          image: soutullostatus/nwaku-jq-curl:v0.34.0-rc1
+          imagePullPolicy: IfNotPresent
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            successThreshold: 3
+            initialDelaySeconds: 1
+            periodSeconds: 3
+            failureThreshold: 1
+            timeoutSeconds: 5
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "768Mi"
+              cpu: "400m"
+          ports:
+            - containerPort: 8645
+            - containerPort: 8008
+          command:
+            - sh
+            - -c
+            - |
+              /usr/bin/wakunode --relay=false --rest=true --rest-address=0.0.0.0 --max-connections=1500 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --nat=extip:$IP --cluster-id=2
+        - name: traffic-monitor
+          image: docker.io/zorlin/traffic-monitor
+          imagePullPolicy: IfNotPresent
+          command: ["python", "traffic_monitor.py", "--ports", "8545", "9000", "60000"]
+          securityContext:
+            capabilities:
+              add: ["NET_RAW", "NET_ADMIN"]
+            privileged: true
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+          ports:
+            - containerPort: 8009
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

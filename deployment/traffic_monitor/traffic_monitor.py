@@ -212,6 +212,32 @@ def packet_callback(packet):
                     stats.prometheus_total_out[dst_port] += packet_length
                     stats.prometheus_overall_out += packet_length
 
+def update_prometheus_metrics():
+    while True:
+        time.sleep(1)  # Update prometheus metrics every second
+        
+        with stats.lock:
+            # Update all prometheus counters
+            for port in PORTS:
+                BYTES_TCP_IN[port].inc(stats.prometheus_tcp_in[port])
+                BYTES_TCP_OUT[port].inc(stats.prometheus_tcp_out[port])
+                BYTES_UDP_IN[port].inc(stats.prometheus_udp_in[port])
+                BYTES_UDP_OUT[port].inc(stats.prometheus_udp_out[port])
+                BYTES_TOTAL_IN[port].inc(stats.prometheus_tcp_in[port] + stats.prometheus_udp_in[port])
+                BYTES_TOTAL_OUT[port].inc(stats.prometheus_tcp_out[port] + stats.prometheus_udp_out[port])
+                
+                # Reset only the prometheus accumulator counters
+                stats.prometheus_tcp_in[port] = 0
+                stats.prometheus_tcp_out[port] = 0
+                stats.prometheus_udp_in[port] = 0
+                stats.prometheus_udp_out[port] = 0
+            
+            # Update overall metrics
+            BYTES_OVERALL_IN.inc(stats.prometheus_overall_in)
+            BYTES_OVERALL_OUT.inc(stats.prometheus_overall_out)
+            stats.prometheus_overall_in = 0
+            stats.prometheus_overall_out = 0
+
 def log_stats():
     while True:
         time.sleep(5)
@@ -243,7 +269,7 @@ def log_stats():
                           f"TCP In: {tcp_in_rate:.2f} B/s, TCP Out: {tcp_out_rate:.2f} B/s, "
                           f"UDP In: {udp_in_rate:.2f} B/s, UDP Out: {udp_out_rate:.2f} B/s")
                 
-                # Reset counters
+                # Reset the main stats counters only after calculating rates
                 stats.tcp_in[port] = 0
                 stats.tcp_out[port] = 0
                 stats.udp_in[port] = 0

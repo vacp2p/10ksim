@@ -48,6 +48,12 @@ class Stats:
         self.udp_in = {port: 0 for port in PORTS}
         self.udp_out = {port: 0 for port in PORTS}
         self.last_log = time.time()
+        self.prometheus_udp_in = {port: 0 for port in PORTS}
+        self.prometheus_udp_out = {port: 0 for port in PORTS}
+        self.prometheus_total_in = {port: 0 for port in PORTS}
+        self.prometheus_total_out = {port: 0 for port in PORTS}
+        self.prometheus_overall_in = 0
+        self.prometheus_overall_out = 0
 
 def packet_callback(packet):
     if IP not in packet:
@@ -66,26 +72,26 @@ def packet_callback(packet):
             if src_ip == pod_ip or dst_ip == pod_ip:
                 if src_ip == pod_ip and src_port in PORTS:  # Outgoing
                     stats.udp_out[src_port] += packet_length
-                    BYTES_UDP_OUT[src_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
+                    stats.prometheus_udp_out[src_port] += packet_length
+                    stats.prometheus_total_out[src_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
                 elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
                     stats.udp_in[dst_port] += packet_length
-                    BYTES_UDP_IN[dst_port].inc(packet_length)
-                    BYTES_TOTAL_IN[dst_port].inc(packet_length)
-                    BYTES_OVERALL_IN.inc(packet_length)
+                    stats.prometheus_udp_in[dst_port] += packet_length
+                    stats.prometheus_total_in[dst_port] += packet_length
+                    stats.prometheus_overall_in += packet_length
             # If neither IP is our pod IP but involves our ports, it's outgoing
             else:
                 if src_port in PORTS:
                     stats.udp_out[src_port] += packet_length
-                    BYTES_UDP_OUT[src_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
+                    stats.prometheus_udp_out[src_port] += packet_length
+                    stats.prometheus_total_out[src_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
                 if dst_port in PORTS:
                     stats.udp_out[dst_port] += packet_length
-                    BYTES_UDP_OUT[dst_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[dst_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
+                    stats.prometheus_udp_out[dst_port] += packet_length
+                    stats.prometheus_total_out[dst_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
 
     elif TCP in packet:
         src_port = packet[TCP].sport
@@ -96,52 +102,26 @@ def packet_callback(packet):
             if src_ip == pod_ip or dst_ip == pod_ip:
                 if src_ip == pod_ip and src_port in PORTS:  # Outgoing
                     stats.tcp_out[src_port] += packet_length
-                    BYTES_TCP_OUT[src_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
+                    stats.prometheus_tcp_out[src_port] += packet_length
+                    stats.prometheus_total_out[src_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
                 elif dst_ip == pod_ip and dst_port in PORTS:  # Incoming
                     stats.tcp_in[dst_port] += packet_length
-                    BYTES_TCP_IN[dst_port].inc(packet_length)
-                    BYTES_TOTAL_IN[dst_port].inc(packet_length)
-                    BYTES_OVERALL_IN.inc(packet_length)
+                    stats.prometheus_tcp_in[dst_port] += packet_length
+                    stats.prometheus_total_in[dst_port] += packet_length
+                    stats.prometheus_overall_in += packet_length
             # If neither IP is our pod IP but involves our ports, it's outgoing
             else:
                 if src_port in PORTS:
                     stats.tcp_out[src_port] += packet_length
-                    BYTES_TCP_OUT[src_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[src_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
+                    stats.prometheus_tcp_out[src_port] += packet_length
+                    stats.prometheus_total_out[src_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
                 if dst_port in PORTS:
                     stats.tcp_out[dst_port] += packet_length
-                    BYTES_TCP_OUT[dst_port].inc(packet_length)
-                    BYTES_TOTAL_OUT[dst_port].inc(packet_length)
-                    BYTES_OVERALL_OUT.inc(packet_length)
-
-def update_prometheus_metrics():
-    while True:
-        time.sleep(1)  # Update prometheus metrics every second
-        
-        with stats.lock:
-            # Update all prometheus counters
-            for port in PORTS:
-                BYTES_TCP_IN[port].inc(stats.prometheus_tcp_in[port])
-                BYTES_TCP_OUT[port].inc(stats.prometheus_tcp_out[port])
-                BYTES_UDP_IN[port].inc(stats.prometheus_udp_in[port])
-                BYTES_UDP_OUT[port].inc(stats.prometheus_udp_out[port])
-                BYTES_TOTAL_IN[port].inc(stats.prometheus_tcp_in[port] + stats.prometheus_udp_in[port])
-                BYTES_TOTAL_OUT[port].inc(stats.prometheus_tcp_out[port] + stats.prometheus_udp_out[port])
-                
-                # Reset only the prometheus accumulator counters
-                stats.prometheus_tcp_in[port] = 0
-                stats.prometheus_tcp_out[port] = 0
-                stats.prometheus_udp_in[port] = 0
-                stats.prometheus_udp_out[port] = 0
-            
-            # Update overall metrics
-            BYTES_OVERALL_IN.inc(stats.prometheus_overall_in)
-            BYTES_OVERALL_OUT.inc(stats.prometheus_overall_out)
-            stats.prometheus_overall_in = 0
-            stats.prometheus_overall_out = 0
+                    stats.prometheus_tcp_out[dst_port] += packet_length
+                    stats.prometheus_total_out[dst_port] += packet_length
+                    stats.prometheus_overall_out += packet_length
 
 def log_stats():
     while True:
@@ -174,7 +154,7 @@ def log_stats():
                           f"TCP In: {tcp_in_rate:.2f} B/s, TCP Out: {tcp_out_rate:.2f} B/s, "
                           f"UDP In: {udp_in_rate:.2f} B/s, UDP Out: {udp_out_rate:.2f} B/s")
                 
-                # Reset the main stats counters only after calculating rates
+                # Reset counters
                 stats.tcp_in[port] = 0
                 stats.tcp_out[port] = 0
                 stats.udp_in[port] = 0

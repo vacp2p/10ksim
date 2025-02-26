@@ -65,6 +65,15 @@ class WakuTracer(MessageTracer):
 
         return df
 
+    def _trace_lightpush_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        df = pd.DataFrame(parsed_logs, columns=['receiver_peer_id', 'sender_peer_id', 'msg_hash', 'timestamp',
+                                                'pod-name', 'kubernetes-worker'])
+
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+
+        return df
+
     def _trace_all_logs(self, parsed_logs: List) -> List:
         return parsed_logs
 

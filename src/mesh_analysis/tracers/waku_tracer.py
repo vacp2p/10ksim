@@ -24,14 +24,20 @@ class WakuTracer(MessageTracer):
         self._tracings = []
 
     def with_received_pattern(self):
-        self._patterns.append(
-            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)')
-        self._tracings.append(self._trace_received_in_logs)
+        patterns = [
+            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)',
+            r'handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)']
+        tracers = [self._trace_received_in_logs,
+                   self._trace_lightpush_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_sent_pattern(self):
-        self._patterns.append(
-            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)')
-        self._tracings.append(self._trace_sent_in_logs)
+        patterns = [
+            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)']
+        tracers = [self._trace_sent_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_wildcard_pattern(self):
         self._patterns.append(r'(.*)')

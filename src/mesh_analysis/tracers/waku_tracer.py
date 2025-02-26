@@ -96,7 +96,7 @@ class WakuTracer(MessageTracer):
             else:
                 logger.warning(f'Peers missed messages on shard {shard}')
                 logger.warning(f'Peers who missed messages: {peers_missed_msg}')
-                logger.warning(f'Missing messages: {missing_messages}')
+                logger.warning(f'Missing messages ({len(missing_messages)}/{unique_messages}): {missing_messages}')
 
                 all_peers_missed_messages.extend(peers_missed_msg)
                 all_missing_messages.extend(missing_messages)

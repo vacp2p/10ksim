@@ -24,23 +24,28 @@ class WakuTracer(MessageTracer):
         self._tracings = []
 
     def with_received_pattern(self):
-        self._patterns.append(
-            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)')
-        self._tracings.append(self._trace_received_in_logs)
+        patterns = [
+            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)',
+            r'handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)']
+        tracers = [self._trace_received_in_logs,
+                   self._trace_lightpush_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_sent_pattern(self):
-        self._patterns.append(
-            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)')
-        self._tracings.append(self._trace_sent_in_logs)
+        patterns = [
+            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)']
+        tracers = [self._trace_sent_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_wildcard_pattern(self):
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
 
-    def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
-        dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
-
-        return dfs
+    def trace(self, parsed_logs: List[List]) -> List[List]:
+        return [[tracer(log) for tracer, log in zip(tracers, log_group)]
+                for tracers, log_group in zip(self._tracings, parsed_logs)]
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
@@ -55,6 +60,15 @@ class WakuTracer(MessageTracer):
         df = pd.DataFrame(parsed_logs,
                           columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name',
                                    'kubernetes-worker'])
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+
+        return df
+
+    def _trace_lightpush_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        df = pd.DataFrame(parsed_logs, columns=['receiver_peer_id', 'sender_peer_id', 'msg_hash', 'timestamp',
+                                                'pod-name', 'kubernetes-worker'])
+
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
 
@@ -82,16 +96,16 @@ class WakuTracer(MessageTracer):
             else:
                 logger.warning(f'Peers missed messages on shard {shard}')
                 logger.warning(f'Peers who missed messages: {peers_missed_msg}')
-                logger.warning(f'Missing messages: {missing_messages}')
+                logger.warning(f'Missing messages ({len(missing_messages)}/{unique_messages}): {missing_messages}')
 
                 all_peers_missed_messages.extend(peers_missed_msg)
                 all_missing_messages.extend(missing_messages)
 
-                self._log_received_messages(pivot_df, unique_messages)
+                self._log_received_messages(pivot_df, unique_messages, df)
 
         return all_peers_missed_messages, all_missing_messages
 
-    def _log_received_messages(self, df: pd.DataFrame, unique_messages: int):
+    def _log_received_messages(self, df: pd.DataFrame, unique_messages: int, complete_df: pd.DataFrame):
         column_sums = df.sum()
         filtered_sums = column_sums[column_sums != unique_messages]
         result_list = list(filtered_sums.items())
@@ -99,7 +113,8 @@ class WakuTracer(MessageTracer):
             peer_id, count = result
             missing_hashes = df[df[peer_id] == 0].index.tolist()
             missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
-            logger.warning(f'Peer {result[0]} {result[1]}/{unique_messages}: {missing_hashes}')
+            pod_name = complete_df[complete_df["receiver_peer_id"] == result[0]]["pod-name"][0][0]
+            logger.warning(f'Peer {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []

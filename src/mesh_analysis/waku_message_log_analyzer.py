@@ -51,7 +51,7 @@ class WakuMessageLogAnalyzer:
                 "headers": {"Content-Type": "application/json"},
                 "params": [
                     {
-                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND received relay message AND _time:{self._timestamp}"},
+                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:{self._timestamp}"},
                     {
                         "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
                 }

@@ -24,23 +24,28 @@ class WakuTracer(MessageTracer):
         self._tracings = []
 
     def with_received_pattern(self):
-        self._patterns.append(
-            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)')
-        self._tracings.append(self._trace_received_in_logs)
+        patterns = [
+            r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)',
+            r'handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)']
+        tracers = [self._trace_received_in_logs,
+                   self._trace_lightpush_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_sent_pattern(self):
-        self._patterns.append(
-            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)')
-        self._tracings.append(self._trace_sent_in_logs)
+        patterns = [
+            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)']
+        tracers = [self._trace_sent_in_logs]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
 
     def with_wildcard_pattern(self):
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
 
-    def trace(self, parsed_logs: List) -> List[pd.DataFrame]:
-        dfs = [trace(parsed_logs[i]) for i, trace in enumerate(self._tracings) if trace is not None]
-
-        return dfs
+    def trace(self, parsed_logs: List[List]) -> List[List]:
+        return [[tracer(log) for tracer, log in zip(tracers, log_group)]
+                for tracers, log_group in zip(self._tracings, parsed_logs)]
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
@@ -55,6 +60,15 @@ class WakuTracer(MessageTracer):
         df = pd.DataFrame(parsed_logs,
                           columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name',
                                    'kubernetes-worker'])
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+
+        return df
+
+    def _trace_lightpush_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        df = pd.DataFrame(parsed_logs, columns=['receiver_peer_id', 'sender_peer_id', 'msg_hash', 'timestamp',
+                                                'pod-name', 'kubernetes-worker'])
+
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
 

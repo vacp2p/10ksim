@@ -51,7 +51,7 @@ class WakuMessageLogAnalyzer:
                 "headers": {"Content-Type": "application/json"},
                 "params": [
                     {
-                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND received relay message AND _time:{self._timestamp}"},
+                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:{self._timestamp}"},
                     {
                         "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
                 }
@@ -197,17 +197,20 @@ class WakuMessageLogAnalyzer:
 
         return has_issues
 
-    def _merge_dfs(self, dfs: List[pd.DataFrame]) -> List[pd.DataFrame]:
+    def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
         logger.info("Merging and sorting information")
-        dfs = list(zip(*dfs))
-        dfs = [pd.concat(tup, axis=0) for tup in dfs]
 
-        dfs = [df.assign(shard=df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
-               .set_index(['shard', 'msg_hash', 'timestamp'])
-               .sort_index()
-               for df in dfs]
+        received_df = pd.concat([pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True)
+        received_df = received_df.assign(shard=received_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        received_df.sort_index(inplace=True)
 
-        return dfs
+        sent_df = pd.concat([pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True)
+        sent_df = sent_df.assign(shard=sent_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        return [received_df, sent_df]
 
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
         received = dfs[0].reset_index()

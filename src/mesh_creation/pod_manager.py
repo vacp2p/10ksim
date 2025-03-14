@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # Project Imports
-from kubernetes import client, config, utils
+from kubernetes import client, config
 from kubernetes.stream import stream
+from result import Result, Err, Ok
 from src.mesh_creation.protocols.base_protocol import BaseProtocol
 from src.mesh_creation.protocols.waku_protocol import WakuProtocol
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("src.mesh_creation.pod_manager")
 
 
 class PodManager:
@@ -24,10 +25,9 @@ class PodManager:
         config.load_kube_config(config_file=kube_config)
         self.api = client.CoreV1Api()
         self.apps_api = client.AppsV1Api()
-        # Store pod information: {statefulset_name: [{name: pod_name, identifier: node_id}]}
         self.deployed_pods = {}
 
-    def execute_pod_command(self, pod_name: str, command: list, container_name: str) -> str:
+    def execute_pod_command(self, pod_name: str, command: list, container_name: str) -> Result[str, None]:
         try:
             resp = stream(
                 self.api.connect_get_namespaced_pod_exec,
@@ -45,141 +45,178 @@ class PodManager:
                 try:
                     json_start = resp.find('{')
                     if json_start != -1:
-                        return resp[json_start:]
+                        return Ok(resp[json_start:])
                 except Exception as e:
                     logger.debug(f"Failed to extract JSON from curl response: {str(e)}")
-                    return resp
-            return resp
+                    return Err(resp)
+            return Ok(resp)
         except Exception as e:
             logger.error(f"Error executing command in pod {pod_name}: {str(e)}")
-            raise
+            return Err(None)
 
-    def get_pod_identifier(self, pod_name: str) -> str:
+    def get_pod_identifier(self, pod_name: str, container_name: str) -> Result[str, None]:
         """Get the node identifier (ENR, peer ID, etc.) of a pod."""
-        try:
-            command = self.protocol.get_node_identifier()
-            response = self.execute_pod_command(pod_name, command)
-            return self.protocol.parse_identifier_response(response)
-        except Exception as e:
-            logger.error(f"Error getting identifier for pod {pod_name}: {str(e)}")
-            return ""
+        command = self.protocol.get_node_identifier()
+        result = self.execute_pod_command(pod_name, command, container_name)
+        if result.is_ok():
+            return Ok(self.protocol.parse_identifier_response(result.ok_value))
 
-    def connect_pods(self, source_pod: Dict[str, str], target_pod: Dict[str, str]) -> bool:
-        """Connect one pod to another using the configured protocol."""
-        try:
-            command = self.protocol.get_connection_command(target_pod["identifier"])
-            self.execute_pod_command(source_pod["name"], command)
-            logger.info(f"Connected pod {source_pod['name']} to {target_pod['name']}")
-            return True
-        except Exception as e:
-            logger.error(f"Error connecting pods: {str(e)}")
-            return False
+        logger.error(f"Error getting identifier for pod {pod_name}")
+        return Err(None)
 
-    def apply_yaml_files(self, yaml_paths: List[str]) -> None:
-        for yaml_path in yaml_paths:
-            self.apply_yaml_file(yaml_path)
+    def connect_pods(self, source_pod: Dict[str, str], target_pod: Dict[str, str]) -> Result[None, None]:
 
-    def apply_yaml_file(self, yaml_path: str) -> None:
+        command = self.protocol.get_connection_command(target_pod["identifier"])
+        result = self.execute_pod_command(
+            source_pod["name"],
+            command,
+            self.deployed_pods['container_name']
+        )
+        if result.is_err():
+            logger.error(f"Error connecting pods: {result.err_value}")
+            return Err(None)
+
+        logger.info(f"Connected pod {source_pod['name']} to {target_pod['name']}")
+        return Ok(None)
+
+    def configure_connections(self, node_to_pod: Dict[int, str], graph) -> Result:
+
+        logger.info("Configuring pod connections based on topology")
+        pod_lookup = {pod['name']: pod for pod in self.deployed_pods['pods']}
+
+        for source_idx, target_idx in graph.edges():
+            source_name = node_to_pod[source_idx]
+            target_name = node_to_pod[target_idx]
+
+            source_pod = pod_lookup.get(source_name)
+            target_pod = pod_lookup.get(target_name)
+
+            if not source_pod or not target_pod:
+                logger.error(f"Could not find pods for nodes {source_idx} -> {target_idx} ({source_name} -> {target_name})")
+                return Err(None)
+
+            if not source_pod['identifier'] or not target_pod['identifier']:
+                logger.error(f"Missing identifier for pod connection {source_name} -> {target_name}")
+                return Err(None)
+
+            logger.info(f"Establishing connection: {source_name} -> {target_name}")
+            result = self.connect_pods(source_pod, target_pod)
+            if result.is_err():
+                return Err(result)
+
+        logger.info("Successfully configured all pod connections")
+        return Ok(None)
+
+    def apply_yaml_file(self, yaml_path: Path) -> Result[None, str]:
         logger.info(f"Applying YAML file: {yaml_path}")
 
         with open(yaml_path, 'r') as f:
             docs = yaml.safe_load_all(f)
             for doc in docs:
-                if doc["kind"] == "StatefulSet":
-                    name = doc["metadata"]["name"]
-                    logger.info(f"Found StatefulSet: {name}")
+                if doc["kind"] != "StatefulSet":
+                    # Only handled for StatefulSets
+                    return Err(f"Yaml file is not a StatefulSet: {yaml_path}")
 
-                    try:
-                        # Check if StatefulSet already exists
-                        existing_ss = self.apps_api.read_namespaced_stateful_set(
-                            name=name,
-                            namespace=self.namespace
-                        )
+                ss_name = doc["metadata"]["name"]
+                logger.info(f"Found StatefulSet: {ss_name}")
 
-                        # If it exists, patch it
-                        logger.info(f"StatefulSet {name} exists, updating it")
-                        self.apps_api.patch_namespaced_stateful_set(
-                            name=name,
-                            namespace=self.namespace,
-                            body=doc
-                        )
-                    except client.exceptions.ApiException as e:
-                        if e.status == 404:
-                            # If it doesn't exist, create it
-                            logger.info(f"Creating new StatefulSet: {name}")
-                            self.apps_api.create_namespaced_stateful_set(
-                                namespace=self.namespace,
-                                body=doc
-                            )
-                        else:
-                            raise
+                # Extract container name from the StatefulSet spec
+                try:
+                    container_name = doc["spec"]["template"]["spec"]["containers"][0]["name"]
+                    replicas = doc["spec"].get("replicas", 1)  # Default to 1 if not specified
+                    logger.info(f"Found container name: {container_name} for StatefulSet {ss_name} with {replicas} replicas")
+                except (KeyError, IndexError) as e:
+                    logger.error(f"Failed to extract container name from StatefulSet {ss_name}: {str(e)}")
+                    return Err(f"StatefulSet {ss_name} must specify a container name")
 
-                    self.deployed_pods[name] = []
-                    logger.info(f"Successfully applied StatefulSet: {name}")
-                else:
-                    # For other kinds of resources (Services, ConfigMaps, etc.)
-                    logger.info(f"Applying {doc['kind']}: {doc['metadata']['name']}")
-                    utils.create_from_dict(
-                        k8s_client=client,
-                        data=doc,
-                        namespace=self.namespace
-                    )
-
-    def wait_for_pods_ready(self, timeout: int = 300) -> bool:
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            all_ready = True
-            statefulsets = self.apps_api.list_namespaced_stateful_set(self.namespace)
-
-            for ss in statefulsets.items:
-                if ss.metadata.name in self.deployed_pods:
-                    if not ss.status.ready_replicas or ss.status.ready_replicas != ss.spec.replicas:
-                        logger.info(
-                            f"StatefulSet {ss.metadata.name} not ready: {ss.status.ready_replicas}/{ss.spec.replicas} replicas")
-                        all_ready = False
-                        break
-
-                    selector = ss.spec.selector.match_labels
-                    selector_str = ",".join([f"{k}={v}" for k, v in selector.items()])
-                    logger.debug(f"Using selector: {selector_str} for StatefulSet {ss.metadata.name}")
-
-                    pods = self.api.list_namespaced_pod(
+                try:
+                    self.apps_api.create_namespaced_stateful_set(
                         namespace=self.namespace,
-                        label_selector=selector_str
+                        body=doc
                     )
+                except client.exceptions.ApiException as e:
+                    if e.status == 409: # Already exists
+                        return Err(f"StatefulSet {ss_name} already exists")
 
-                    if not pods.items:
-                        logger.warning(f"No pods found for StatefulSet {ss.metadata.name} with selector {selector_str}")
-                        all_ready = False
-                        break
+                pods = [
+                    {
+                        "name": f"{ss_name}-{i}",
+                        "identifier": ""  # Will be filled when pods are ready
+                    }
+                    for i in range(replicas)
+                ]
 
-                    self.deployed_pods[ss.metadata.name] = []
+                self.deployed_pods = {
+                    'ss_name': ss_name,
+                    'pods': pods,
+                    'container_name': container_name
+                }
+                logger.debug(f"Successfully applied StatefulSet: {ss_name} with expected pods: {[p['name'] for p in pods]}")
 
-                    for pod in pods.items:
-                        pod_name = pod.metadata.name
-                        logger.info(f"Found pod: {pod_name} for StatefulSet {ss.metadata.name}")
-                        identifier = self.get_pod_identifier(pod_name)
-                        if not identifier:
-                            all_ready = False
-                            break
+        return Ok(None)
 
-                        self.deployed_pods[ss.metadata.name].append({
-                            "name": pod_name,
-                            "identifier": identifier
-                        })
+    def wait_for_pods_ready(self, timeout: int = 300) -> Result:
+        """
+        Wait for all pods in the managed StatefulSets to be ready and collect their identifiers.
+        """
+        start_time = time.time()
+        ss_name = self.deployed_pods['ss_name']
 
-            if all_ready:
+        logger.info("Waiting for pods to be ready and collecting identifiers...")
+        while time.time() - start_time < timeout:
+            try:
+                ss = self.apps_api.read_namespaced_stateful_set(
+                    name=ss_name,
+                    namespace=self.namespace
+                )
+
+                if not ss.status.ready_replicas or ss.status.ready_replicas != ss.spec.replicas:
+                    logger.info(f"StatefulSet {ss_name} not ready: "
+                                f"{ss.status.ready_replicas}/{ss.spec.replicas} replicas")
+                    time.sleep(5)
+                    continue
+
+                selector = ss.spec.selector.match_labels
+                selector_str = ",".join([f"{k}={v}" for k, v in selector.items()])
+                logger.debug(f"Using selector: {selector_str} for StatefulSet {ss_name}")
+
+                pods = self.api.list_namespaced_pod(
+                    namespace=self.namespace,
+                    label_selector=selector_str
+                )
+
+                if not pods.items:
+                    logger.warning(f"No pods found for StatefulSet {ss_name} with selector {selector_str}")
+                    break
+
+                # Keep the existing pod list structure but update identifiers
+                logger.info(f"Collecting identifiers for pods")
+                for pod in pods.items:
+                    pod_name = pod.metadata.name
+                    for managed_pod in self.deployed_pods['pods']:
+                        if managed_pod['name'] == pod_name:
+                            logger.debug(f"Collecting identifier for pod: {pod_name}")
+                            identifier = self.get_pod_identifier(
+                                pod_name,
+                                self.deployed_pods['container_name']
+                            )
+                            if identifier.is_err():
+                                logger.debug(f"No identifier for pod: {pod_name}")
+                                return Err(None)
+                            managed_pod['identifier'] = identifier.ok_value
                 logger.info("All pods are ready and identifiers collected!")
-                return True
+                return Ok(None)
 
-            logger.info("Waiting for pods to be ready and collecting identifiers...")
-            time.sleep(5)
+            except client.exceptions.ApiException as e:
+                error = f"Error checking StatefulSet {ss_name}: {str(e)}"
+                logger.error(error)
+                return Err(error)
 
         logger.error("Timeout waiting for pods to be ready")
-        return False
+        return Err(None)
 
     def get_all_pods(self) -> List[Dict[str, str]]:
-        return [pod for pods in self.deployed_pods.values() for pod in pods]
+        return [pod for ss_info in self.deployed_pods.values() for pod in ss_info['pods']]
 
     def get_pods_by_statefulset(self, statefulset_name: str) -> List[Dict[str, str]]:
-        return self.deployed_pods.get(statefulset_name, [])
+        return self.deployed_pods.get(statefulset_name, {}).get('pods', [])

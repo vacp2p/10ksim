@@ -1,136 +1,126 @@
 # Mesh Creation Module
 
-This module provides functionality to create and configure network topologies in Kubernetes clusters, specifically designed for peer-to-peer network experiments. It supports different node protocols (currently Waku and LibP2P) and various network topology types.
-
-## Overview
-
-The mesh creation module consists of three main components:
-
-1. **TopologyManager**: Orchestrates the overall process of creating and configuring the network topology
-2. **PodManager**: Handles Kubernetes pod operations and statefulset management
-3. **NodeProtocol**: Abstract interface for different node protocols (Waku, LibP2P)
+A Python module for creating and managing mesh networks of p2p nodes in Kubernetes, with support for custom topologies and different node protocols.
 
 ## Components
 
-### TopologyManager (`topology_creation.py`)
+### Core Classes
 
-The TopologyManager is responsible for:
-- Creating network topologies using NetworkX
-- Managing pod deployment and configuration
-- Coordinating the connection setup between nodes
+1. `TopologyManager`
+   - Generates network topologies
+   - Supports custom degree constraints
+   - Imports Pajek format networks
+   - Configures node connections
 
-Supported topology types:
-- Random (Erdős-Rényi)
-- Scale-free (Barabási-Albert)
-- Small-world (Watts-Strogatz)
-- Custom topologies via Pajek format
+2. `PodManager`
+   - Manages Kubernetes pod deployments
+   - Handles pod-to-pod communication
+   - Tracks pod states and identifiers
+   - Executes commands in pods
 
-Example usage:
+3. `NodeProtocol` (Abstract Base Class)
+   - Base class for protocol implementations
+   - Defines interface for node communication
+   - Handles identifier retrieval and connections
+
+### Protocol Implementations
+
+1. `WakuProtocol`
+   - Implementation for Waku nodes
+   - Handles ENR URI retrieval
+   - Manages node connections via HTTP API
+
+2. `LibP2PProtocol`
+   - Generic LibP2P implementation
+   - Handles peer ID management
+   - Configures direct connections
+
+## Usage Examples
+
+### Basic Node Deployment
+
 ```python
-from test_topology_creation import TopologyManager
-from node_protocol import WakuProtocol
+from mesh_creation.topology_creation import TopologyManager
+from mesh_creation.protocols.waku_protocol import WakuProtocol
 
 # Initialize manager with Waku protocol
 manager = TopologyManager(
-    kube_config="your_kube_config.yaml",
-    namespace="your_namespace",
+    kube_config="config.yaml",
+    namespace="test",
     protocol=WakuProtocol(port=8645)
 )
 
-# Deploy nodes
-manager.setup_nodes(["statefulset.yaml"])
+# Deploy nodes from YAML
+manager.setup_nodes("waku-nodes.yaml")
 
-# Create and apply topology
-config = manager.read_config("topology_config.yaml")
+# Generate and configure topology
 graph = manager.generate_topology(
-    config["topology_type"],
-    **config["parameters"]
+    "libp2p_custom",
+    n=5,
+    d_low=2,
+    d_high=4
 )
 manager.configure_node_connections(graph)
 ```
 
-### PodManager (`pod_manager.py`)
+### Custom Topology from Pajek
 
-The PodManager handles Kubernetes-related operations:
-- Deploying and managing StatefulSets
-- Monitoring pod readiness
-- Executing commands in pods
-- Managing pod identifiers and connections
-
-Key features:
-- Automatic pod readiness detection
-- StatefulSet creation and updates
-- Pod command execution with proper error handling
-- Support for different container runtimes
-
-### NodeProtocol (`node_protocol.py`)
-
-Abstract interface for different node protocols with concrete implementations for:
-- Waku nodes
-- LibP2P nodes (example)
-
-Each protocol implementation provides:
-- Node identifier retrieval
-- Connection command generation
-- Response parsing
-
-## Configuration
-
-### Topology Configuration (`topology_config.yaml`)
-
-Example configuration for different topology types:
-```yaml
-# Random topology
-topology_type: "random"
-parameters:
-  n: 10  # number of nodes
-  p: 0.2  # connection probability
-
-# Scale-free topology
-topology_type: "scale_free"
-parameters:
-  n: 10  # number of nodes
-  m: 2   # number of edges per new node
-
-# Small-world topology
-topology_type: "small_world"
-parameters:
-  n: 10  # number of nodes
-  k: 4   # nearest neighbors to connect
-  p: 0.1 # rewiring probability
+```python
+# Read existing topology
+graph = manager.read_pajek("topology.net")
+manager.configure_node_connections(graph)
 ```
 
-### StatefulSet Configuration
+## Configuration Files
 
-Your StatefulSet YAML should define:
-- Pod specifications
-- Container configurations
-- Required ports and protocols
-- Any necessary volumes or configurations
+### Node Deployment (YAML)
 
-## Usage
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: waku-node
+spec:
+  replicas: 5
+  template:
+    spec:
+      containers:
+      - name: waku
+        image: wakuorg/node:latest
+        ports:
+        - containerPort: 8645
+```
 
-1. **Prepare Configuration Files**
-   - Create your StatefulSet YAML
-   - Create topology configuration YAML
-   - Ensure Kubernetes cluster access
+## Development
 
-2. **Create Network Topology**
-   ```python
-   from test_topology_creation import TopologyManager
-   from node_protocol import WakuProtocol
+### Adding New Protocol Support
 
-   # Initialize
-   manager = TopologyManager(protocol=WakuProtocol(port=8645))
+1. Create new protocol class:
+```python
+from mesh_creation.protocols.base_protocol import BaseProtocol
 
-   # Deploy nodes
-   manager.setup_nodes(["your_statefulset.yaml"])
+class CustomProtocol(BaseProtocol):
+    def get_node_identifier(self) -> List[str]:
+        return ["curl", "-s", "http://localhost:8080/id"]
 
-   # Configure topology
-   config = manager.read_config("topology_config.yaml")
-   graph = manager.generate_topology(
-       config["topology_type"],
-       **config["parameters"]
-   )
-   manager.configure_node_connections(graph)
-   ```
+    def get_connection_command(self, identifier: str) -> List[str]:
+        return ["curl", "-s", "-X", "POST", f"http://localhost:8080/connect/{identifier}"]
+
+    def parse_identifier_response(self, response: str) -> str:
+        return json.loads(response)["id"]
+```
+
+2. Use with topology manager:
+```python
+manager = TopologyManager(protocol=CustomProtocol())
+```
+
+### Running Tests
+
+```bash
+# Run all mesh_creation tests
+pytest src/mesh_creation/tests/
+
+# Run specific test file
+pytest src/mesh_creation/tests/test_pod_manager.py
+```

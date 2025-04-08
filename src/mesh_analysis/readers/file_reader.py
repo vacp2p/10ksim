@@ -32,21 +32,14 @@ class FileReader(Reader):
         parsed_logs = self._read_files(files_result.ok_value)
         logger.info(f'Tracing {self._folder_path}')
 
-        def merge_sublists(biglist):
-            transposed = list(zip(*biglist))
-            merged = [[item for sublist in sublists for item in sublist] for sublists in transposed]
+        dfs = self._tracer.trace(parsed_logs)
 
-            return merged
-
-        test = merge_sublists(parsed_logs)
-        dfs = self._tracer.trace(test)
-
-        return dfs
+        return dfs[0]
 
     def _read_files(self, files: List) -> List:
         # TODO: set this as a parameter?
         num_processes = multiprocessing.cpu_count()
-        with multiprocessing.Pool(processes=4) as pool:
+        with multiprocessing.Pool(processes=2) as pool:
             parsed_logs = pool.map(self._read_file_patterns, files)
 
         return parsed_logs
@@ -56,12 +49,14 @@ class FileReader(Reader):
 
         with open(Path(self._folder_path / file)) as log_file:
             for line in log_file:
-                for i, pattern in enumerate(self._tracer.patterns):
-                    match = re.search(pattern, line)
-                    if match:
-                        match_as_list = list(match.groups())
-                        match_as_list.append(file)
-                        results[i].append(match_as_list)
-                        break
+                for i, query in enumerate(self._tracer.patterns):
+                    for j, pattern in enumerate(query):
+                        match = re.search(pattern, line)
+                        if match:
+                            match_as_list = list(match.groups())
+                            match_as_list.append(None) # Pod name
+                            match_as_list.append(None) # Kubernetes worker
+                            results[i].append(match_as_list)
+                            break
 
         return results

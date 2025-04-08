@@ -32,9 +32,26 @@ class FileReader(Reader):
         parsed_logs = self._read_files(files_result.ok_value)
         logger.info(f'Tracing {self._folder_path}')
 
-        dfs = self._tracer.trace(parsed_logs)
+        def merge_sublists(biglist):
+            transposed = list(zip(*biglist))
+            merged = [[item for sublist in sublists for item in sublist] for sublists in transposed]
 
-        return dfs[0]
+            return merged
+
+        merged_lists = merge_sublists(parsed_logs)
+
+        dfs = self._tracer.trace(merged_lists)
+
+        merged_list = []
+
+        consistent_columns = ["msg_hash", "timestamp", "receiver_peer_id", "sender_peer_id", "pod-name", "kubernetes-worker"]  # Assume df1 has the desired column order
+
+        for inner_list in dfs:
+            reordered_dfs = [df[consistent_columns] for df in inner_list]
+            merged_df = pd.concat(reordered_dfs, ignore_index=True)
+            merged_list.append(merged_df)
+
+        return merged_list
 
     def _read_files(self, files: List) -> List:
         # TODO: set this as a parameter?
@@ -45,9 +62,12 @@ class FileReader(Reader):
         return parsed_logs
 
     def _read_file_patterns(self, file: str) -> List:
-        results = [[] for p in self._tracer.patterns]
+        results = [
+            [[] for _ in query]
+            for query in self._tracer.patterns
+        ]
 
-        with open(Path(self._folder_path / file)) as log_file:
+        with open(Path(self._folder_path) / file) as log_file:
             for line in log_file:
                 for i, query in enumerate(self._tracer.patterns):
                     for j, pattern in enumerate(query):
@@ -56,7 +76,7 @@ class FileReader(Reader):
                             match_as_list = list(match.groups())
                             match_as_list.append(None) # Pod name
                             match_as_list.append(None) # Kubernetes worker
-                            results[i].append(match_as_list)
+                            results[i][j].append(match_as_list)
                             break
 
         return results

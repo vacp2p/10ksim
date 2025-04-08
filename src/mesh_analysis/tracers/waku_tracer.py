@@ -34,8 +34,10 @@ class WakuTracer(MessageTracer):
 
     def with_sent_pattern(self):
         patterns = [
-            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)']
-        tracers = [self._trace_sent_in_logs]
+            r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)',
+            r'publishWithConn.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?sentTime=(\d+)']
+        tracers = [self._trace_sent_in_logs,
+                   self._trace_mixnet_in_logs]
         self._patterns.append(patterns)
         self._tracings.append(tracers)
 
@@ -59,6 +61,15 @@ class WakuTracer(MessageTracer):
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         df = pd.DataFrame(parsed_logs,
                           columns=['sender_peer_id', 'msg_hash', 'receiver_peer_id', 'timestamp', 'pod-name',
+                                   'kubernetes-worker'])
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+
+        return df
+
+    def _trace_mixnet_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        df = pd.DataFrame(parsed_logs,
+                          columns=['sender_peer_id', 'receiver_peer_id', 'msg_hash', 'timestamp', 'pod-name',
                                    'kubernetes-worker'])
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')

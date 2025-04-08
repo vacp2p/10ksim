@@ -128,7 +128,20 @@ class WakuMessageLogAnalyzer:
         reader = FileReader(self._local_path_to_analyze, waku_tracer)
         dfs = reader.read()
 
-        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+        received_df = dfs[0].assign(shard=0)
+        received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        sent_df =  dfs[1].assign(shard=0)
+        sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        result = self._dump_dfs([received_df, sent_df])
+        if result.is_err():
+            logger.warning(f'Issue dumping message summary. {result.err_value}')
+            exit(1)
+
+        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', received_df, sent_df,
                                                                 self._dump_analysis_dir)
 
         return has_issues

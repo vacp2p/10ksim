@@ -10,9 +10,15 @@ spec:
       - zerotesting-service.zerotesting.svc.cluster.local
   containers:
     - name: publisher-container
-      image: soutullostatus/publisher:v0.4.0
+      image: soutullostatus/publisher:testing
       imagePullPolicy: Always
       command:
         - sh
         - -c
-        - python /app/traffic.py --messages=60  --msg-size-kbytes=1 --delay-seconds=10 --pubsub-topic="/waku/2/rs/2/0" --debug
+        - |
+          python /app/traffic.py \
+          --messages=600 \
+          --msg-size-kbytes=1 \
+          --delay-seconds=1 \
+          --pubsub-topic="/waku/2/rs/2/" \
+          --protocols relay

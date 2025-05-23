@@ -2,7 +2,6 @@
 import re
 import logging
 import multiprocessing
-import pandas as pd
 from typing import List
 from pathlib import Path
 
@@ -10,7 +9,6 @@ from pathlib import Path
 from src.utils import file_utils
 from src.mesh_analysis.readers.reader import Reader
 from src.mesh_analysis.tracers.message_tracer import MessageTracer
-
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +19,7 @@ class FileReader(Reader):
         self._folder_path = folder
         self._tracer = tracer
 
-    def read(self) -> List:
+    def read_logs(self) -> List:
         logger.info(f'Reading {self._folder_path}')
         files_result = file_utils.get_files_from_folder_path(self._folder_path)
 

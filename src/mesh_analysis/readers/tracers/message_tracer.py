@@ -1,5 +1,4 @@
 # Python Imports
-import pandas as pd
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
@@ -17,4 +16,8 @@ class MessageTracer(ABC):
 
     @abstractmethod
     def trace(self, parsed_logs: List) -> List:
+        pass
+
+    @abstractmethod
+    def get_num_patterns(self) -> int:
         pass

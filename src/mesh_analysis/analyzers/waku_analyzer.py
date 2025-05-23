@@ -9,13 +9,14 @@ import numpy as np
 import seaborn as sns
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Optional, Tuple
 from result import Ok, Err, Result
 
 # Project Imports
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
-from src.mesh_analysis.tracers.waku_tracer import WakuTracer
+from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
+from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.utils.plot_utils import add_boxplot_stat_labels
 from src.utils import file_utils, log_utils, path_utils, list_utils
 from src.utils.path_utils import check_params_path_exists_by_position, check_params_path_exists_by_position_or_kwargs
@@ -23,20 +24,24 @@ from src.utils.path_utils import check_params_path_exists_by_position, check_par
 logger = logging.getLogger(__name__)
 sns.set_theme()
 
-class WakuMessageLogAnalyzer:
-    def __init__(self, stateful_sets: List[str], timestamp_to_analyze: str = None,
-                 dump_analysis_dir: str = None, local_folder_to_analyze: str = None):
-        self._stateful_sets = stateful_sets
-        self._num_nodes: List[int] = []
-        self._validate_analysis_location(timestamp_to_analyze, local_folder_to_analyze)
-        self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
-        self._timestamp = timestamp_to_analyze
-        self._message_hashes = []
 
-    def _validate_analysis_location(self, timestamp_to_analyze: str, local_folder_to_analyze: str):
-        if timestamp_to_analyze is None and local_folder_to_analyze is None:
-            logger.error('No timestamp or local folder specified')
-            exit(1)
+class WakuAnalyzer:
+    def __init__(self, dump_analysis_dir: str = None, local_folder_to_analyze: str = None, **kwargs):
+        self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
+        self._kwargs = kwargs
+        self._message_hashes = []
+        self._stack: Optional[StackAnalysis] = self._set_up_stack()
+
+    def _set_up_stack(self):
+        if self._kwargs is None:
+            return None
+
+        dispatch = {
+            'vaclab': VaclabStackAnalysis,
+            # 'local': LocalStackAnalaysis # TODO
+        }
+
+        return dispatch[type](**self._kwargs)
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
         self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None
@@ -45,26 +50,6 @@ class WakuMessageLogAnalyzer:
         if result.is_err():
             logger.error(result.err_value)
             exit(1)
-
-    def _get_victoria_config_parallel(self, stateful_set_name: str, node_index: int) -> Dict:
-        return {"url": "https://vmselect.riff.cc/select/logsql/query",
-                "headers": {"Content-Type": "application/json"},
-                "params": [
-                    {
-                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:{self._timestamp}"},
-                    {
-                        "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:{self._timestamp}"}]
-                }
-
-    def _get_victoria_config_single(self) -> Dict:
-        return {"url": "https://vmselect.riff.cc/select/logsql/query",
-                "headers": {"Content-Type": "application/json"},
-                "params": [
-                    {
-                        "query": f"kubernetes.container_name:waku AND received relay message AND _time:{self._timestamp}"},
-                    {
-                        "query": f"kubernetes.container_name:waku AND sent relay message AND _time:{self._timestamp}"}]
-                }
 
     def _get_affected_node_pod(self, data_file: str) -> Result[str, str]:
         peer_id = data_file.split('.')[0]
@@ -128,7 +113,20 @@ class WakuMessageLogAnalyzer:
         reader = FileReader(self._local_path_to_analyze, waku_tracer)
         dfs = reader.read()
 
-        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+        received_df = dfs[0].assign(shard=0)
+        received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        sent_df =  dfs[1].assign(shard=0)
+        sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        result = self._dump_dfs([received_df, sent_df])
+        if result.is_err():
+            logger.warning(f'Issue dumping message summary. {result.err_value}')
+            exit(1)
+
+        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', received_df, sent_df,
                                                                 self._dump_analysis_dir)
 
         return has_issues
@@ -141,58 +139,6 @@ class WakuMessageLogAnalyzer:
         dfs = reader.read()
 
         has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir)
-
-        return has_issues
-
-    def _read_logs_for_node(self, stateful_set_name: str, node_index: int, victoria_config_func) -> List[pd.DataFrame]:
-        waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-
-        config = victoria_config_func(stateful_set_name, node_index)
-        reader = VictoriaReader(config, waku_tracer)
-        data = reader.read()
-        logger.debug(f'{stateful_set_name}-{node_index} analyzed')
-
-        return data
-
-    def _read_logs_concurrently(self) -> List[pd.DataFrame]:
-        dfs = []
-        for stateful_set_name, num_nodes_in_stateful_set in zip(self._stateful_sets, self._num_nodes):
-            with ProcessPoolExecutor(8) as executor:
-                futures = {executor.submit(self._read_logs_for_node, stateful_set_name, node_index,
-                                           self._get_victoria_config_parallel):
-                               node_index for node_index in range(num_nodes_in_stateful_set)}
-
-                for i, future in enumerate(as_completed(futures)):
-                    i = i + 1
-                    try:
-                        df = future.result()
-                        dfs.append(df)
-                        if i % 50 == 0 or i == num_nodes_in_stateful_set:
-                            logger.info(f'Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>')
-
-                    except Exception as e:
-                        logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
-
-        return dfs
-
-    def _has_issues_in_cluster_parallel(self) -> bool:
-        dfs = self._read_logs_concurrently()
-        dfs = self._merge_dfs(dfs)
-
-        self._message_hashes = dfs[0].index.get_level_values(1).unique().tolist()
-
-        result = self._dump_dfs(dfs)
-        if result.is_err():
-            logger.warning(f'Issue dumping message summary. {result.err_value}')
-            exit(1)
-
-        waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
                                                                 self._dump_analysis_dir)
 
         return has_issues
@@ -231,41 +177,105 @@ class WakuMessageLogAnalyzer:
 
         return Ok(None)
 
-    def _get_number_nodes(self) -> List[int]:
-        num_nodes_per_stateful_set = []
+    def analyze_reliability(self, parallel: bool = False):
+        dfs = self._stack.get_reliability_data(**self._kwargs)
+        dfs = self._merge_dfs(dfs)
 
-        for stateful_set in self._stateful_sets:
-            victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
-                               "headers": {"Content-Type": "application/json"},
-                               "params": {
-                                   "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set} AND _time:{self._timestamp} | uniq by (kubernetes.pod_name)"}
-                               }
+        result = self._dump_dfs(dfs)
+        if result.is_err():
+            logger.warning(f'Issue dumping message summary. {result.err_value}')
+            exit(1)
 
-            reader = VictoriaReader(victoria_config, None)
-            result = reader.multi_query_info()
-            if result.is_ok():
-                num_nodes_per_stateful_set.append(len(list(result.ok_value)))
-            else:
-                logger.error(result.err_value)
-                exit(1)
+        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+                                                                self._dump_analysis_dir)
 
-        return num_nodes_per_stateful_set
+        return has_issues
 
-    def analyze_message_logs(self, parallel: bool = False):
-        if self._timestamp is not None:
-            logger.info('Analyzing from server')
-            self._num_nodes = self._get_number_nodes()
-            logger.info(f'Detected {self._num_nodes} pods in {self._stateful_sets}')
-            has_issues = self._has_issues_in_cluster_parallel() if parallel else self._has_issues_in_cluster_single()
-            if has_issues:
-                match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
-                    case Ok(data_files_names):
-                        self._dump_information(data_files_names)
-                    case Err(error):
-                        logger.error(error)
+    def _has_message_reliability_issues(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
+                                       received_df: pd.DataFrame, sent_df: pd.DataFrame,
+                                       issue_dump_location: Path) -> bool:
+        logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
+        logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
+
+        peers_missed_messages, missed_messages = self._get_peers_missed_messages(shard_identifier, msg_identifier,
+                                                                                 peer_identifier, received_df)
+
+        received_df = received_df.reset_index()
+        shard_groups = received_df.groupby('msg_hash')['shard'].nunique()
+        violations = shard_groups[shard_groups > 1]
+
+        if violations.empty:
+            logger.info("All msg_hash values appear in only one shard.")
         else:
-            logger.info('Analyzing from local')
-            _ = self._has_issues_in_local()
+            logger.warning("These msg_hash values appear in multiple shards:")
+            logger.warning(violations)
+
+        if peers_missed_messages:
+            msg_sent_data = self._check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)
+            # TODO check si realmente el nodo ha recibido el mensaje
+            for data in msg_sent_data:
+                peer_id = data[0].split('*')[-1]
+                logger.info(f'Peer {peer_id} message information dumped in {issue_dump_location}')
+                match path_utils.prepare_path_for_file(issue_dump_location / f"{data[0].split('*')[-1]}.csv"):
+                    case Ok(location_path):
+                        data[1].to_csv(location_path)
+                    case Err(err):
+                        logger.error(err)
+                        exit(1)
+            return True
+
+        return False
+
+    def _check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
+        messages_sent_to_peer = []
+        for peer in peers:
+            try:
+                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
+                filtered_df = filtered_df[filtered_df['receiver_peer_id'] == peer]
+                messages_sent_to_peer.append((peer, filtered_df))
+            except KeyError as _:
+                logger.warning(f'Message {missed_messages} has not ben sent to {peer} by any other node.')
+
+        return messages_sent_to_peer
+
+    def _get_peers_missed_messages(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
+                                   df: pd.DataFrame) -> Tuple[List, List]:
+        all_peers_missed_messages = []
+        all_missing_messages = []
+
+        for shard, df_shard in df.groupby(level=shard_identifier):
+            unique_messages = len(df_shard.index.get_level_values(msg_identifier).unique())
+
+            grouped = df_shard.groupby([msg_identifier, peer_identifier]).size().reset_index(name='count')
+            pivot_df = grouped.pivot_table(index=msg_identifier, columns=peer_identifier, values='count', fill_value=0)
+
+            peers_missed_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
+            missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
+
+            if not peers_missed_msg:
+                logger.info(f'All peers received all messages for shard {shard}')
+            else:
+                logger.warning(f'Peers missed messages on shard {shard}')
+                logger.warning(f'Peers who missed messages: {peers_missed_msg}')
+                logger.warning(f'Missing messages: {missing_messages}')
+
+                all_peers_missed_messages.extend(peers_missed_msg)
+                all_missing_messages.extend(missing_messages)
+
+                self._log_received_messages(pivot_df, unique_messages, df)
+
+        return all_peers_missed_messages, all_missing_messages
+
+    def _log_received_messages(self, df: pd.DataFrame, unique_messages: int, complete_df: pd.DataFrame):
+        column_sums = df.sum()
+        filtered_sums = column_sums[column_sums != unique_messages]
+        result_list = list(filtered_sums.items())
+        for result in result_list:
+            peer_id, count = result
+            missing_hashes = df[df[peer_id] == 0].index.tolist()
+            missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
+            pod_name = complete_df[complete_df["receiver_peer_id"] == result[0]]["pod-name"][0][0]
+            logger.warning(f'Peer {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_store_messages(self):
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
@@ -333,6 +343,184 @@ class WakuMessageLogAnalyzer:
                 logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')
 
 
+    def plot_message_distribution_libp2pmix(self, received_summary_path: Path, sent_summary_path: Path, compare: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+        if not received_summary_path.exists():
+            error = f"Received summary file {received_summary_path} does not exist"
+            logger.error(error)
+            return Err(error)
+
+        if not sent_summary_path.exists():
+            error = f"Sent summary file {sent_summary_path} does not exist"
+            logger.error(error)
+            return Err(error)
+
+        sns.set_theme()
+
+        df = pd.read_csv(received_summary_path, parse_dates=["timestamp"])
+        other_df = pd.read_csv(compare, parse_dates=["timestamp"])
+
+        # Check unique messages and pods
+        all_msgs = df['msg_id'].unique()
+        all_pods = df['pod-name'].unique()
+
+        # Create a pivot table of counts
+        msg_pod_counts = df.groupby(['msg_id', 'pod-name']).size().unstack(fill_value=0)
+
+        # Check for missing deliveries (i.e., zero counts)
+        missing_deliveries = msg_pod_counts == 0
+
+        # Report messages not received by all pods
+        incomplete_msgs = missing_deliveries.any(axis=1)
+        num_incomplete = incomplete_msgs.sum()
+        if num_incomplete == 0:
+            print(f"All nodes received all messages.")
+        else:
+        # Optionally list them:
+            print("Messages not received by all nodes:")
+            print(msg_pod_counts[incomplete_msgs])
+
+        delays = df[['msg_id', 'delayMs']]
+
+        # Group by msg_id to get the max delay (i.e., last node's reception time)
+        #########
+        # Assuming df is your DataFrame
+        allowed_pods = {'pod-0', 'pod-1', 'pod-2', 'pod-3', 'pod-4', 'pod-5', 'pod-6', 'pod-7', 'pod-8', 'pod-9'}
+
+        # Function to check if first non-zero delay pod is allowed
+        def is_first_nonzero_allowed(group):
+            non_zero = group[group['delayMs'] > 0]
+            if non_zero.empty:
+                return True  # No non-zero delay, so considered OK
+            first_pod = non_zero.sort_values('delayMs').iloc[0]['pod-name']
+            return first_pod in allowed_pods
+
+        # Group by msg_id and count violations
+        violations = df.groupby('msg_id').apply(lambda g: not is_first_nonzero_allowed(g))
+        violation_count = violations.sum()
+
+        print(f"Number of violations: {violation_count}")
+        #########
+
+        max_delays = delays.groupby('msg_id')['delayMs'].max()
+        other_max_delays = other_df.groupby('msg_id')['delayMs'].max()
+
+        # Plot distribution
+        plt.figure(figsize=(10, 6))
+
+        # KDE for max delays in first experiment
+        sns.kdeplot(max_delays, fill=True, label='No mix', color='skyblue', alpha=0.5)
+
+        # KDE for max delays in second experiment
+        sns.kdeplot(other_max_delays, fill=True, label='Mix', color='salmon', alpha=0.5)
+
+        plt.title("KDE of Max Message Propagation Time (ms)")
+        plt.xlabel("Time until last node received the message (ms)")
+        plt.ylabel("Density")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, None)
+        plt.tight_layout()
+        plt.savefig(dump_path / "distribution_comparison_kde.png")
+        plt.show()
+
+        mixnet_prefix = "pod-"
+        mixnet_range = 10
+        # Identify mixnet nodes
+        mixnet_nodes = {f"{mixnet_prefix}{i}" for i in range(mixnet_range)}  # Assumes order matters
+
+        def get_mixnet_and_outside_time(group):
+            mixnet_group = group[group['pod-name'].isin(mixnet_nodes)]
+            non_mixnet_group = group[~group['pod-name'].isin(mixnet_nodes)]
+
+            if non_mixnet_group.empty:
+                return pd.Series({'mixnet_time': None, 'outside_time': None})
+
+            mixnet_time = non_mixnet_group['delayMs'].min()
+            total_time = group['delayMs'].max()
+            outside_time = total_time - mixnet_time
+            return pd.Series({'mixnet_time': mixnet_time, 'outside_time': outside_time})
+
+        times = df.groupby('msg_id').apply(get_mixnet_and_outside_time).dropna()
+
+        plt.figure(figsize=(10, 6))
+
+        # KDE area plot for mixnet delay
+        sns.kdeplot(times['mixnet_time'], fill=True, label='Mixnet Time', color='orange', alpha=0.6)
+
+        # KDE area plot for outside delay
+        sns.kdeplot(times['outside_time'], fill=True, label='Outside Time', color='skyblue', alpha=0.6)
+
+        plt.title("KDE Area Plot of Mixnet vs Outside Message Delay")
+        plt.xlabel("Delay (ms)")
+        plt.ylabel("Density")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(dump_path / "kde.png")
+        plt.show()
+
+        return Ok(None)
+
+
+    def plot_message_distribution_mixnet(self, received_summary_path: Path, sent_summary_path: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+        if not received_summary_path.exists():
+            error = f"Received summary file {received_summary_path} does not exist"
+            logger.error(error)
+            return Err(error)
+
+        if not sent_summary_path.exists():
+            error = f"Sent summary file {sent_summary_path} does not exist"
+            logger.error(error)
+            return Err(error)
+
+        sns.set_theme()
+
+        df_received = pd.read_csv(received_summary_path, parse_dates=["timestamp"])
+        df_received.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+
+        df_sent = pd.read_csv(sent_summary_path, parse_dates=["timestamp"])
+        df_sent.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+
+        ###################
+        for (shard, msg_hash), group in df_sent.groupby(['shard', 'msg_hash']):
+            received_group = df_received.loc[shard, msg_hash]
+
+            for i in range(0, len(group) - 1, 2):
+                receiver_id = group.iloc[i]['receiver_peer_id']
+                sender_id = group.iloc[i + 1]['sender_peer_id']
+
+                # Check if the receiver_peer_id in the current row matches the sender_peer_id in the next row
+                if receiver_id != sender_id:
+                    logger.error(f"Mismatch detected at shard {shard}, msg_hash {msg_hash}, timestamp {group.index[i]}: "
+                          f"{receiver_id} != {sender_id}")
+
+            # Check that the last receiver in the received group matches the last sender in the sent data
+            if received_group.iloc[-1]['receiver_peer_id'] != group.iloc[-1]['receiver_peer_id']:
+                logger.error(f"Final mismatch at shard {shard}, msg_hash {msg_hash}: "
+                      f"{received_group.iloc[-1]['receiver_peer_id']} != {group.iloc[-1]['sender_peer_id']}")
+        ###################
+
+        latest_received = df_received.groupby(level='msg_hash').apply(
+            lambda x: x.index.get_level_values('timestamp').max()
+        ).rename("last_received")
+
+        sent_times = df_sent.groupby("msg_hash").apply(lambda x: x.index.get_level_values('timestamp').min()).rename(
+            "injected_at")
+
+        merged = pd.concat([sent_times, latest_received], axis=1, join="inner")
+        merged["time_to_reach"] = (merged["last_received"] - merged["injected_at"]).dt.total_seconds()
+
+        plt.figure(figsize=(12, 6))
+        ax = sns.boxplot(x="time_to_reach", data=merged.reset_index(), color="skyblue")
+
+        plt.xlabel('Time to Reach Node (seconds)')
+        plt.title(plot_title)
+        plt.savefig(dump_path)
+        plt.show()
+
+        return Ok(None)
+
+
     def plot_message_distribution(self, received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
         """
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
@@ -356,11 +544,11 @@ class WakuMessageLogAnalyzer:
         time_ranges_df = time_ranges.reset_index(name='time_to_reach')
 
         plt.figure(figsize=(12, 6))
-        ax = sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue', whis=(0,100))
+        ax = sns.boxplot(x='time_to_reach', data=time_ranges_df, color='skyblue')
 
-        add_boxplot_stat_labels(ax, value_type="min", scale_by=0.001)
-        add_boxplot_stat_labels(ax, value_type="max", scale_by=0.001)
-        add_boxplot_stat_labels(ax, value_type="median", scale_by=0.001)
+        add_boxplot_stat_labels(ax, value_type="min")
+        add_boxplot_stat_labels(ax, value_type="max")
+        add_boxplot_stat_labels(ax, value_type="median")
 
         q1 = np.percentile(time_ranges_df['time_to_reach'], 25)
         q3 = np.percentile(time_ranges_df['time_to_reach'], 75)

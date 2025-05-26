@@ -7,5 +7,5 @@ class StackAnalysis(ABC):
         self._kwargs = kwargs
 
     @abstractmethod
-    def get_reliability_data(self, **kwargs):
+    def get_reliability_data(self, n_jobs: int, **kwargs):
         pass

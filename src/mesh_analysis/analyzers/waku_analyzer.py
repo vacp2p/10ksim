@@ -14,6 +14,7 @@ from result import Ok, Err, Result
 
 # Project Imports
 from src.mesh_analysis.readers.file_reader import FileReader
+from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
@@ -106,18 +107,19 @@ class WakuAnalyzer:
                 except Exception as e:
                     logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
-    def _has_issues_in_local(self) -> bool:
+    def _analyze_reliability_local(self, n_jobs: int) :
         waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-        reader = FileReader(self._local_path_to_analyze, waku_tracer)
-        dfs = reader.read()
+        waku_tracer.with_received_group_pattern()
+        waku_tracer.with_sent_pattern_group()
+
+        reader = FileReader(self._local_path_to_analyze, waku_tracer, n_jobs)
+        dfs = reader.read_logs()
 
         received_df = dfs[0].assign(shard=0)
         received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         received_df.sort_index(inplace=True)
 
-        sent_df =  dfs[1].assign(shard=0)
+        sent_df = dfs[1].assign(shard=0)
         sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         sent_df.sort_index(inplace=True)
 
@@ -126,22 +128,8 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        has_issues = waku_tracer.has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', received_df, sent_df,
-                                                                self._dump_analysis_dir)
-
-        return has_issues
-
-    def _has_issues_in_cluster_single(self) -> bool:
-        waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-        reader = VictoriaReader(self._get_victoria_config_single(), waku_tracer)
-        dfs = reader.read()
-
-        has_issues = waku_tracer.has_message_reliability_issues('msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir)
-
-        return has_issues
+        self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', received_df, sent_df,
+                                                          self._dump_analysis_dir)
 
     def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
         logger.info("Merging and sorting information")
@@ -177,8 +165,8 @@ class WakuAnalyzer:
 
         return Ok(None)
 
-    def analyze_reliability(self, parallel: bool = False):
-        dfs = self._stack.get_reliability_data(**self._kwargs)
+    def _analyze_reliability_cluster(self, n_jobs: int):
+        dfs = self._stack.get_reliability_data(n_jobs, **self._kwargs)
         dfs = self._merge_dfs(dfs)
 
         result = self._dump_dfs(dfs)
@@ -186,14 +174,18 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                                self._dump_analysis_dir)
+        self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+                                                          self._dump_analysis_dir)
 
-        return has_issues
+    def analyze_reliability(self, n_jobs: int):
+        if self._local_path_to_analyze is None:
+            self._analyze_reliability_cluster(n_jobs)
+        else:
+            self._analyze_reliability_local(n_jobs)
 
     def _has_message_reliability_issues(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
-                                       received_df: pd.DataFrame, sent_df: pd.DataFrame,
-                                       issue_dump_location: Path) -> bool:
+                                        received_df: pd.DataFrame, sent_df: pd.DataFrame,
+                                        issue_dump_location: Path):
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
         logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
 
@@ -222,9 +214,6 @@ class WakuAnalyzer:
                     case Err(err):
                         logger.error(err)
                         exit(1)
-            return True
-
-        return False
 
     def _check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []

@@ -18,12 +18,12 @@ class VaclabStackAnalysis(StackAnalysis):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get_reliability_data(self, **kwargs):
+    def get_reliability_data(self, n_jobs:int, **kwargs):
         dfs = []
         num_nodes = self._get_number_nodes()
 
         for stateful_set_name, num_nodes_in_stateful_set in zip(self._kwargs['stateful_sets'], num_nodes):
-            with ProcessPoolExecutor(8) as executor:
+            with ProcessPoolExecutor(n_jobs) as executor:
                 futures = {executor.submit(self._read_logs_for_single_node, stateful_set_name, node_index):
                                node_index for node_index in range(num_nodes_in_stateful_set)}
 

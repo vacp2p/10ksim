@@ -331,8 +331,8 @@ class WakuAnalyzer:
             for jump in time_jumps:
                 logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')
 
-
-    def plot_message_distribution_libp2pmix(self, received_summary_path: Path, sent_summary_path: Path, compare: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+    def plot_message_distribution_libp2pmix(self, received_summary_path: Path, sent_summary_path: Path, compare: Path,
+                                            plot_title: str, dump_path: Path) -> Result[None, str]:
         if not received_summary_path.exists():
             error = f"Received summary file {received_summary_path} does not exist"
             logger.error(error)
@@ -364,7 +364,7 @@ class WakuAnalyzer:
         if num_incomplete == 0:
             print(f"All nodes received all messages.")
         else:
-        # Optionally list them:
+            # Optionally list them:
             print("Messages not received by all nodes:")
             print(msg_pod_counts[incomplete_msgs])
 
@@ -450,8 +450,8 @@ class WakuAnalyzer:
 
         return Ok(None)
 
-
-    def plot_message_distribution_mixnet(self, received_summary_path: Path, sent_summary_path: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+    def plot_message_distribution_mixnet(self, received_summary_path: Path, sent_summary_path: Path, plot_title: str,
+                                         dump_path: Path) -> Result[None, str]:
         if not received_summary_path.exists():
             error = f"Received summary file {received_summary_path} does not exist"
             logger.error(error)
@@ -480,13 +480,14 @@ class WakuAnalyzer:
 
                 # Check if the receiver_peer_id in the current row matches the sender_peer_id in the next row
                 if receiver_id != sender_id:
-                    logger.error(f"Mismatch detected at shard {shard}, msg_hash {msg_hash}, timestamp {group.index[i]}: "
-                          f"{receiver_id} != {sender_id}")
+                    logger.error(
+                        f"Mismatch detected at shard {shard}, msg_hash {msg_hash}, timestamp {group.index[i]}: "
+                        f"{receiver_id} != {sender_id}")
 
             # Check that the last receiver in the received group matches the last sender in the sent data
             if received_group.iloc[-1]['receiver_peer_id'] != group.iloc[-1]['receiver_peer_id']:
                 logger.error(f"Final mismatch at shard {shard}, msg_hash {msg_hash}: "
-                      f"{received_group.iloc[-1]['receiver_peer_id']} != {group.iloc[-1]['sender_peer_id']}")
+                             f"{received_group.iloc[-1]['receiver_peer_id']} != {group.iloc[-1]['sender_peer_id']}")
         ###################
 
         latest_received = df_received.groupby(level='msg_hash').apply(
@@ -509,8 +510,8 @@ class WakuAnalyzer:
 
         return Ok(None)
 
-
-    def plot_message_distribution(self, received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[None, str]:
+    def plot_message_distribution(self, received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[
+        None, str]:
         """
         Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
         from logs.
@@ -562,7 +563,6 @@ class WakuAnalyzer:
         plt.show()
 
         return Ok(None)
-
 
     @check_params_path_exists_by_position()
     @check_params_path_exists_by_position_or_kwargs(1, 'file_path_2')
@@ -619,9 +619,9 @@ class WakuAnalyzer:
 
         plt.figure()
         if file_path_2:
-            sns.violinplot(x=['Data']*len(df), y="Time to Target", data=df, hue="Dataset", split=True, inner="quart")
+            sns.violinplot(x=['Data'] * len(df), y="Time to Target", data=df, hue="Dataset", split=True, inner="quart")
         else:
-            sns.boxplot(x=['Data']*len(df), y="Time to Target", data=df)
+            sns.boxplot(x=['Data'] * len(df), y="Time to Target", data=df)
         plt.title(f'Time to Reach Target Value: {value_name or "Target Value"}')
         plt.ylabel('Time to Reach Target (seconds)')
         plt.tight_layout()

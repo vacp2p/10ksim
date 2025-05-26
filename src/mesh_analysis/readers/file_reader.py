@@ -6,18 +6,19 @@ from typing import List
 from pathlib import Path
 
 # Project Imports
+from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.utils import file_utils
 from src.mesh_analysis.readers.reader import Reader
-from src.mesh_analysis.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
 
 
 class FileReader(Reader):
 
-    def __init__(self, folder: Path, tracer: MessageTracer):
+    def __init__(self, folder: Path, tracer: MessageTracer, n_jobs: int):
         self._folder_path = folder
         self._tracer = tracer
+        self._n_jobs = n_jobs
 
     def read_logs(self) -> List:
         logger.info(f'Reading {self._folder_path}')
@@ -42,9 +43,7 @@ class FileReader(Reader):
         return dfs
 
     def _read_files(self, files: List) -> List:
-        # TODO: set this as a parameter?
-        num_processes = multiprocessing.cpu_count()
-        with multiprocessing.Pool(processes=4) as pool:
+        with multiprocessing.Pool(processes=self._n_jobs) as pool:
             parsed_logs = pool.map(self._read_file_patterns, files)
 
         return parsed_logs

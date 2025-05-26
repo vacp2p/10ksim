@@ -17,7 +17,7 @@ class Nimlibp2pTracer(MessageTracer):
         self._patterns = []
         self._tracings = []
 
-    def get_num_patterns(self) -> int:
+    def get_num_patterns_group(self) -> int:
         return len(self._patterns)
 
     def get_patterns(self) -> List[List[str]]:

@@ -19,5 +19,5 @@ class MessageTracer(ABC):
         pass
 
     @abstractmethod
-    def get_num_patterns(self) -> int:
+    def get_num_patterns_group(self) -> int:
         pass

@@ -17,10 +17,12 @@ logger = logging.getLogger(__name__)
 
 class VictoriaReader:
 
-    def __init__(self, tracer: MessageTracer, victoria_config_query: Dict, extra_fields: List[str]):
+    def __init__(self, tracer: MessageTracer, victoria_config_query: Dict, extract_fields: List[str]):
+        # message field needs to go on first position in extract fields parameter
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
-        self.logs = []
+        self._extract_fields = extract_fields
+        self._logs = []
 
     def _fetch_data(self, query: Dict):
         logger.debug(f'Fetching {query}')
@@ -32,31 +34,30 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    # TODO extract "extra fields" if required just once
-                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes.pod_name'], parsed_object['kubernetes.pod_node_name']))
-        logger.debug(f'Fetched {len(self.logs)} messages')
+                    # self.logs.append((parsed_object['_msg'], parsed_object['kubernetes.pod_name'], parsed_object['kubernetes.pod_node_name']))
+                    self._logs.append(tuple(parsed_object[k] for k in self._extract_fields))
+        logger.debug(f'Fetched {len(self._logs)} log lines')
 
     def _make_queries(self) -> List:
         # In victoria you cannot do group extraction, so we have to parse it "manually"
         # We will consider a result for each group of patterns (ie: different ways to tell we received a message)
-        results = [[] for _ in range(self._tracer.get_num_patterns())]
+        results = [[] for _ in range(self._tracer.get_num_patterns_group())]
 
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in self._tracer.patterns[i]]
             self._fetch_data(self._config_query)
-            for log_line in self.logs:
+            for log_line in self._logs:
                 for j, pattern in enumerate(self._tracer.patterns[i]):
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())
-                        # TODO check line34 todo, append them once as we are just working with the same container/pod
-                        match_as_list.append(log_line[1])
-                        match_as_list.append(log_line[2])
+                        for k in range(log_line):
+                            match_as_list.append(log_line[k+1]) # 1st position is always message
                         query_results[j].append(match_as_list)
                         break
 
             results[i].extend(query_results)
-            self.logs.clear()
+            self._logs.clear()
 
         return results
 

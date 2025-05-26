@@ -44,11 +44,10 @@ class VaclabStackAnalysis(StackAnalysis):
         pass
 
     def _read_logs_for_single_node(self, stateful_set_name: str, node_index: int) -> List[pd.DataFrame]:
-        waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
+        waku_tracer = WakuTracer(extra_fields=['pod', 'kubernetes_worker'])
+        waku_tracer.with_received_group_pattern()
+        waku_tracer.with_sent_pattern_group()
 
-        reader = VictoriaReader(waku_tracer)
         victoria_config_query =  {"url": self._kwargs['url'],
                     "headers": {"Content-Type": "application/json"},
                     "params": [
@@ -57,7 +56,9 @@ class VaclabStackAnalysis(StackAnalysis):
                         {
                             "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"}]
                     }
-        data = reader.read_logs(victoria_config_query)
+
+        reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg', 'kubernetes.pod_name', 'kubernetes.pod_node_name'])
+        data = reader.read_logs()
 
         logger.debug(f'{stateful_set_name}-{node_index} analyzed')
 
@@ -65,9 +66,9 @@ class VaclabStackAnalysis(StackAnalysis):
 
     def _get_number_nodes(self) -> List[int]:
         waku_tracer = WakuTracer()
-        waku_tracer.with_received_pattern()
-        waku_tracer.with_sent_pattern()
-        reader = VictoriaReader(waku_tracer)
+        waku_tracer.with_received_group_pattern()
+        waku_tracer.with_sent_pattern_group()
+
 
         num_nodes_per_stateful_set = []
 
@@ -77,8 +78,8 @@ class VaclabStackAnalysis(StackAnalysis):
                                "params": {
                                    "query": f"kubernetes.container_name:container-0 AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
                                }
-
-            result = reader.multi_query_info(victoria_config_query)
+            reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg'])
+            result = reader.multi_query_info()
             if result.is_ok():
                 num_nodes_per_stateful_set.append(len(list(result.ok_value)))
             else:

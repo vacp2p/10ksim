@@ -42,7 +42,7 @@ class WakuAnalyzer:
             # 'local': LocalStackAnalaysis # TODO
         }
 
-        return dispatch[type](**self._kwargs)
+        return dispatch[self._kwargs['type']](**self._kwargs)
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
         self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None

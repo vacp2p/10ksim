@@ -20,11 +20,11 @@ class VaclabStackAnalysis(StackAnalysis):
 
     def get_reliability_data(self, n_jobs:int, **kwargs):
         dfs = []
-        num_nodes = self._get_number_nodes()
+        num_nodes = self._get_number_nodes(self._kwargs['container_name'])
 
         for stateful_set_name, num_nodes_in_stateful_set in zip(self._kwargs['stateful_sets'], num_nodes):
             with ProcessPoolExecutor(n_jobs) as executor:
-                futures = {executor.submit(self._read_logs_for_single_node, stateful_set_name, node_index):
+                futures = {executor.submit(self._read_logs_for_single_node, stateful_set_name, self._kwargs['container_name'], node_index):
                                node_index for node_index in range(num_nodes_in_stateful_set)}
 
                 for i, future in enumerate(as_completed(futures)):
@@ -43,8 +43,8 @@ class VaclabStackAnalysis(StackAnalysis):
     def dump_logs(self):
         pass
 
-    def _read_logs_for_single_node(self, stateful_set_name: str, node_index: int) -> List[pd.DataFrame]:
-        waku_tracer = WakuTracer(extra_fields=['pod', 'kubernetes_worker'])
+    def _read_logs_for_single_node(self, stateful_set_name: str, container_name: str, node_index: int) -> List[pd.DataFrame]:
+        waku_tracer = WakuTracer(extra_fields=['pod-name', 'kubernetes_worker'])
         waku_tracer.with_received_group_pattern()
         waku_tracer.with_sent_pattern_group()
 
@@ -52,9 +52,9 @@ class VaclabStackAnalysis(StackAnalysis):
                     "headers": {"Content-Type": "application/json"},
                     "params": [
                         {
-                            "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"},
+                            "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"},
                         {
-                            "query": f"kubernetes.container_name:waku AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"}]
+                            "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"}]
                     }
 
         reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg', 'kubernetes.pod_name', 'kubernetes.pod_node_name'])
@@ -64,11 +64,10 @@ class VaclabStackAnalysis(StackAnalysis):
 
         return data
 
-    def _get_number_nodes(self) -> List[int]:
+    def _get_number_nodes(self, container_name: str) -> List[int]:
         waku_tracer = WakuTracer()
         waku_tracer.with_received_group_pattern()
         waku_tracer.with_sent_pattern_group()
-
 
         num_nodes_per_stateful_set = []
 
@@ -76,7 +75,7 @@ class VaclabStackAnalysis(StackAnalysis):
             victoria_config_query = {"url": self._kwargs['url'],
                                "headers": {"Content-Type": "application/json"},
                                "params": {
-                                   "query": f"kubernetes.container_name:container-0 AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
+                                   "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
                                }
             reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg'])
             result = reader.multi_query_info()
@@ -85,5 +84,7 @@ class VaclabStackAnalysis(StackAnalysis):
             else:
                 logger.error(result.err_value)
                 exit(1)
+
+        logger.info(f'Found {num_nodes_per_stateful_set} nodes')
 
         return num_nodes_per_stateful_set

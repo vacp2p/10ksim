@@ -24,9 +24,9 @@ class VictoriaReader:
         self._extract_fields = extract_fields
         self._logs = []
 
-    def _fetch_data(self, query: Dict):
+    def _fetch_data(self, query: Dict, i: int):
         logger.debug(f'Fetching {query}')
-        with requests.post(**query, stream=True) as response:
+        with requests.post(query['url'], headers=query['headers'], params=query['params'][i], stream=True) as response:
             for line in response.iter_lines():
                 if line:
                     try:
@@ -45,14 +45,13 @@ class VictoriaReader:
 
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in self._tracer.patterns[i]]
-            self._fetch_data(self._config_query)
+            self._fetch_data(self._config_query, i)
             for log_line in self._logs:
                 for j, pattern in enumerate(self._tracer.patterns[i]):
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())
-                        for k in range(log_line):
-                            match_as_list.append(log_line[k+1]) # 1st position is always message
+                        match_as_list.extend(log_line[1:])
                         query_results[j].append(match_as_list)
                         break
 

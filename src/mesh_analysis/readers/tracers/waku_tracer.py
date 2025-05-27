@@ -55,6 +55,10 @@ class WakuTracer(MessageTracer):
         self._tracings.append(self._trace_all_logs)
 
     def trace(self, parsed_logs: List[List]) -> List[List]:
+        """Returns one Dataframe per pattern string. ie: received patterns (2) and sent patterns (2), will
+        return a List with 2 positions (received + send patterns). Inside each position, it will have as 
+        many Dataframes as string patterns there are. In total, 4 Dataframes.
+        """
         return [[tracer(log) for tracer, log in zip(tracers, log_group)]
                 for tracers, log_group in zip(self._tracings, parsed_logs)]
 

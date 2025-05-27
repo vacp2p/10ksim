@@ -22,7 +22,7 @@ class FileReader(Reader):
 
     def read_logs(self) -> List:
         logger.info(f'Reading {self._folder_path}')
-        files_result = file_utils.get_files_from_folder_path(self._folder_path)
+        files_result = file_utils.get_files_from_folder_path(self._folder_path, extension='*.log')
 
         if files_result.is_err():
             logger.error(f'Could not read {self._folder_path}')
@@ -51,14 +51,21 @@ class FileReader(Reader):
     def _read_file_patterns(self, file: str) -> List:
         results = [[] for p in self._tracer.patterns]
 
-        with open(Path(self._folder_path / file)) as log_file:
-            for line in log_file:
-                for i, pattern in enumerate(self._tracer.patterns):
+        with open(Path(self._folder_path) / file) as log_file:
+            lines = log_file.readlines()
+
+        for i, patterns in enumerate(self._tracer.patterns):
+            query_results = [[] for _ in patterns]
+
+            for line in lines:
+                for j, pattern in enumerate(patterns):
                     match = re.search(pattern, line)
                     if match:
                         match_as_list = list(match.groups())
                         match_as_list.append(file)
-                        results[i].append(match_as_list)
+                        query_results[j].append(match_as_list)
                         break
+
+            results[i].extend(query_results)
 
         return results

@@ -103,12 +103,13 @@ class WakuAnalyzer:
                     logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
     def _analyze_reliability_local(self, n_jobs: int) :
-        waku_tracer = WakuTracer()
+        waku_tracer = WakuTracer(['file'])
         waku_tracer.with_received_group_pattern()
         waku_tracer.with_sent_pattern_group()
 
         reader = FileReader(self._local_path_to_analyze, waku_tracer, n_jobs)
         dfs = reader.read_logs()
+        dfs = self._merge_dfs_local(dfs)
 
         received_df = dfs[0].assign(shard=0)
         received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
@@ -136,6 +137,24 @@ class WakuAnalyzer:
         received_df.sort_index(inplace=True)
 
         sent_df = pd.concat([pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True)
+        sent_df = sent_df.assign(shard=sent_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        return [received_df, sent_df]
+
+    def _merge_dfs_local(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
+        raise NotImplementedError
+        # TODO POD NAME should not be hardcoded
+        logger.info("Merging and sorting information")
+
+        received_df = pd.concat(dfs[0], ignore_index=True)
+        # TODO extract shard information from logs?
+        received_df = received_df.assign(shard=received_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        sent_df = pd.concat(dfs[1], ignore_index=True)
         sent_df = sent_df.assign(shard=sent_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
         sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         sent_df.sort_index(inplace=True)

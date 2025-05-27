@@ -44,10 +44,10 @@ class VictoriaReader:
         results = [[] for _ in range(self._tracer.get_num_patterns_group())]
 
         for i, patterns in enumerate(self._tracer.patterns):
-            query_results = [[] for _ in self._tracer.patterns[i]]
+            query_results = [[] for _ in patterns]
             self._fetch_data(self._config_query, i)
             for log_line in self._logs:
-                for j, pattern in enumerate(self._tracer.patterns[i]):
+                for j, pattern in enumerate(patterns):
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())

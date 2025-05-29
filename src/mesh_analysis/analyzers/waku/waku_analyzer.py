@@ -132,12 +132,12 @@ class WakuAnalyzer:
         logger.info("Merging and sorting information")
 
         received_df = pd.concat([pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True)
-        received_df = received_df.assign(shard=received_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        received_df = received_df.assign(shard=received_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
         received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         received_df.sort_index(inplace=True)
 
         sent_df = pd.concat([pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True)
-        sent_df = sent_df.assign(shard=sent_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        sent_df = sent_df.assign(shard=sent_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
         sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         sent_df.sort_index(inplace=True)
 
@@ -150,12 +150,12 @@ class WakuAnalyzer:
 
         received_df = pd.concat(dfs[0], ignore_index=True)
         # TODO extract shard information from logs?
-        received_df = received_df.assign(shard=received_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        received_df = received_df.assign(shard=received_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
         received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         received_df.sort_index(inplace=True)
 
         sent_df = pd.concat(dfs[1], ignore_index=True)
-        sent_df = sent_df.assign(shard=sent_df['pod-name'].str.extract(r'.*-(\d+)-').astype(int))
+        sent_df = sent_df.assign(shard=sent_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
         sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         sent_df.sort_index(inplace=True)
 

@@ -65,7 +65,7 @@ class VaclabStackAnalysis(StackAnalysis):
         return data
 
     def _get_number_nodes(self, container_name: str) -> List[int]:
-        waku_tracer = WakuTracer()
+        waku_tracer = WakuTracer(msg_field='_msg')
         waku_tracer.with_received_group_pattern()
         waku_tracer.with_sent_pattern_group()
 
@@ -73,11 +73,11 @@ class VaclabStackAnalysis(StackAnalysis):
 
         for stateful_set in self._kwargs['stateful_sets']:
             victoria_config_query = {"url": self._kwargs['url'],
-                               "headers": {"Content-Type": "application/json"},
-                               "params": {
-                                   "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
-                               }
-            reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg'])
+                                     "headers": {"Content-Type": "application/json"},
+                                     "params": {
+                                         "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
+                                     }
+            reader = VictoriaReader(waku_tracer, victoria_config_query)
             result = reader.multi_query_info()
             if result.is_ok():
                 num_nodes_per_stateful_set.append(len(list(result.ok_value)))

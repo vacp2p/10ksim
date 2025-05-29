@@ -17,12 +17,10 @@ logger = logging.getLogger(__name__)
 
 class VictoriaReader:
 
-    def __init__(self, tracer: MessageTracer, victoria_config_query: Dict, extract_fields: List[str]):
+    def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
         # message field needs to go on first position in extract fields parameter
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
-        self._extract_fields = extract_fields
-        self._logs = []
 
     def _fetch_data(self, query: Dict, i: int):
         logger.debug(f'Fetching {query}')
@@ -34,9 +32,11 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    # self.logs.append((parsed_object['_msg'], parsed_object['kubernetes.pod_name'], parsed_object['kubernetes.pod_node_name']))
-                    self._logs.append(tuple(parsed_object[k] for k in self._extract_fields))
-        logger.debug(f'Fetched {len(self._logs)} log lines')
+                    logs.append((parsed_object[self._tracer.get_msg_field()],) + tuple(parsed_object[k] for k in self._tracer.get_extra_fields())
+) # TODO extra fields are hardcoded
+        logger.debug(f'Fetched {len(logs)} log lines')
+
+        return logs
 
     def _make_queries(self) -> List:
         # In victoria you cannot do group extraction, so we have to parse it "manually"

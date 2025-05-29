@@ -77,3 +77,60 @@ class VaclabStackAnalysis(StackAnalysis):
         logger.info(f'Found {num_nodes_per_stateful_set} nodes')
 
         return num_nodes_per_stateful_set
+
+    def dump_node_logs(self, identifiers: List[str], dump_analysis_dir: str) -> None:
+        with ProcessPoolExecutor() as executor:
+            futures = {executor.submit(self._get_affected_node_log, identifier, dump_analysis_dir): identifier for identifier in
+                       identifiers}
+
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    match result:
+                        case Ok(log_path):
+                            logger.info(f'{log_path} dumped')
+                        case Err(_):
+                            logger.warning(result.err_value)
+                except Exception as e:
+                    logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
+
+    def _get_affected_node_pod(self, data_file: str) -> Result[str, str]:
+        peer_id = data_file.split('.')[0]
+        victoria_config = {"url": self._kwargs['url'],
+                           "headers": {"Content-Type": "application/json"},
+                           "params": {
+                               "query": f"kubernetes.container_name:waku AND 'my_peer_id=16U*{peer_id}' AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | limit 1"}}
+
+
+        reader = VictoriaReader(None, victoria_config, ['kubernetes.pod_name'])
+        result = reader.single_query_info()
+
+        if result.is_ok():
+            pod_name = result.unwrap()['kubernetes.pod_name']
+            logger.debug(f'Pod name for peer id {peer_id} is {pod_name}')
+            return Ok(pod_name)
+
+        return Err(f'Unable to obtain pod name from {peer_id}')
+
+    def _get_affected_node_log(self, identifier: str, dump_analysis_dir: str) -> Result[Path, str]:
+        result = self._get_affected_node_pod(identifier)
+        if result.is_err():
+            return Err(result.err_value)
+
+        victoria_config = {"url": self._kwargs['url'],
+                           "headers": {"Content-Type": "application/json"},
+                           "params": [{
+                               "query": f"kubernetes.pod_name:{result.ok_value} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | sort by (_time)"}]}
+
+        waku_tracer = WakuTracer()
+        waku_tracer.with_wildcard_pattern()
+        reader = VictoriaReader(waku_tracer, victoria_config)
+        pod_log = reader.read_logs()
+
+        log_lines = [inner_list[0] for inner_list in pod_log[0]]
+        log_name_path = Path(dump_analysis_dir) / f"{identifier.split('.')[0]}.log"
+        with open(log_name_path, 'w') as file:
+            for element in log_lines:
+                file.write(f"{element}\n")
+
+        return Ok(log_name_path)

@@ -4,12 +4,12 @@ import base64
 import logging
 import pandas as pd
 import seaborn as sns
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional, Tuple
 from result import Ok, Err, Result
 
 # Project Imports
+from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
@@ -26,18 +26,7 @@ class WakuAnalyzer:
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._kwargs = kwargs
         self._message_hashes = []
-        self._stack: Optional[StackAnalysis] = self._set_up_stack()
-
-    def _set_up_stack(self):
-        if self._kwargs is None:
-            return None
-
-        dispatch = {
-            'vaclab': VaclabStackAnalysis,
-            # 'local': LocalStackAnalaysis # TODO
-        }
-
-        return dispatch[self._kwargs['type']](**self._kwargs)
+        self._stack: Optional[StackAnalysis] = None
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
         self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None
@@ -181,7 +170,18 @@ class WakuAnalyzer:
         return Ok(None)
 
     def _analyze_reliability_cluster(self, n_jobs: int):
-        dfs = self._stack.get_reliability_data(n_jobs, **self._kwargs)
+        extract_fields = ['kubernetes.pod_name', 'kubernetes.pod_node_name']
+        tracer = WakuTracer(msg_field='_msg', extra_fields=extract_fields)
+        # TODO EL ORDEN DE COMO SE PONEN LOS WITHS REVIENTA EL CODIGO
+        tracer.with_received_group_pattern()
+        tracer.with_sent_pattern_group()
+
+        queries = ['(received relay message OR  handling lightpush request)', 'sent relay message']
+        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+
+        self._stack = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        dfs = self._stack.get_node_logs(n_jobs, **self._kwargs)
         dfs = self._merge_dfs(dfs)
 
         result = self._dump_dfs(dfs)
@@ -189,8 +189,14 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                          self._dump_analysis_dir)
+        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1], self._dump_analysis_dir)
+        if has_issues:
+            match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
+                case Ok(data_files_names):
+                    identifiers = [f"my_peer_id=16U*{file}" for file in data_files_names]
+                    self._stack.dump_logs(identifiers, self._dump_analysis_dir)
+                case Err(error):
+                    logger.error(error)
 
     def analyze_reliability(self, n_jobs: int):
         if self._local_path_to_analyze is None:
@@ -200,7 +206,7 @@ class WakuAnalyzer:
 
     def _has_message_reliability_issues(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
                                         received_df: pd.DataFrame, sent_df: pd.DataFrame,
-                                        issue_dump_location: Path):
+                                        issue_dump_location: Path) -> bool:
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
         logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
 
@@ -229,6 +235,9 @@ class WakuAnalyzer:
                     case Err(err):
                         logger.error(err)
                         exit(1)
+            return True
+
+        return False
 
     def _check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []
@@ -278,7 +287,7 @@ class WakuAnalyzer:
             peer_id, count = result
             missing_hashes = df[df[peer_id] == 0].index.tolist()
             missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
-            pod_name = complete_df[complete_df["receiver_peer_id"] == result[0]]["pod-name"][0][0]
+            pod_name = complete_df[complete_df["receiver_peer_id"] == result[0]]["kubernetes.pod_name"][0][0]
             logger.warning(f'Peer {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_store_messages(self):

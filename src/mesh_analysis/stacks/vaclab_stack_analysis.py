@@ -1,31 +1,37 @@
 # Python Imports
 import logging
 import pandas as pd
+from pathlib import Path
 from typing import List
 
 # Project Imports
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from result import Ok, Err, Result
+from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
 
 logger = logging.getLogger(__name__)
 
+
 # Class in charge of obtaining Dataframes
 # As it is Vaclab, we know it uses Victoria
 class VaclabStackAnalysis(StackAnalysis):
+    def __init__(self, reader_builder: VictoriaReaderBuilder, **kwargs):
+        super().__init__(reader_builder, **kwargs)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def get_reliability_data(self, n_jobs:int, **kwargs):
+    def get_node_logs(self, n_jobs: int, **kwargs):
         dfs = []
+
+        # TODO check nº of nodes match with given in kwargs
         num_nodes = self._get_number_nodes(self._kwargs['container_name'])
 
-        for stateful_set_name, num_nodes_in_stateful_set in zip(self._kwargs['stateful_sets'], num_nodes):
+        for stateful_set_name, num_nodes_in_stateful_set in zip(self._kwargs['stateful_sets'], self._kwargs['nodes_per_statefulset']):
             with ProcessPoolExecutor(n_jobs) as executor:
-                futures = {executor.submit(self._read_logs_for_single_node, stateful_set_name, self._kwargs['container_name'], node_index):
-                               node_index for node_index in range(num_nodes_in_stateful_set)}
+                futures = {
+                    executor.submit(self._read_logs_for_single_node, stateful_set_name, node_index):
+                        node_index for node_index in range(num_nodes_in_stateful_set)}
 
                 for i, future in enumerate(as_completed(futures)):
                     i = i + 1
@@ -33,34 +39,17 @@ class VaclabStackAnalysis(StackAnalysis):
                         df = future.result()
                         dfs.append(df)
                         if i % 50 == 0 or i == num_nodes_in_stateful_set:
-                            logger.info(f'Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>')
+                            logger.info(
+                                f'Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>')
 
                     except Exception as e:
                         logger.error(f'Error retrieving logs for node {futures[future]}: {e}')
 
         return dfs
 
-    def dump_logs(self):
-        pass
-
-    def _read_logs_for_single_node(self, stateful_set_name: str, container_name: str, node_index: int) -> List[pd.DataFrame]:
-        waku_tracer = WakuTracer(extra_fields=['pod-name', 'kubernetes_worker'])
-        waku_tracer.with_received_group_pattern()
-        waku_tracer.with_sent_pattern_group()
-
-        victoria_config_query =  {"url": self._kwargs['url'],
-                    "headers": {"Content-Type": "application/json"},
-                    "params": [
-                        {
-                            "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND (received relay message OR  handling lightpush request) AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"},
-                        {
-                            "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set_name}-{node_index} AND sent relay message AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"}]
-                    }
-
-        reader = VictoriaReader(waku_tracer, victoria_config_query, ['_msg', 'kubernetes.pod_name', 'kubernetes.pod_node_name'])
+    def _read_logs_for_single_node(self, statefulset_name: str, node_index: int) -> pd.DataFrame:
+        reader = self._reader_builder.build(statefulset_name, node_index)
         data = reader.read_logs()
-
-        logger.debug(f'{stateful_set_name}-{node_index} analyzed')
 
         return data
 

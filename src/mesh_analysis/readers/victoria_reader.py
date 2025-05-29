@@ -4,7 +4,7 @@ import logging
 import re
 import pandas as pd
 import requests
-from typing import Dict, List, Iterator
+from typing import Dict, List, Iterator, Optional
 from httpx import Response
 from result import Result, Ok, Err
 
@@ -23,6 +23,7 @@ class VictoriaReader:
         self._config_query = victoria_config_query
 
     def _fetch_data(self, query: Dict, i: int):
+        logs = []
         logger.debug(f'Fetching {query}')
         with requests.post(query['url'], headers=query['headers'], params=query['params'][i], stream=True) as response:
             for line in response.iter_lines():
@@ -45,8 +46,8 @@ class VictoriaReader:
 
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in patterns]
-            self._fetch_data(self._config_query, i)
-            for log_line in self._logs:
+            logs = self._fetch_data(self._config_query, i)
+            for log_line in logs:
                 for j, pattern in enumerate(patterns):
                     match = re.search(pattern, log_line[0])
                     if match:
@@ -56,7 +57,6 @@ class VictoriaReader:
                         break
 
             results[i].extend(query_results)
-            self._logs.clear()
 
         return results
 

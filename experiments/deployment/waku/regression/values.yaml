@@ -1,0 +1,13 @@
+numNodes: 3000
+messages: 600
+msgSizeKbytes: 1
+delaySeconds: 1
+namespace: zerotesting
+initContainers:
+  image:
+    tag: null
+  repository: null
+image:
+  image:
+    tag: null
+  repository: null

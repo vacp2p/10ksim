@@ -24,9 +24,6 @@ class VaclabStackAnalysis(StackAnalysis):
     def get_node_logs(self, n_jobs: int, **kwargs):
         dfs = []
 
-        # TODO check nº of nodes match with given in kwargs
-        num_nodes = self._get_number_nodes(self._kwargs['container_name'])
-
         for stateful_set_name, num_nodes_in_stateful_set in zip(self._kwargs['stateful_sets'], self._kwargs['nodes_per_statefulset']):
             with ProcessPoolExecutor(n_jobs) as executor:
                 futures = {
@@ -47,34 +44,23 @@ class VaclabStackAnalysis(StackAnalysis):
 
         return dfs
 
-    def _read_logs_for_single_node(self, statefulset_name: str, node_index: int) -> pd.DataFrame:
-        reader = self._reader_builder.build(statefulset_name, node_index)
+    def _read_logs_for_single_node(self, statefulset_name: str, node_index: int) -> List[pd.DataFrame] :
+        reader = self._reader_builder.build_with_queries(statefulset_name, node_index)
         data = reader.read_logs()
 
         return data
 
-    def _get_number_nodes(self, container_name: str) -> List[int]:
-        waku_tracer = WakuTracer(msg_field='_msg')
-        waku_tracer.with_received_pattern_group()
-        waku_tracer.with_sent_pattern_group()
-
+    def get_number_nodes(self) -> List[int]:
         num_nodes_per_stateful_set = []
 
         for stateful_set in self._kwargs['stateful_sets']:
-            victoria_config_query = {"url": self._kwargs['url'],
-                                     "headers": {"Content-Type": "application/json"},
-                                     "params": {
-                                         "query": f"kubernetes.container_name:{container_name} AND kubernetes.pod_name:{stateful_set} AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}] | uniq by (kubernetes.pod_name)"}
-                                     }
-            reader = VictoriaReader(waku_tracer, victoria_config_query)
-            result = reader.multi_query_info()
+            reader = self._reader_builder.build_with_single_query(stateful_set, uniq_by='|uniq by (kubernetes.pod_name)')
+            result = reader.multiline_query_info()
             if result.is_ok():
                 num_nodes_per_stateful_set.append(len(list(result.ok_value)))
             else:
                 logger.error(result.err_value)
                 exit(1)
-
-        logger.info(f'Found {num_nodes_per_stateful_set} nodes')
 
         return num_nodes_per_stateful_set
 

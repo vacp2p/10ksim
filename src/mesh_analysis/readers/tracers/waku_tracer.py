@@ -2,7 +2,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from typing import List, Self
+from typing import List, Self, Optional
 
 # Project Imports
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class WakuTracer(MessageTracer):
 
-    def __init__(self, extra_fields: List[str]):
+    def __init__(self, extra_fields: Optional[List[str]] = None):
         super().__init__(extra_fields)
         self._patterns = []
         self._tracings = []

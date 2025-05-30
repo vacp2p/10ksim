@@ -89,8 +89,8 @@ class VictoriaReader:
 
             return Err(response)
 
-    def multi_query_info(self) -> Result[Iterator, str]:
-        response = requests.post(**self._config_query)
+    def multiline_query_info(self) -> Result[Iterator, str]:
+        response = requests.post(self._config_query['url'], headers=self._config_query['headers'], params=self._config_query['params'])
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')
             return Err(response.text)

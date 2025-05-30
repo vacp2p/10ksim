@@ -5,7 +5,7 @@ import logging
 import pandas as pd
 import seaborn as sns
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from result import Ok, Err, Result
 
 # Project Imports
@@ -13,7 +13,6 @@ from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaR
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.readers.victoria_reader import VictoriaReader
-from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.utils import file_utils, log_utils, path_utils, list_utils
 
@@ -26,7 +25,6 @@ class WakuAnalyzer:
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._kwargs = kwargs
         self._message_hashes = []
-        self._stack: Optional[StackAnalysis] = None
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
         self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None
@@ -114,17 +112,38 @@ class WakuAnalyzer:
 
         return Ok(None)
 
+    def _assert_num_nodes(self) -> Result[str, str]:
+        tracer = WakuTracer().with_wildcard_pattern()
+        query = '*'
+
+        reader_builder = VictoriaReaderBuilder(tracer, query, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        num_nodes_per_ss = stack_analysis.get_number_nodes()
+        for i, num_nodes in enumerate(num_nodes_per_ss):
+            if num_nodes != self._kwargs['nodes_per_statefulset'][i]:
+                return Err(f'Number of nodes in cluster {num_nodes_per_ss} doesnt match'
+                             f'with provided {self._kwargs["nodes_per_statefulset"]} data.')
+
+        return Ok(f'Found {num_nodes_per_ss} nodes')
+
     def _analyze_reliability_cluster(self, n_jobs: int):
+        result = self._assert_num_nodes()
+        if result.is_ok():
+            logger.info(result.ok_value)
+        else:
+            logger.error(result.err_value)
+            exit(1)
+
         tracer = WakuTracer(extra_fields=self._kwargs['extra_fields']) \
             .with_received_pattern_group() \
             .with_sent_pattern_group()
 
         queries = ['(received relay message OR  handling lightpush request)', 'sent relay message']
         reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
-        self._stack = VaclabStackAnalysis(reader_builder, **self._kwargs)
-
-        dfs = self._stack.get_node_logs(n_jobs, **self._kwargs)
+        dfs = stack_analysis.get_node_logs(n_jobs, **self._kwargs)
         dfs = self._merge_dfs(dfs)
 
         result = self._dump_dfs(dfs)
@@ -132,12 +151,13 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1], self._dump_analysis_dir)
+        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
+                                                          self._dump_analysis_dir)
         if has_issues:
             match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
                 case Ok(data_files_names):
                     identifiers = [f"my_peer_id=16U*{file}" for file in data_files_names]
-                    self._stack.dump_logs(identifiers, self._dump_analysis_dir)
+                    stack_analysis.dump_logs(identifiers, self._dump_analysis_dir)
                 case Err(error):
                     logger.error(error)
 

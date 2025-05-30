@@ -15,7 +15,17 @@ logger = logging.getLogger(__name__)
 
 
 class VictoriaReader:
+    """
+    Note: Queries should follow the same order as the patterns in the Tracer.
+    ie:
+    tracer = Tracer.with_SENT_pattern_group().with_RECEIVED_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['SENT QUERY', 'RECEIVED QUERY'])
 
+    or
+
+    tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
+    """
     def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query

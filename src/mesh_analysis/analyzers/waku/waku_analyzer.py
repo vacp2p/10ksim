@@ -115,10 +115,10 @@ class WakuAnalyzer:
         return Ok(None)
 
     def _analyze_reliability_cluster(self, n_jobs: int):
-        tracer = WakuTracer(extra_fields=self._kwargs['extra_fields'])
+        tracer = WakuTracer(extra_fields=self._kwargs['extra_fields']) \
+                  .with_received_group_pattern() \
+                  .with_sent_pattern_group()
         # TODO EL ORDEN DE COMO SE PONEN LOS WITHS REVIENTA EL CODIGO
-        tracer.with_received_group_pattern()
-        tracer.with_sent_pattern_group()
 
         queries = ['(received relay message OR  handling lightpush request)', 'sent relay message']
         reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)

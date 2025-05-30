@@ -2,7 +2,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Self
 
 # Project Imports
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
@@ -28,7 +28,7 @@ class WakuTracer(MessageTracer):
     def patterns(self) -> List[List[str]]:
         return self._patterns
 
-    def with_received_group_pattern(self):
+    def with_received_group_pattern(self) -> Self:
         patterns = [
             r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)',
             r'handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)'
@@ -41,7 +41,9 @@ class WakuTracer(MessageTracer):
         self._patterns.append(patterns)
         self._tracings.append(tracers)
 
-    def with_sent_pattern_group(self):
+        return self
+
+    def with_sent_pattern_group(self) -> Self:
         patterns = [
             r'sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)',
             r'publishWithConn.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?sentTime=(\d+)',
@@ -52,9 +54,13 @@ class WakuTracer(MessageTracer):
         self._patterns.append(patterns)
         self._tracings.append(tracers)
 
-    def with_wildcard_pattern(self):
+        return self
+
+    def with_wildcard_pattern(self) -> Self:
         self._patterns.append(r'(.*)')
         self._tracings.append(self._trace_all_logs)
+
+        return self
 
     def trace(self, parsed_logs: List[List]) -> List[List]:
         """Returns one Dataframe per pattern string. ie: received patterns (2) and sent patterns (2), will

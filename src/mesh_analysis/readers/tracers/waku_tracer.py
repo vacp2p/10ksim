@@ -28,7 +28,7 @@ class WakuTracer(MessageTracer):
     def patterns(self) -> List[List[str]]:
         return self._patterns
 
-    def with_received_group_pattern(self) -> Self:
+    def with_received_pattern_group(self) -> Self:
         patterns = [
             r'received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)',
             r'handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)'

@@ -36,9 +36,9 @@ class WakuAnalyzer:
             logger.error(result.err_value)
             exit(1)
 
-    def _analyze_reliability_local(self, n_jobs: int) :
+    def _analyze_reliability_local(self, n_jobs: int):
         waku_tracer = WakuTracer(['file'])
-        waku_tracer.with_received_group_pattern()
+        waku_tracer.with_received_pattern_group()
         waku_tracer.with_sent_pattern_group()
 
         reader = FileReader(self._local_path_to_analyze, waku_tracer, n_jobs)
@@ -116,9 +116,8 @@ class WakuAnalyzer:
 
     def _analyze_reliability_cluster(self, n_jobs: int):
         tracer = WakuTracer(extra_fields=self._kwargs['extra_fields']) \
-                  .with_received_group_pattern() \
-                  .with_sent_pattern_group()
-        # TODO EL ORDEN DE COMO SE PONEN LOS WITHS REVIENTA EL CODIGO
+            .with_received_pattern_group() \
+            .with_sent_pattern_group()
 
         queries = ['(received relay message OR  handling lightpush request)', 'sent relay message']
         reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)

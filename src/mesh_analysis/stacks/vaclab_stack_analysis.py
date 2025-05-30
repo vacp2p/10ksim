@@ -55,7 +55,7 @@ class VaclabStackAnalysis(StackAnalysis):
 
     def _get_number_nodes(self, container_name: str) -> List[int]:
         waku_tracer = WakuTracer(msg_field='_msg')
-        waku_tracer.with_received_group_pattern()
+        waku_tracer.with_received_pattern_group()
         waku_tracer.with_sent_pattern_group()
 
         num_nodes_per_stateful_set = []

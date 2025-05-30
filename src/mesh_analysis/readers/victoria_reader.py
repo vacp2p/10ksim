@@ -41,7 +41,7 @@ class VictoriaReader:
         # In victoria you cannot do group extraction, so we have to parse it "manually"
         # We will consider a result for each group of patterns (ie: different ways to tell we received a message)
         results = [[] for _ in range(self._tracer.get_num_patterns_group())]
-
+        # TODO SOLO HACER FETCH DEL PATTERN QUE SE NECESITA, SI NO SE COMPARA TODO CON TODO?
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in patterns]
             logs = self._fetch_data(self._config_query, i)

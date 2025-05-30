@@ -13,23 +13,19 @@ logger = logging.getLogger(__name__)
 
 class WakuTracer(MessageTracer):
 
-    def __init__(self, msg_field: str, extra_fields: List[str] = None):
-        super().__init__()
-        self._msg_field = msg_field
-        self._extra_fields = extra_fields
+    def __init__(self, extra_fields: List[str]):
+        super().__init__(extra_fields)
         self._patterns = []
         self._tracings = []
 
     def get_extra_fields(self) -> List[str]:
         return self._extra_fields
 
-    def get_msg_field(self) -> str:
-        return self._msg_field
-
     def get_num_patterns_group(self) -> int:
         return len(self._patterns)
 
-    def get_patterns(self) -> List[List[str]]:
+    @property
+    def patterns(self) -> List[List[str]]:
         return self._patterns
 
     def with_received_group_pattern(self):

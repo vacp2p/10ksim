@@ -11,14 +11,12 @@ from result import Result, Ok, Err
 # Project Imports
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
-
 logger = logging.getLogger(__name__)
 
 
 class VictoriaReader:
 
     def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
-        # message field needs to go on first position in extract fields parameter
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
 
@@ -33,8 +31,8 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    logs.append((parsed_object[self._tracer.get_msg_field()],) + tuple(parsed_object[k] for k in self._tracer.get_extra_fields())
-) # TODO extra fields are hardcoded
+                    logs.append((parsed_object['_msg'],) +
+                                tuple(parsed_object[k] for k in self._tracer.get_extra_fields()))
         logger.debug(f'Fetched {len(logs)} log lines')
 
         return logs

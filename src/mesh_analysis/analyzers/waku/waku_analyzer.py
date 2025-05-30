@@ -115,8 +115,7 @@ class WakuAnalyzer:
         return Ok(None)
 
     def _analyze_reliability_cluster(self, n_jobs: int):
-        extract_fields = ['kubernetes.pod_name', 'kubernetes.pod_node_name']
-        tracer = WakuTracer(msg_field='_msg', extra_fields=extract_fields)
+        tracer = WakuTracer(extra_fields=self._kwargs['extra_fields'])
         # TODO EL ORDEN DE COMO SE PONEN LOS WITHS REVIENTA EL CODIGO
         tracer.with_received_group_pattern()
         tracer.with_sent_pattern_group()

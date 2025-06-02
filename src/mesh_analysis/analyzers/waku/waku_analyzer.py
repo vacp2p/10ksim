@@ -56,8 +56,8 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', received_df, sent_df,
-                                                          self._dump_analysis_dir)
+        self._has_message_reliability_issues('shard', 'msg_hash', 'kubernetes.pod-name', received_df, sent_df,
+                                             self._dump_analysis_dir)
 
     def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
         # TODO POD NAME should not be hardcoded
@@ -231,8 +231,8 @@ class WakuAnalyzer:
             if not peers_missed_msg:
                 logger.info(f'All peers received all messages for shard {shard}')
             else:
-                logger.warning(f'Peers missed messages on shard {shard}')
-                logger.warning(f'Peers who missed messages: {peers_missed_msg}')
+                logger.warning(f'Nodes missed messages on shard {shard}')
+                logger.warning(f'Nodes who missed messages: {peers_missed_msg}')
                 logger.warning(f'Missing messages: {missing_messages}')
 
                 all_peers_missed_messages.extend(peers_missed_msg)
@@ -247,11 +247,11 @@ class WakuAnalyzer:
         filtered_sums = column_sums[column_sums != unique_messages]
         result_list = list(filtered_sums.items())
         for result in result_list:
-            peer_id, count = result
-            missing_hashes = df[df[peer_id] == 0].index.tolist()
-            missing_hashes.extend(df[df[peer_id].isna()].index.tolist())
-            pod_name = complete_df[complete_df["receiver_peer_id"] == result[0]]["kubernetes.pod_name"][0][0]
-            logger.warning(f'Peer {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
+            pod_name, count = result
+            missing_hashes = df[df[pod_name] == 0].index.tolist()
+            missing_hashes.extend(df[df[pod_name].isna()].index.tolist())
+            pod_name = complete_df[complete_df["kubernetes.pod_name"] == result[0]]["receiver_peer_id"][0][0]
+            logger.warning(f'Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_store_messages(self):
         victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",

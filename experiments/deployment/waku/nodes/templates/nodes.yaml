@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ default "zerotesting" .Values.namespace }}
+spec:
+  replicas: {{ .Values.waku.nodes.numNodes }}
+  podManagementPolicy: "Parallel"
+  serviceName: {{ .Values.serviceName }}
+  selector:
+    matchLabels:
+      app: {{ .Values.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app }}
+    spec:
+      dnsConfig:
+        {{- toYaml .Values.waku.nodes.dnsConfig | nindent 8 }}
+      volumes:
+      {{ with .Values.volumes }}
+        {{ toYaml . }}
+      {{ end }}
+      {{ if .Values.waku.nodes.includes.getEnr }}
+        - name: enr-data
+          emptyDir: {}
+      {{ end }}
+      {{ if .Values.waku.nodes.includes.getAddress }}
+        - name: address-data
+          emptyDir: {}
+      {{ end }}
+      {{ if .Values.waku.nodes.storeNode }}
+        - name: postgres-data
+          emptyDir: {}
+      {{ end }}
+      initContainers:
+        {{ if .Values.waku.nodes.initContainers }}
+          {{ toYaml .Values.waku.nodes.initContainers }}
+        {{ end }}
+        {{- if .Values.waku.nodes.includes.getAddress }}
+          {{- include "waku.nodes.getAddress" ( dict "Values" .Values.waku.nodes ) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.waku.nodes.includes.getEnr }}
+          {{- include "waku.nodes.getEnr" ( dict "Values" .Values.waku.nodes ) | nindent 8 }}
+        {{- end }}
+      containers:
+        {{- if .Values.waku.nodes.storeNode }}
+          {{- include "waku.nodes.postgress.container" . | indent 5 }}
+        {{- end }}
+        - name: waku
+          image: {{ default "soutullostatus/nwaku-jq-curl" .Values.waku.nodes.image.repository }}:{{ default "v0.34.0-rc1" .Values.waku.nodes.image.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8645
+            - containerPort: 8008
+          volumeMounts:
+            {{- with .Values.waku.nodes.volumesMounts }}
+              {{ toYaml . | indent 7 }}
+            {{- end }}
+            {{- if .Values.waku.nodes.includes.getAddress }}
+            - name: address-data
+              mountPath: /etc/addrs
+            {{- end }}
+            {{- if .Values.waku.nodes.includes.getEnr }}
+            - name: enr-data
+              mountPath: /etc/enr
+            {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                {{- include "valueOrPreset"
+                  (dict "value" .Values.waku.nodes.readinessProbe.command
+                        "presetKey" (default "health" .Values.waku.nodes.readinessProbe.type)
+                        "presets" .Values.waku.nodes.readinessProbe.presets ) | nindent 16 }}
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- if .Values.waku.nodes.storeNode }}
+            - name: POSTGRES_URL
+            value: "postgres://wakuuser:wakupassword@127.0.0.1:5432/wakumessages"
+            {{- end }}
+          command:
+            {{- include "waku.container.command" ( dict
+              "includes" (dict
+                "getEnr" .Values.waku.nodes.getEnr
+                "getAddress" .Values.waku.nodes.address
+              )
+              "command" .Values.waku.nodes.command
+            ) | nindent 14 }}

@@ -1,0 +1,6 @@
+waku:
+  nodes:
+    readinessProbe:
+      presets:
+        health: "include:waku.nodes.readiness-probe.health"
+        metrics: "include:waku.nodes.readiness-probe.metrics"

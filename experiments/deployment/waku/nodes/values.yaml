@@ -1,0 +1,4 @@
+waku:
+  command:
+    args: {}
+  container: {}

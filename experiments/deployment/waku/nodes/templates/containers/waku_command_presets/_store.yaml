@@ -1,0 +1,21 @@
+waku:
+  command:
+    presets:
+      store:
+        relay: true
+        maxConnections: 150
+        rest: true
+        restAdmin: true
+        restPrivate: true
+        restAddress: 0.0.0.0
+        discv5Discovery: true
+        discv5EnrAutoUpdate: True
+        logLevel: INFO
+        metricsServer: True
+        metricsServerAddress: 0.0.0.0
+        discv5BootstrapNode: $ENR1
+        discv5BootstrapNode: $ENR2
+        discv5BootstrapNode: $ENR3
+        nat: extip:${IP}
+        clusterId: 2
+        pubsubTopic: "/waku/2/rs/2/0"

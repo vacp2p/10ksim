@@ -16,6 +16,7 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
+from deployment.common import BaseExperiment
 from kube_utils import (
     cleanup_resources,
     get_cleanup_resources,
@@ -37,8 +38,23 @@ logger = logging.getLogger(__name__)
 
 class NimRegressionNodes(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    api_client: ApiClient = Field(default=client.ApiClient())
     release_name: str = Field(default="nim-regression-nodes")
+
+    def add_args(subparser):
+        subparser.add_argument(
+            "--delay",
+            type=str,
+            dest="delay",
+            required=False,
+            help="For nimlibp2p tests only. The delay before nodes activate in string format (eg. 1hr20min)",
+        )
+
+    def add_parser(subparsers):
+        subparser = subparsers.add_parser(
+            "nimlibp2p-regression-nodes", help="Run a regression_nodes test using waku."
+        )
+        BaseExperiment.common_flags(subparser)
+        NimRegressionNodes.add_args(subparser)
 
     def run(
         self,

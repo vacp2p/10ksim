@@ -1,0 +1,6 @@
+waku:
+  bootstrap:
+    dnsConfig:
+      searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+          - zerotesting-bootstrap.zerotesting.svc.cluster.local

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 
+from pathlib import Path
+
 import argparse
 import contextlib
 import itertools
@@ -13,7 +15,7 @@ import tempfile
 import time
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Dict, Iterator, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import dateparser
 from kubernetes import client, utils
@@ -104,7 +106,7 @@ def kubectl_apply(kube_yaml, namespace="zerotesting"):
         utils.create_from_yaml(client.ApiClient(), yaml_file=temp.name, namespace=namespace)
 
 
-def get_cleanup_resources(yamls: list[yaml.YAMLObject], types: Optional[List[str]] = None):
+def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str]] = None):
     """
     Get dict of resources to cleanup based on yamls.
 
@@ -559,7 +561,7 @@ def get_defs_from_template(template_path):
 def validate_values_yaml(values_yaml, template_yamls: List[yaml.yaml_object]):
     # TODO: ensure bijection between values.yaml and deployments.yaml.
     # Consider experiments with multiple deployments.yaml. For example:
-    # boostrap, nodes, publishers.
+    # bootstrap, nodes, publishers.
     raise NotImplementedError()
 
 
@@ -603,7 +605,7 @@ def dict_add(dict: Dict, path: str | List[str], value, sep=os.path.sep) -> None:
     dict[path[-1]] = value
 
 
-def default_chart_yaml(name):
+def default_chart_yaml_str(name) -> str:
     return """
     apiVersion: v2
     name: {name}
@@ -615,17 +617,40 @@ def default_chart_yaml(name):
 
 def helm_build_dir(workdir: str, values_paths: List[str], name: str) -> yaml.YAMLObject:
     values = [["--values", values_path] for values_path in values_paths]
+    command = ["helm", "template", ".", "--name-template", name, "--debug"] + list(
+        itertools.chain(*values)
+    )
+    logger.info(f"Running helm template command. cwd: `{workdir}`\tcommand: `{command}`")
+    logger.info(f"Usable command: `{' '.join(command)}`")
     result = subprocess.run(
-        ["helm", "template", ".", "--name-template", name, "--debug"]
-        + list(itertools.chain(*values)),
+        command,
         cwd=workdir,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        raise Exception(result.stderr)
+        raise Exception(
+            f"Failed to build helm template. cwd: `{workdir}`\tcommand: `{command}`\tstderr: `{result.stderr}`"
+        )
 
     return yaml.safe_load(result.stdout)
+
+
+import ruamel.yaml
+
+
+def get_YAML():
+    """Return a ruamel.yaml.YAML() that dumps multipline strings as multiple lines instead of escaping newlines."""
+
+    def str_representer(dumper, data):
+        if "\n" in data:
+            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+    yaml = ruamel.yaml.YAML()
+    yaml.Representer.add_representer(str, str_representer)
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    return yaml
 
 
 def helm_build(
@@ -671,8 +696,10 @@ def helm_build(
     return helm_build_dir(workdir, values_paths, name)
 
 
+
+
+
 def helm_build_from_params(
-    # template_path, values_yaml, out_path, workdir
     template_path,
     values_yaml: yaml.YAMLObject,
     workdir: str,
@@ -684,9 +711,18 @@ def helm_build_from_params(
     which will be used for `.Release.Name` when making the deployment template.
     """
     values = [("values.yaml", values_yaml)]
-    chart_yaml = default_chart_yaml("my-chart")
+    chart_yaml = default_chart_yaml_str("my-chart")
     name = name if name else "noname"
     return helm_build([template_path], values, workdir, name, chart_yaml)
+
+
+def relative_paths(base_path: str, paths: List[str]) -> List[str]:
+    return [
+        os.path.relpath(
+            os.path.join(base_path, path) if not os.path.isabs(path) else path, base_path
+        )
+        for path in paths
+    ]
 
 
 @contextlib.contextmanager

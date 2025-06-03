@@ -11,3 +11,5 @@ image:
   image:
     tag: null
   repository: null
+waku:
+  container: ~

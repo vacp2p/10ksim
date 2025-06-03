@@ -1,32 +1,40 @@
-#!/usr/bin/env python3
-
 import argparse
 import logging
+import os
+from typing import Optional
 
 from kubernetes import config
 from kubernetes.client import ApiClient
+from ruamel import yaml
 
-from kube_utils import (
-    init_logger,
-)
-from regression_tests.dispatch import add_subparser as add_regression_tests_subparser
-from regression_tests.dispatch import run_regression_tests
+from kube_utils import init_logger
+from registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
 
 
-def run_experiment(experiment, params, values_path, kube_config=None):
-    logger.debug(f"params: {params}")
+def run_experiment(
+    name: str,
+    args: argparse.Namespace,
+    values_path: Optional[str],
+    kube_config=None,
+):
+    logger.debug(f"params: {args}")
     if not kube_config:
         kube_config = "~/.kube/config"
     config.load_kube_config(config_file=kube_config)
     api_client = ApiClient()
 
-    # TODO [automatic experiment collection]: Programmatically gather tests by searching in test folders.
-    if experiment == "regression_nodes":
-        run_regression_tests(api_client, params, values_path)
-    else:
-        raise NotImplementedError()
+    try:
+        with open(values_path, "r") as values:
+            values_yaml = yaml.safe_load(values.read())
+    except TypeError:
+        # values_path is None.
+        values_yaml = None
+
+    info = experiment_registry[name]
+    experiment = info.cls()
+    experiment.run(api_client, args, values_yaml)
 
 
 def main():
@@ -36,7 +44,7 @@ def main():
 
     subparsers = parser.add_subparsers(dest="experiment", required=True)
 
-    parser.add_argument("--values", required=True, help="", dest="values_path")
+    parser.add_argument("--values", default=None, help="Path to values.yaml", dest="values_path")
     parser.add_argument(
         "--config",
         required=True,
@@ -60,17 +68,23 @@ def main():
         help="Pipes the log to given file in addition to stdout/stderr.",
     )
 
-    # Add more subparsers as needed for new experiments here.
-    add_regression_tests_subparser(subparsers)
+    # Scan for experiments.
+    experiment_registry.scan(os.path.join(os.path.dirname(__file__), "deployment"), mode="skip")
+
+    # Add subparsers for all experiments.
+    for info in experiment_registry.items():
+        try:
+            info.cls.add_parser(subparsers)
+        except AttributeError as e:
+            raise AttributeError(f"{info}") from e
 
     args = parser.parse_args()
     verbosity = args.verbosity or 2
     init_logger(logging.getLogger(), verbosity, args.log_file_path)
-    params = vars(args)
     try:
         run_experiment(
-            experiment=args.experiment,
-            params=params,
+            name=args.experiment,
+            args=args,
             values_path=args.values_path,
             kube_config=args.kube_config,
         )

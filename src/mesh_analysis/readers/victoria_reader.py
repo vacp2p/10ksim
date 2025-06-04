@@ -9,12 +9,13 @@ from httpx import Response
 from result import Result, Ok, Err
 
 # Project Imports
+from src.mesh_analysis.readers.reader import Reader
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
 
 
-class VictoriaReader:
+class VictoriaReader(Reader):
     """
     Note: Queries should follow the same order as the patterns in the Tracer.
     ie:

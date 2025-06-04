@@ -37,10 +37,10 @@ def plot_message_distribution_libp2pmix(received_summary_path: Path, sent_summar
 
     # Check unique messages and pods
     all_msgs = df['msg_id'].unique()
-    all_pods = df['pod-name'].unique()
+    all_pods = df['kubernetes.pod_name'].unique()
 
     # Create a pivot table of counts
-    msg_pod_counts = df.groupby(['msg_id', 'pod-name']).size().unstack(fill_value=0)
+    msg_pod_counts = df.groupby(['msg_id', 'kubernetes.pod_name']).size().unstack(fill_value=0)
 
     # Check for missing deliveries (i.e., zero counts)
     missing_deliveries = msg_pod_counts == 0
@@ -67,7 +67,7 @@ def plot_message_distribution_libp2pmix(received_summary_path: Path, sent_summar
         non_zero = group[group['delayMs'] > 0]
         if non_zero.empty:
             return True  # No non-zero delay, so considered OK
-        first_pod = non_zero.sort_values('delayMs').iloc[0]['pod-name']
+        first_pod = non_zero.sort_values('delayMs').iloc[0]['kubernetes.pod_name']
         return first_pod in allowed_pods
 
     # Group by msg_id and count violations
@@ -105,8 +105,8 @@ def plot_message_distribution_libp2pmix(received_summary_path: Path, sent_summar
     mixnet_nodes = {f"{mixnet_prefix}{i}" for i in range(mixnet_range)}  # Assumes order matters
 
     def get_mixnet_and_outside_time(group):
-        mixnet_group = group[group['pod-name'].isin(mixnet_nodes)]
-        non_mixnet_group = group[~group['pod-name'].isin(mixnet_nodes)]
+        mixnet_group = group[group['kubernetes.pod_name'].isin(mixnet_nodes)]
+        non_mixnet_group = group[~group['kubernetes.pod_name'].isin(mixnet_nodes)]
 
         if non_mixnet_group.empty:
             return pd.Series({'mixnet_time': None, 'outside_time': None})
@@ -140,8 +140,12 @@ def plot_message_distribution_libp2pmix(received_summary_path: Path, sent_summar
 def plot_message_distribution(received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[
     None, str]:
     """
-    Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
-    from logs.
+    :param received_summary_path: File path pointing to the summary CSV that has been created with analyze_reliability
+    function.
+    :param plot_title: Title for the plot.
+    :param dump_path: File path to save the resulting plot image.
+    :return: An Ok result containing None if successful, or an Err result holding an error
+        message in case the input file does not exist.
     """
     if not received_summary_path.exists():
         error = f'Received summary file {received_summary_path} does not exist'

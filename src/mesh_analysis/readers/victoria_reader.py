@@ -31,10 +31,10 @@ class VictoriaReader(Reader):
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
 
-    def _fetch_data(self, query: Dict, i: int):
+    def _fetch_data(self, url: str, headers: Dict, params: Dict):
         logs = []
-        logger.debug(f'Fetching {query}')
-        with requests.post(query['url'], headers=query['headers'], params=query['params'][i], stream=True) as response:
+        logger.debug(f'Fetching {params}')
+        with requests.post(url=url, headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
                 if line:
                     try:
@@ -43,7 +43,7 @@ class VictoriaReader(Reader):
                         logger.info(line)
                         exit()
                     logs.append((parsed_object['_msg'],) +
-                                tuple(parsed_object[k] for k in self._tracer.get_extra_fields()))
+                                tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or []))
         logger.debug(f'Fetched {len(logs)} log lines')
 
         return logs
@@ -51,11 +51,16 @@ class VictoriaReader(Reader):
     def _make_queries(self) -> List:
         # In victoria you cannot do group extraction, so we have to parse it "manually"
         # We will consider a result for each group of patterns (ie: different ways to tell we received a message)
+        params = self._config_query['params']
+        if isinstance(params, Dict):
+            params = [params]
+
         results = [[] for _ in range(self._tracer.get_num_patterns_group())]
-        # TODO SOLO HACER FETCH DEL PATTERN QUE SE NECESITA, SI NO SE COMPARA TODO CON TODO?
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in patterns]
-            logs = self._fetch_data(self._config_query, i)
+            logs = self._fetch_data(self._config_query['url'],
+                                    self._config_query['headers'],
+                                    params[i])
             for log_line in logs:
                 for j, pattern in enumerate(patterns):
                     match = re.search(pattern, log_line[0])

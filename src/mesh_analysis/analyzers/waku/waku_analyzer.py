@@ -20,6 +20,19 @@ sns.set_theme()
 
 
 class WakuAnalyzer:
+    """
+    Handles the analysis of Waku message reliability from either local log files or online data.
+
+    The class ensures that every Waku node received every expected message. It facilitates both local
+    and online analysis of message reliability, merging and processing dataframes, and dumping results.
+    In cases of missed messages, the class logs details and optionally dumps relevant node logs. It
+    supports parallel processing to improve analysis efficiency.
+
+    :ivar _dump_analysis_path: Path where analysis results are dumped.
+    :ivar _local_path_to_analyze: Path to the folder containing local logs for analysis.
+    :ivar _kwargs: Additional settings and configurations for analysis.
+    :ivar _message_hashes: List of message hashes analyzed.
+    """
     def __init__(self, dump_analysis_dir: str = None, local_folder_to_analyze: str = None, **kwargs):
         self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
         self._kwargs = kwargs
@@ -164,6 +177,22 @@ class WakuAnalyzer:
 
 
     def analyze_reliability(self, n_jobs: int):
+        """
+        This function automatically assumes two scenarios, analysis from online data, and analysis from local data.
+
+        Online: It will search in the logs tracked in the used monitoring system. It makes sure that every waku node
+        received every message. It will create a summary folder in dump_analysis_dir, with 2 csv files gathering all
+        the information from the received messages and sent messages. If it detects that a waku node missed messages,
+        it will log the information, and also dump the logs of that node into a <node>.log file.
+
+        Local: It will read the logs provided in local_folder_to_analyze. It makes sure that every waku node received
+        every message. It will create a summary folder IN dump_analysis_dir, with 2 csv files gathering all the
+        information from the received messages and sent messages.
+
+        :param n_jobs: The number of parallel jobs to use for the analysis.
+        :type n_jobs: int
+        :return: None
+        """
         if self._local_path_to_analyze is None:
             self._analyze_reliability_cluster(n_jobs)
         else:

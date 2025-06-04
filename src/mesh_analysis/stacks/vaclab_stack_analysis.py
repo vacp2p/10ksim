@@ -46,7 +46,7 @@ class VaclabStackAnalysis(StackAnalysis):
 
     def _read_logs_for_single_node(self, statefulset_name: str, node_index: int) -> List[pd.DataFrame] :
         reader = self._reader_builder.build_with_queries(statefulset_name, node_index)
-        data = reader.read_logs()
+        data = reader.get_dataframes()
 
         return data
 

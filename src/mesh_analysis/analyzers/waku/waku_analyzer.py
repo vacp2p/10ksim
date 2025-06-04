@@ -40,7 +40,7 @@ class WakuAnalyzer:
         waku_tracer.with_sent_pattern_group()
 
         reader = FileReader(self._local_path_to_analyze, waku_tracer, n_jobs)
-        dfs = reader.read_logs()
+        dfs = reader.get_dataframes()
         dfs = self._merge_dfs_local(dfs)
 
         received_df = dfs[0].assign(shard=0)

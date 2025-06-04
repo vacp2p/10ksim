@@ -20,7 +20,7 @@ class FileReader(Reader):
         self._tracer = tracer
         self._n_jobs = n_jobs
 
-    def read_logs(self) -> List:
+    def get_dataframes(self) -> List:
         logger.info(f'Reading {self._folder_path}')
         files_result = file_utils.get_files_from_folder_path(self._folder_path, extension='*.log')
 

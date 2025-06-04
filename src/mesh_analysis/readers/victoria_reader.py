@@ -70,6 +70,7 @@ class VictoriaReader:
 
     def read_logs(self) -> List[pd.DataFrame]:
         results = self._make_queries()
+    def get_dataframes(self) -> List[pd.DataFrame]:
         dfs = self._tracer.trace(results)
 
         return dfs

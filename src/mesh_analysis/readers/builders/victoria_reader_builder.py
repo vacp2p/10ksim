@@ -16,6 +16,22 @@ class VictoriaReaderBuilder:
         self._tracer = tracer
         self._queries = queries
 
+    def build_with_pod_identifier(self, pod_name: str, uniq_by: Optional[str] = None) -> VictoriaReader:
+
+        query = {"query": f"kubernetes.container_name:{self._kwargs['container_name']} "
+                                f"AND kubernetes.pod_name:{pod_name} "
+                                f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
+                                f"{uniq_by if uniq_by is not None else ''}"}
+
+        victoria_config_query = {"url": self._kwargs['url'],
+                                 "headers": {"Content-Type": "application/json"},
+                                 "params": [query]
+                                 }
+
+        reader = VictoriaReader(self._tracer, victoria_config_query)
+
+        return reader
+
     def build_with_queries(self, stateful_set_name: str, node_index: Optional[int] = None, uniq_by: Optional[str] = None) -> VictoriaReader:
         params = []
         for query in self._queries:
@@ -34,10 +50,10 @@ class VictoriaReaderBuilder:
 
         return reader
 
-    def build_with_single_query(self, stateful_set_name: str, node_index: Optional[int] = None, uniq_by: Optional[str] = None) -> VictoriaReader:
+    def build_with_single_query(self, pod_name: str, uniq_by: Optional[str] = None) -> VictoriaReader:
 
         param = {"query": f"kubernetes.container_name:{self._kwargs['container_name']} "
-                                f"AND kubernetes.pod_name:{stateful_set_name}-{node_index if node_index is not None else ''} "
+                                f"AND kubernetes.pod_name:{pod_name} "
                                 f"AND {self._queries} "
                                 f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
                                 f"{uniq_by if uniq_by is not None else ''}"}

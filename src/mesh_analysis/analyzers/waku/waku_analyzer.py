@@ -255,66 +255,54 @@ class WakuAnalyzer:
             logger.warning(f'Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_store_messages(self):
-        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
-                           "headers": {"Content-Type": "application/json"},
-                           "params": {
-                               "query": f"kubernetes.pod_name:get-store-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
-                           }
+        """
+        It checks that the messages obtained by get-store-messages pod are the same messages detected in
+        analyze_reliability. This is used to detect if the store nodes can retrieve all messages.
+        It has to be used after analyze_reliability, and this function only makes sense if there were store nodes
+        in the experiment.
+        :return:
+        """
+        waku_tracer = WakuTracer().with_wildcard_pattern()
+        reader = VictoriaReaderBuilder(waku_tracer, '*', **self._kwargs)
+        stack = VaclabStackAnalysis(reader, **self._kwargs)
+        data = stack.get_pod_logs('get-store-messages')
 
-        reader = VictoriaReader(victoria_config, None)
-        result = reader.single_query_info()
+        log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
+        messages_list = ast.literal_eval(log_list[-1]) # Last line in get-store-messages
+        messages_list = ['0x' + base64.b64decode(msg).hex() for msg in messages_list]
+        logger.debug(f'Messages from store: {messages_list}')
 
+        if len(self._message_hashes) != len(messages_list):
+            logger.error('Number of messages does not match')
+        elif set(self._message_hashes) == set(messages_list):
+            logger.info('Messages from store match with received messages')
+        else:
+            logger.error('Messages from store does not match with received messages')
+            logger.error(f'Received messages: {self._message_hashes}')
+            logger.error(f'Store messages: {messages_list}')
+
+        result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_path / 'store_messages.txt')
         if result.is_ok():
-            messages_string = result.unwrap()['_msg']
-            messages_list = ast.literal_eval(messages_string)
-            messages_list = ['0x' + base64.b64decode(msg).hex() for msg in messages_list]
-            logger.debug(f'Messages from store: {messages_list}')
-
-            if len(self._message_hashes) != len(messages_list):
-                logger.error('Number of messages does not match')
-            elif set(self._message_hashes) == set(messages_list):
-                logger.info('Messages from store match with received messages')
-            else:
-                logger.error('Messages from store does not match with received messages')
-                logger.error(f'Received messages: {self._message_hashes}')
-                logger.error(f'Store messages: {messages_list}')
-
-            result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_dir / 'store_messages.txt')
-            if result.is_ok():
-                logger.info(f'Messages from store saved in {result.ok_value}')
+            logger.info(f'Messages from store saved in {result.ok_value}')
 
     def check_filter_messages(self):
-        victoria_config = {"url": "https://vmselect.riff.cc/select/logsql/query",
-                           "headers": {"Content-Type": "application/json"},
-                           "params": {
-                               "query": f"kubernetes.pod_name:get-filter-messages AND _time:{self._timestamp} | sort by (_time) desc | limit 1"}
-                           }
-
-        reader = VictoriaReader(victoria_config, None)
-        result = reader.single_query_info()
-
-        if result.is_ok():
-            messages_string = result.unwrap()['_msg']
-            all_ok = ast.literal_eval(messages_string)
-            if all_ok:
-                logger.info("Messages from filter match in length.")
-            else:
-                logger.error("Messages from filter do not match.")
-
-    def analyze_message_timestamps(self, time_difference_threshold: int):
         """
-        Note that this function assumes that analyze_message_logs has been called, since timestamps will be checked
-        from logs.
+        It checks that the messages obtained by get-filter-messages pod are the same messages detected in
+        analyze_reliability. This is used to detect if the filter nodes received all messages.
+        It has to be used after analyze_reliability, and this function only makes sense if there were filter nodes
+        in the experiment.
+        :return:
         """
-        file_logs = file_utils.get_files_from_folder_path(self._local_path_to_analyze, extension='*.log')
-        if file_logs.is_err():
-            logger.error(file_logs.err_value)
-            return
+        waku_tracer = WakuTracer().with_wildcard_pattern()
+        reader = VictoriaReaderBuilder(waku_tracer, '*', **self._kwargs)
+        stack = VaclabStackAnalysis(reader, **self._kwargs)
+        data = stack.get_pod_logs('get-filter-messages')
 
-        logger.info(f'Analyzing timestamps from {len(file_logs.ok_value)} files')
-        for file in file_logs.ok_value:
-            logger.debug(f'Analyzing timestamps for {file}')
-            time_jumps = log_utils.find_time_jumps(self._local_path_to_analyze / file, time_difference_threshold)
+        log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
+        all_ok_boolean = ast.literal_eval(log_list[-1]) # Last line in get-filter-messages
 
-            for jump in time_jumps:
-                logger.info(f'{file}: {jump[0]} to {jump[1]} -> {jump[2]}')
+        all_ok = ast.literal_eval(all_ok_boolean)
+        if all_ok:
+            logger.info("Messages from filter match in length.")
+        else:
+            logger.error("Messages from filter do not match.")

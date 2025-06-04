@@ -51,6 +51,7 @@ class VictoriaReader(Reader):
     def _make_queries(self) -> List:
         # In victoria you cannot do group extraction, so we have to parse it "manually"
         # We will consider a result for each group of patterns (ie: different ways to tell we received a message)
+    def make_queries(self) -> List:
         params = self._config_query['params']
         if isinstance(params, Dict):
             params = [params]
@@ -74,9 +75,8 @@ class VictoriaReader(Reader):
 
         return results
 
-    def read_logs(self) -> List[pd.DataFrame]:
-        results = self._make_queries()
     def get_dataframes(self) -> List[pd.DataFrame]:
+        results = self.make_queries()
         dfs = self._tracer.trace(results)
 
         return dfs

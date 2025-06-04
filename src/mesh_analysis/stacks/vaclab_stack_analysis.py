@@ -50,6 +50,7 @@ class VaclabStackAnalysis(StackAnalysis):
 
         return data
 
+        data = reader.make_queries()
     def get_number_nodes(self) -> List[int]:
         num_nodes_per_stateful_set = []
 

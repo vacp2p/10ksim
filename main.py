@@ -3,7 +3,7 @@
 # Project Imports
 import src.logger.logger
 from src.metrics.scrapper import Scrapper
-from src.plotting.plotter import Plotter
+from src.plotting.metrics_plotter import MetricsPlotter
 from src.utils import file_utils
 
 
@@ -16,7 +16,7 @@ def main():
     scrapper.query_and_dump_metrics()
 
     config_dict = file_utils.read_yaml_file("scrape.yaml")
-    plotter = Plotter(config_dict["plotting"])
+    plotter = MetricsPlotter(config_dict["plotting"])
     plotter.create_plots()
 
 

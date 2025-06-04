@@ -5,14 +5,13 @@ import logging
 import pandas as pd
 import seaborn as sns
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from result import Ok, Err, Result
 
 # Project Imports
 from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
-from src.mesh_analysis.readers.victoria_reader import VictoriaReader
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.utils import file_utils, log_utils, path_utils, list_utils
 
@@ -27,9 +26,9 @@ class WakuAnalyzer:
         self._message_hashes = []
 
     def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
-        self._dump_analysis_dir = Path(dump_analysis_dir) if dump_analysis_dir else None
+        self._dump_analysis_path = Path(dump_analysis_dir) if dump_analysis_dir else None
         self._local_path_to_analyze = Path(local_folder_to_analyze) if local_folder_to_analyze else None
-        result = path_utils.prepare_path_for_folder(self._dump_analysis_dir)
+        result = path_utils.prepare_path_for_folder(self._dump_analysis_path)
         if result.is_err():
             logger.error(result.err_value)
             exit(1)
@@ -57,10 +56,9 @@ class WakuAnalyzer:
             exit(1)
 
         self._has_message_reliability_issues('shard', 'msg_hash', 'kubernetes.pod-name', received_df, sent_df,
-                                             self._dump_analysis_dir)
+                                             self._dump_analysis_path)
 
     def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        # TODO POD NAME should not be hardcoded
         logger.info("Merging and sorting information")
 
         received_df = pd.concat([pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True)
@@ -76,18 +74,19 @@ class WakuAnalyzer:
         return [received_df, sent_df]
 
     def _merge_dfs_local(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        raise NotImplementedError
-        # TODO POD NAME should not be hardcoded
+        """
+        TODO currently shard information is picked in the pod's name during the experiment. If you are working with
+        local logs, make sure that each node has it's own log file, named like <node>-<shard>-<node_index>.
+        """
         logger.info("Merging and sorting information")
 
         received_df = pd.concat(dfs[0], ignore_index=True)
-        # TODO extract shard information from logs?
-        received_df = received_df.assign(shard=received_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
+        received_df = received_df.assign(shard=received_df['file'].str.extract(r'.*-(\d+)-').astype(int))
         received_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         received_df.sort_index(inplace=True)
 
         sent_df = pd.concat(dfs[1], ignore_index=True)
-        sent_df = sent_df.assign(shard=sent_df['kubernetes.pod_name'].str.extract(r'.*-(\d+)-').astype(int))
+        sent_df = sent_df.assign(shard=sent_df['file'].str.extract(r'.*-(\d+)-').astype(int))
         sent_df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
         sent_df.sort_index(inplace=True)
 
@@ -97,7 +96,7 @@ class WakuAnalyzer:
         received = dfs[0].reset_index()
         received = received.astype(str)
         logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(received, self._dump_analysis_dir / 'summary' / 'received.csv', False)
+        result = file_utils.dump_df_as_csv(received, self._dump_analysis_path / 'summary' / 'received.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -105,7 +104,7 @@ class WakuAnalyzer:
         sent = dfs[1].reset_index()
         sent = sent.astype(str)
         logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(sent, self._dump_analysis_dir / 'summary' / 'sent.csv', False)
+        result = file_utils.dump_df_as_csv(sent, self._dump_analysis_path / 'summary' / 'sent.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -127,6 +126,12 @@ class WakuAnalyzer:
 
         return Ok(f'Found {num_nodes_per_ss} nodes')
 
+    def _dump_logs(self, nodes_with_issues: List[str]):
+        tracer = WakuTracer().with_wildcard_pattern()
+        vreader = VictoriaReaderBuilder(tracer, '*', **self._kwargs)
+        stack = VaclabStackAnalysis(vreader, **self._kwargs)
+        stack.dump_node_logs(8, nodes_with_issues, self._dump_analysis_path)
+
     def _analyze_reliability_cluster(self, n_jobs: int):
         result = self._assert_num_nodes()
         if result.is_ok():
@@ -143,7 +148,7 @@ class WakuAnalyzer:
         reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
-        dfs = stack_analysis.get_node_logs(n_jobs, **self._kwargs)
+        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
         dfs = self._merge_dfs(dfs)
 
         result = self._dump_dfs(dfs)
@@ -151,15 +156,12 @@ class WakuAnalyzer:
             logger.warning(f'Issue dumping message summary. {result.err_value}')
             exit(1)
 
-        has_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'receiver_peer_id', dfs[0], dfs[1],
-                                                          self._dump_analysis_dir)
-        if has_issues:
-            match file_utils.get_files_from_folder_path(Path(self._dump_analysis_dir), extension="csv"):
-                case Ok(data_files_names):
-                    identifiers = [f"my_peer_id=16U*{file}" for file in data_files_names]
-                    stack_analysis.dump_logs(identifiers, self._dump_analysis_dir)
-                case Err(error):
-                    logger.error(error)
+        nodes_with_issues = self._has_message_reliability_issues('shard', 'msg_hash', 'kubernetes.pod_name', dfs[0], dfs[1],
+                                                                 self._dump_analysis_path)
+        if nodes_with_issues:
+            logger.info('Dumping logs from nodes with issues')
+            self._dump_logs(nodes_with_issues)
+
 
     def analyze_reliability(self, n_jobs: int):
         if self._local_path_to_analyze is None:
@@ -169,7 +171,7 @@ class WakuAnalyzer:
 
     def _has_message_reliability_issues(self, shard_identifier: str, msg_identifier: str, peer_identifier: str,
                                         received_df: pd.DataFrame, sent_df: pd.DataFrame,
-                                        issue_dump_location: Path) -> bool:
+                                        issue_dump_location: Path) -> Optional[List[str]]:
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
         logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
 
@@ -188,7 +190,6 @@ class WakuAnalyzer:
 
         if peers_missed_messages:
             msg_sent_data = self._check_if_msg_has_been_sent(peers_missed_messages, missed_messages, sent_df)
-            # TODO check si realmente el nodo ha recibido el mensaje
             for data in msg_sent_data:
                 peer_id = data[0].split('*')[-1]
                 logger.info(f'Peer {peer_id} message information dumped in {issue_dump_location}')
@@ -198,9 +199,9 @@ class WakuAnalyzer:
                     case Err(err):
                         logger.error(err)
                         exit(1)
-            return True
+            return peers_missed_messages
 
-        return False
+        return None
 
     def _check_if_msg_has_been_sent(self, peers: List, missed_messages: List, sent_df: pd.DataFrame) -> List:
         messages_sent_to_peer = []
@@ -250,7 +251,7 @@ class WakuAnalyzer:
             pod_name, count = result
             missing_hashes = df[df[pod_name] == 0].index.tolist()
             missing_hashes.extend(df[df[pod_name].isna()].index.tolist())
-            pod_name = complete_df[complete_df["kubernetes.pod_name"] == result[0]]["receiver_peer_id"][0][0]
+            pod_name = complete_df[complete_df["kubernetes.pod_name"] == result[0]]["receiver_peer_id"].iloc[0][0]
             logger.warning(f'Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}')
 
     def check_store_messages(self):

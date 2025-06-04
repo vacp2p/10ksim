@@ -57,7 +57,7 @@ class WakuTracer(MessageTracer):
         return self
 
     def with_wildcard_pattern(self) -> Self:
-        self._patterns.append(r'(.*)')
+        self._patterns.append([r'(.*)'])
         self._tracings.append(self._trace_all_logs)
 
         return self
@@ -75,9 +75,7 @@ class WakuTracer(MessageTracer):
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
-        df = pd.DataFrame(parsed_logs, columns=columns)
-        df['timestamp'] = df['timestamp'].astype(np.uint64)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df = self._create_dataframe_with_timestamp(parsed_logs, columns)
 
         return df
 
@@ -86,9 +84,7 @@ class WakuTracer(MessageTracer):
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
-        df = pd.DataFrame(parsed_logs, columns=columns)
-        df['timestamp'] = df['timestamp'].astype(np.uint64)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df = self._create_dataframe_with_timestamp(parsed_logs, columns)
 
         return df
 
@@ -97,9 +93,7 @@ class WakuTracer(MessageTracer):
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
-        df = pd.DataFrame(parsed_logs, columns=columns)
-        df['timestamp'] = df['timestamp'].astype(np.uint64)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df = self._create_dataframe_with_timestamp(parsed_logs, columns)
 
         return df
 
@@ -108,11 +102,16 @@ class WakuTracer(MessageTracer):
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
-        df = pd.DataFrame(parsed_logs, columns=columns)
-        df['timestamp'] = df['timestamp'].astype(np.uint64)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df = self._create_dataframe_with_timestamp(parsed_logs, columns)
 
         return df
 
     def _trace_all_logs(self, parsed_logs: List) -> List:
         return parsed_logs
+
+    def _create_dataframe_with_timestamp(self, parsed_logs: List[str], columns: List[str]):
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df['timestamp'] = df['timestamp'].astype(np.uint64)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+
+        return df

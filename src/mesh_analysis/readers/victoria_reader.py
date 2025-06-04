@@ -27,7 +27,13 @@ class VictoriaReader(Reader):
     tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
     builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
     """
+
     def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
+        """
+        :param tracer: MessageTracer instance to retrieve raw message patterns from Victoria.
+        :param victoria_config_query: Configuration for the Victoria query. This allows to do a first filtering by the
+        monitoring stack retrieving only the lines we are interested in, saving time in the parsing process.
+        """
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
 
@@ -48,10 +54,18 @@ class VictoriaReader(Reader):
 
         return logs
 
-    def _make_queries(self) -> List:
-        # In victoria you cannot do group extraction, so we have to parse it "manually"
-        # We will consider a result for each group of patterns (ie: different ways to tell we received a message)
     def make_queries(self) -> List:
+        """
+        This function returns a list of lists, structured hierarchically as follows:
+        - The outer list corresponds to the pattern groups.
+        - Each element in the outer list is a list representing a specific pattern group.
+        - Within each pattern group list, there are sublists, one for each pattern in that group.
+        - Each sublist contains the lines that match the corresponding pattern.
+
+        The result is organized as [pattern_groups -> patterns -> matched_lines], where:
+        - Each pattern group can have multiple patterns.
+        - Each pattern can match multiple lines.
+        """
         params = self._config_query['params']
         if isinstance(params, Dict):
             params = [params]

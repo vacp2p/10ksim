@@ -4,27 +4,43 @@ import logging
 import re
 import pandas as pd
 import requests
-from typing import Dict, List, Optional, Iterator
+from typing import Dict, List, Iterator, Optional
 from httpx import Response
 from result import Result, Ok, Err
 
 # Project Imports
-from src.mesh_analysis.tracers.message_tracer import MessageTracer
+from src.mesh_analysis.readers.reader import Reader
+from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
 
 
-class VictoriaReader:
+class VictoriaReader(Reader):
+    """
+    Note: Queries should follow the same order as the patterns in the Tracer.
+    ie:
+    tracer = Tracer.with_SENT_pattern_group().with_RECEIVED_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['SENT QUERY', 'RECEIVED QUERY'])
 
-    def __init__(self, config: Dict, tracer: Optional[MessageTracer]):
-        self._config = config
-        self._tracer = tracer
-        self.logs = []
+    or
 
-    def _fetch_data(self, headers: Dict, params: Dict):
+    tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
+    """
+
+    def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
+        """
+        :param tracer: MessageTracer instance to retrieve raw message patterns from Victoria.
+        :param victoria_config_query: Configuration for the Victoria query. This allows to do a first filtering by the
+        monitoring stack retrieving only the lines we are interested in, saving time in the parsing process.
+        """
+        self._tracer: MessageTracer = tracer
+        self._config_query = victoria_config_query
+
+    def _fetch_data(self, url: str, headers: Dict, params: Dict):
+        logs = []
         logger.debug(f'Fetching {params}')
-        # time.sleep(5)
-        with requests.post(self._config['url'], headers=headers, params=params, stream=True) as response:
+        with requests.post(url=url, headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
                 if line:
                     try:
@@ -32,40 +48,55 @@ class VictoriaReader:
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    self.logs.append((parsed_object['_msg'], parsed_object['kubernetes.pod_name'], parsed_object['kubernetes.pod_node_name']))
-        logger.debug(f'Fetched {len(self.logs)} messages')
+                    logs.append((parsed_object['_msg'],) +
+                                tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or []))
+        logger.debug(f'Fetched {len(logs)} log lines')
 
-    def _make_queries(self) -> List:
-        results = [[] for _ in self._config['params']]
+        return logs
 
-        for i, query in enumerate(self._config['params']):
-            query_results = [[] for _ in self._tracer.patterns[i]]
-            self._fetch_data(self._config["headers"], query)
-            for log_line in self.logs:
-                for j, pattern in enumerate(self._tracer.patterns[i]):
+    def make_queries(self) -> List:
+        """
+        This function returns a list of lists, structured hierarchically as follows:
+        - The outer list corresponds to the pattern groups.
+        - Each element in the outer list is a list representing a specific pattern group.
+        - Within each pattern group list, there are sublists, one for each pattern in that group.
+        - Each sublist contains the lines that match the corresponding pattern.
+
+        The result is organized as [pattern_groups -> patterns -> matched_lines], where:
+        - Each pattern group can have multiple patterns.
+        - Each pattern can match multiple lines.
+        """
+        params = self._config_query['params']
+        if isinstance(params, Dict):
+            params = [params]
+
+        results = [[] for _ in range(self._tracer.get_num_patterns_group())]
+        for i, patterns in enumerate(self._tracer.patterns):
+            query_results = [[] for _ in patterns]
+            logs = self._fetch_data(self._config_query['url'],
+                                    self._config_query['headers'],
+                                    params[i])
+            for log_line in logs:
+                for j, pattern in enumerate(patterns):
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())
-                        match_as_list.append(log_line[1])
-                        match_as_list.append(log_line[2])
+                        match_as_list.extend(log_line[1:])
                         query_results[j].append(match_as_list)
                         break
-            # logger.debug('Fetched lines parsed with pattern')
+
             results[i].extend(query_results)
-            self.logs.clear()
 
         return results
 
-    def read(self) -> List[pd.DataFrame]:
-        # logger.info(f'Reading {self._config["url"]}')
-
-        results = self._make_queries()
+    def get_dataframes(self) -> List[pd.DataFrame]:
+        results = self.make_queries()
         dfs = self._tracer.trace(results)
 
         return dfs
 
     def single_query_info(self) -> Result[Dict, Response]:
-        response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
+        response = requests.post(**self._config_query)
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')
             return Err(response)
@@ -79,8 +110,8 @@ class VictoriaReader:
 
             return Err(response)
 
-    def multi_query_info(self) -> Result[Iterator, str]:
-        response = requests.post(self._config['url'], headers=self._config['headers'], params=self._config['params'])
+    def multiline_query_info(self) -> Result[Iterator, str]:
+        response = requests.post(self._config_query['url'], headers=self._config_query['headers'], params=self._config_query['params'])
         if response.status_code != 200:
             logger.error(f'Request failed with status code: {response.status_code}')
             return Err(response.text)

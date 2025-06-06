@@ -6,5 +6,5 @@ from abc import ABC, abstractmethod
 class Reader(ABC):
 
     @abstractmethod
-    def read(self) -> pd.DataFrame:
+    def get_dataframes(self) -> pd.DataFrame:
         pass

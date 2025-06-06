@@ -1,7 +1,5 @@
 # Python Imports
-import socket
 import logging
-import time
 from typing import Dict, List, Optional
 from result import Ok, Err
 
@@ -25,6 +23,7 @@ class Scrapper:
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         # socket.create_connection = self._k8s.create_connection
+        # Not needed anymore as we have a public address in the lab
 
         for time_name in self._query_config['general_config']['times_names']:
             logger.info(f'Querying simulation {time_name[2]}')
@@ -32,7 +31,6 @@ class Scrapper:
                 logger.info(f'Querying metric {scrape_name}')
                 promql = self._create_query(metric_config['query'],
                                             self._query_config['scrape_config'], time_name)
-                time.sleep(5)
                 match scrape_utils.get_query_data(promql):
                     case Ok(data):
                         logger.debug(f'Successfully extracted {scrape_name} data from response')

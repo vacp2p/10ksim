@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ default "publisher" .Values.name }}
+  namespace: {{ default "zerotesting" .Values.namespace }}
+spec:
+  restartPolicy: Never
+  dnsConfig:
+    {{- toYaml .Values.waku.publisher.dnsConfig | nindent 4 }}
+  containers:
+    - name: publisher-container
+      image: {{ default "soutullostatus/publisher" (.Values.waku.publisher.image).repository }}:{{ default "testing" (.Values.waku.publisher.image).tag }}
+      imagePullPolicy: Always
+      command:
+        {{- include "waku.publisher.container.command" ( dict "values" .Values.waku.publisher.command ) | nindent 8 }}

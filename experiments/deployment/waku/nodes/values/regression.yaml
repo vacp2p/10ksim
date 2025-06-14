@@ -1,0 +1,29 @@
+name: nodes-0
+namespace: zerotesting
+
+serviceName: zerotesting-service
+app: zerotenkay
+
+waku:
+  nodes:
+    numNodes: 10
+    getEnr:
+      repo: "soutullostatus/getenr"
+      tag: "v0.5.0"
+      numEnrs: 3
+      serviceName: "zerotesting-bootstrap.zerotesting"
+    command:
+      type: "regression"
+      args:
+        maxConnections: 200
+    readinessProbe:
+      type: "metrics"
+    includes:
+      getEnr: True
+    image:
+      repository: "soutullostatus/nwaku-jq-curl"
+      tag: "v0.34.0-rc1"
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting.svc.cluster.local
+

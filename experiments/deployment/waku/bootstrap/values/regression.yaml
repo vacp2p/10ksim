@@ -1,0 +1,9 @@
+waku:
+  bootstrap:
+    command:
+      type: "regression"
+      args:
+        maxConnections: 1000
+        logLevel: "INFO"
+        clusterId: 2
+

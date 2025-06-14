@@ -1,0 +1,17 @@
+waku:
+  bootstrap:
+    command:
+      presets:
+        regression:
+          relay: false
+          rest: true
+          restAddress: "0.0.0.0"
+          maxConnections: 1000
+          discv5Discovery: true
+          discv5EnrAutoUpdate: True
+          logLevel: "INFO"
+          metricsServer: True
+          metricsServerAddress: "0.0.0.0"
+          nat: "extip:$IP"
+          clusterId: 2
+

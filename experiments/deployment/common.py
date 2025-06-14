@@ -1,47 +1,35 @@
 #!/usr/bin/env python3
 
 
-from abc import ABC, abstractmethod
 import argparse
 import logging
-import os
 import shutil
 import time
+from abc import ABC, abstractmethod
+from contextlib import ExitStack
 from typing import Optional
-from ruamel.yaml.comments import CommentedMap
 
-
-from kubernetes import client
 from kubernetes.client import ApiClient
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, PositiveInt
 from ruamel import yaml
 
 from kube_utils import (
-    assert_equals,
-    cleanup_resources,
-    get_cleanup_resources,
-    helm_build_from_params,
-    kubectl_apply,
     maybe_dir,
     poll_namespace_has_objects,
-    wait_for_cleanup,
     wait_for_no_objs_in_namespace,
-    wait_for_rollout,
 )
-
-from contextlib import ExitStack
 
 logger = logging.getLogger(__name__)
 
 
 class BaseExperiment(ABC, BaseModel):
-    '''Base experiment that add an ExitStack with `workdir` to `run` and uses an internal `_run`.
+    """Base experiment that add an ExitStack with `workdir` to `run` and uses an internal `_run`.
 
     How to use:
         - Inherit from this class.
         - Call `BaseExperiment.add_args` in the child class's `add_parser`
         - Implement `_run` in the child class.
-    '''
+    """
 
     def add_args(subparser):
         subparser.add_argument(
@@ -58,7 +46,12 @@ class BaseExperiment(ABC, BaseModel):
             help="If present, does not wait until the namespace is empty before running the test.",
         )
 
-    def run(self, api_client : ApiClient, args : argparse.Namespace, values_yaml : Optional[yaml.YAMLObject]):
+    def run(
+        self,
+        api_client: ApiClient,
+        args: argparse.Namespace,
+        values_yaml: Optional[yaml.YAMLObject],
+    ):
         with ExitStack() as stack:
             workdir = args.workdir
             stack.enter_context(maybe_dir(workdir))
@@ -66,13 +59,26 @@ class BaseExperiment(ABC, BaseModel):
                 shutil.rmtree(workdir)
             except FileNotFoundError:
                 pass
-            self._run(api_client=api_client, workdir=workdir, args=args, values_yaml=values_yaml, stack=stack)
+            self._run(
+                api_client=api_client,
+                workdir=workdir,
+                args=args,
+                values_yaml=values_yaml,
+                stack=stack,
+            )
 
     @abstractmethod
-    def _run(self, api_client : ApiClient, workdir : str, args : argparse.Namespace, values_yaml : Optional[yaml.YAMLObject], stack : ExitStack):
+    def _run(
+        self,
+        api_client: ApiClient,
+        workdir: str,
+        args: argparse.Namespace,
+        values_yaml: Optional[yaml.YAMLObject],
+        stack: ExitStack,
+    ):
         pass
 
-    def _wait_until_clear(self, api_client : ApiClient, namespace : str, skip_check : bool):
+    def _wait_until_clear(self, api_client: ApiClient, namespace: str, skip_check: bool):
         # Wait for namespace to be clear unless --skip-check flag was used.
         if not skip_check:
             wait_for_no_objs_in_namespace(namespace=namespace, api_client=api_client)
@@ -82,8 +88,6 @@ class BaseExperiment(ABC, BaseModel):
             )
             if not namepace_is_empty:
                 logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")
-
-
 
 
 def run_waku_regression_nodes(

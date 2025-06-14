@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 
-from pathlib import Path
-
 import argparse
 import contextlib
 import itertools
@@ -15,7 +13,7 @@ import tempfile
 import time
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import dateparser
 from kubernetes import client, utils
@@ -694,9 +692,6 @@ def helm_build(
     # Build and output.
     values_paths = [value[0] for value in values]
     return helm_build_dir(workdir, values_paths, name)
-
-
-
 
 
 def helm_build_from_params(

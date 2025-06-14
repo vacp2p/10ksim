@@ -5,32 +5,20 @@ import glob
 import logging
 import os
 import shutil
-import time
-from typing import List, Literal, Optional, Tuple
+from typing import List, Literal, Optional
 
 from kubernetes import client
 from kubernetes.client import ApiClient
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field
+
 # from ruamel import yaml
 from ruamel.yaml import YAMLObject
+from ruamel.yaml.comments import CommentedMap
 
 from kube_utils import (
-    assert_equals,
-    cleanup_resources,
-    default_chart_yaml_str,
     get_YAML,
-    get_cleanup_resources,
     helm_build_dir,
-    helm_build_from_params,
-    kubectl_apply,
-    maybe_dir,
-    poll_namespace_has_objects,
-    wait_for_cleanup,
-    wait_for_no_objs_in_namespace,
-    wait_for_rollout,
 )
-
-from ruamel.yaml.comments import CommentedMap
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +30,12 @@ class WakuBuilder(BaseModel):
     deployment_dir: str = Field(default=os.path.dirname(__file__))
 
     def _get_excluded_yamls(self, work_sub_dir, service):
-        return [path for path in glob.glob(os.path.join(work_sub_dir, "templates", "*.yaml"), recursive=False)]
+        return [
+            path
+            for path in glob.glob(
+                os.path.join(work_sub_dir, "templates", "*.yaml"), recursive=False
+            )
+        ]
 
     def _get_values_yamls(self, work_sub_dir, service):
         """Get all *.yaml files from this experiment that should be included in `--values <values.yaml>` args.
@@ -114,7 +107,9 @@ class WakuBuilder(BaseModel):
         all_values = (
             self._get_values_yamls(work_sub_dir, service)
             + [os.path.join("values", name) for name in extra_values_names]
-            + [os.path.relpath(values_path, work_sub_dir)] # It is significant that [values_path] is at the end.
+            + [
+                os.path.relpath(values_path, work_sub_dir)
+            ]  # It is significant that [values_path] is at the end.
         )
 
         deployment = helm_build_dir(

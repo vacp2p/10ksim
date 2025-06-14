@@ -2,15 +2,12 @@
 
 
 import argparse
-from contextlib import ExitStack
 import logging
-import os
 import re
-import shutil
 import time
+from contextlib import ExitStack
 from typing import Callable, List, Optional
 
-from kubernetes import client
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
@@ -21,12 +18,8 @@ from kube_utils import (
     assert_equals,
     cleanup_resources,
     get_cleanup_resources,
-    helm_build_from_params,
     kubectl_apply,
-    maybe_dir,
-    poll_namespace_has_objects,
     wait_for_cleanup,
-    wait_for_no_objs_in_namespace,
     wait_for_rollout,
 )
 from registry import experiment

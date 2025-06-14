@@ -4,21 +4,20 @@
 import argparse
 import logging
 
-from kubernetes.client import ApiClient
 from ruamel import yaml
 
 from deployment.common import BaseExperiment
+from deployment.nimlibp2p.experiments.regression import NimRegressionNodes
 from deployment.waku.experiments.regression import WakuRegressionNodes
 from registry import experiment
-
-from deployment.nimlibp2p.experiments.regression import NimRegressionNodes
 
 logger = logging.getLogger(__name__)
 
 
 @experiment(name="regression-nodes", type="dispatch")
-class RegressionNodes():
-    '''Proxy for running waku-regression-nodes or nim-regression-nodes.'''
+class RegressionNodes:
+    """Proxy for running waku-regression-nodes or nim-regression-nodes."""
+
     def add_parser(subparsers):
         regression_nodes = subparsers.add_parser(
             "regression-nodes", help="Run a regression_nodes test."

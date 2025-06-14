@@ -1,11 +1,9 @@
-from dataclasses import dataclass
 import importlib
 import logging
-import os
-from pathlib import Path
 import sys
-from typing import Dict, List, Any, Literal
-
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +20,7 @@ class Registry:
         self._experiments: List[ExperimentInfo] = []
         self._scan_mode: Literal["raise", "skip", "replace"] = "raise"
 
-    def get_by_metadata(self, **filters)->List[ExperimentInfo]:
+    def get_by_metadata(self, **filters) -> List[ExperimentInfo]:
         return [
             experiment
             for experiment in self._experiments
@@ -96,7 +94,7 @@ registry = Registry()
 
 def experiment(name, **metadata):
     def decorator(cls):
-        metadata['module_path'] = sys.modules[cls.__module__].__file__
+        metadata["module_path"] = sys.modules[cls.__module__].__file__
         exp_name = name if name is not None else cls.__name__
         registry.add(exp_name, cls, **metadata)
         return cls

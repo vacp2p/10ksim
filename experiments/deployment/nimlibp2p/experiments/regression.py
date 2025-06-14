@@ -11,8 +11,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 import humanfriendly
-from kubernetes import client
-from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 

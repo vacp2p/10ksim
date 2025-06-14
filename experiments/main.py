@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import sys
 from typing import Optional
 
 from kubernetes import config
@@ -12,10 +11,7 @@ from ruamel import yaml
 from kube_utils import (
     init_logger,
 )
-
-
 from registry import registry as experiment_registry
-
 
 logger = logging.getLogger(__name__)
 

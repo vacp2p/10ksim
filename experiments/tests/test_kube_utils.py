@@ -12,6 +12,7 @@ def logger():
     logger = logging.getLogger(__name__)
     init_logger(logging.getLogger(), "DEBUG")
 
+
 @pytest.mark.parametrize(
     "start_dict,path,value,sep",
     [

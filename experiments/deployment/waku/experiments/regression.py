@@ -143,7 +143,7 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
 
     def get_flag_value(self, flag: str, command: List[str]) -> int:
         for node in command:
-            matches = re.search(f"--{flag}=(?P<numMessages>\d+)", node)
+            matches = re.search(f"--{flag}=(?P<numMessages>\\d+)", node)
             try:
                 return int(matches["numMessages"])
             except (TypeError, IndexError):

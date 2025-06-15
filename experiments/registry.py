@@ -70,6 +70,11 @@ class Registry:
         spec.loader.exec_module(module)
 
     def scan(self, folder: str, mode: Literal["raise", "skip", "replace"] = "raise") -> None:
+        """Scan a directory for experiments.
+
+        Warning: Do not scan a directory with a venv under it.
+        Scanning venv will raise errors.
+        """
         root_dir = Path(folder).resolve()
         logger.debug(f"Scanning directory for experiments: `{root_dir}`")
         old_mode = self._scan_mode

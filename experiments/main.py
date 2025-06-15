@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 from typing import Optional
 
 from kubernetes import config
@@ -72,7 +73,7 @@ def main():
     )
 
     # Scan for experiments.
-    experiment_registry.scan(".", mode="skip")
+    experiment_registry.scan(os.path.join(os.path.dirname(__file__), "deployment"), mode="skip")
 
     # Add subparsers for all experiments.
     for info in experiment_registry.items():

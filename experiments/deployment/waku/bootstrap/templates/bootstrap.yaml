@@ -6,7 +6,7 @@ metadata:
 spec:
   replicas: 3
   podManagementPolicy: "Parallel"
-  serviceName: zerotesting-bootstrap
+  serviceName: {{ default "zerotesting-bootstrap" .Values.serviceName }}
   selector:
     matchLabels:
       app: zerotenkay-bootstrap
@@ -17,11 +17,10 @@ spec:
     spec:
       dnsConfig:
         searches:
-          - zerotesting-service.zerotesting.svc.cluster.local
-          - zerotesting-bootstrap.zerotesting.svc.cluster.local
+{{- .Values.waku.bootstrap.dnsConfig.searches | toYaml | nindent 10}}
       containers:
         - name: waku
-          image: soutullostatus/nwaku-jq-curl:v0.34.0-rc1
+          image: {{ default "soutullostatus/nwaku-jq-curl" (.Values.waku.bootstrap.image).repository }}:{{ default "v0.34.0-rc1" (.Values.waku.bootstrap.image).tag }}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
@@ -48,7 +47,7 @@ spec:
             - containerPort: 8645
             - containerPort: 8008
           command:
-            - sh
-            - -c
-            - |
-              /usr/bin/wakunode --relay=false --rest=true --rest-address=0.0.0.0 --max-connections=1000 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --nat=extip:$IP --cluster-id=2
+            {{- include "waku.container.command" ( dict
+              "includes" (dict)
+              "command" .Values.waku.bootstrap.command
+            ) | nindent 14 }}

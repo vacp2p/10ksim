@@ -1,0 +1,11 @@
+waku:
+  publisher:
+    container: {}
+    command:
+      args: {}
+      protocols: {}
+    image: {}
+
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting.svc.cluster.local

@@ -2,22 +2,21 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: pod
-  namespace: {{ default "zerotesting-nimlibp2p" .Values.namespace }}
+  namespace: {{ default "zerotesting-nimlibp2p" .Values.nimlibp2p.nodes.namespace }}
 spec:
-  replicas: {{ .Values.replicas }}
+  replicas: {{ .Values.nimlibp2p.nodes.replicas }}
   podManagementPolicy: "Parallel"
   serviceName: nimp2p-service
   selector:
     matchLabels:
-      app: zerotenkay
+      app: {{ default "zerotenkay" .Values.nimlibp2p.nodes.app }}
   template:
     metadata:
       labels:
-        app: zerotenkay
+        app: {{ default "zerotenkay" .Values.nimlibp2p.nodes.app }}
     spec:
       dnsConfig:
-        searches:
-          - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
+        {{- toYaml .Values.nimlibp2p.nodes.dnsConfig | nindent 8 }}
       initContainers:
         - name: slowyourroll
           image: soutullostatus/tc-container:1
@@ -30,7 +29,7 @@ spec:
             - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
       containers:
         - name: container-0
-          image: {{ default "soutullostatus/dst-test-node" .Values.image.repository }}:{{ default "v1.8.0-mplex" .Values.image.tag }}
+          image: {{ default "soutullostatus/dst-test-node" .Values.nimlibp2p.nodes.image.repository }}:{{ default "v1.8.0-mplex" .Values.nimlibp2p.nodes.image.tag }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -50,9 +49,9 @@ spec:
             - name: CONNECTTO
               value: "10"
             - name: MSGRATE
-              value: {{ quote .Values.messageRate }}
+              value: {{ quote .Values.nimlibp2p.nodes.messageRate }}
             - name: MSGSIZE
-              value: {{ quote .Values.messageSize }}
+              value: {{ quote .Values.nimlibp2p.nodes.messageSize }}
           args:
-            - {{ quote .Values.minutes }}
-            - {{ quote .Values.hours }}
+            - {{ quote .Values.nimlibp2p.nodes.minutes }}
+            - {{ quote .Values.nimlibp2p.nodes.hours }}

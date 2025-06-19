@@ -1,0 +1,6 @@
+nimlibp2p:
+  nodes:
+    namespace: "zerotesting-nimlibp2p"
+    image:
+      repository: soutullostatus/dst-test-node
+      tag: v1.8.0-mplex

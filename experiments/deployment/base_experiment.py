@@ -8,6 +8,7 @@ from typing import Optional
 from kubernetes.client import ApiClient
 from pydantic import BaseModel
 from ruamel import yaml
+from ruamel.yaml.comments import CommentedMap
 
 from kube_utils import maybe_dir, poll_namespace_has_objects, wait_for_no_objs_in_namespace
 
@@ -45,6 +46,9 @@ class BaseExperiment(ABC, BaseModel):
         args: Namespace,
         values_yaml: Optional[yaml.YAMLObject],
     ):
+        if values_yaml is None:
+            values_yaml = CommentedMap()
+
         with ExitStack() as stack:
             workdir = args.workdir
             stack.enter_context(maybe_dir(workdir))

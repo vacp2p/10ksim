@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ .Values.name }}
-  namespace: {{ default "zerotesting" .Values.namespace }}
+  name: {{ .Values.waku.nodes.name }}
+  namespace: {{ default "zerotesting" .Values.waku.nodes.namespace }}
 spec:
   replicas: {{ .Values.waku.nodes.numNodes }}
   podManagementPolicy: "Parallel"
-  serviceName: {{ .Values.serviceName }}
+  serviceName: {{ .Values.waku.nodes.serviceName }}
   selector:
     matchLabels:
-      app: {{ .Values.app }}
+      app: {{ .Values.waku.nodes.app }}
   template:
     metadata:
       labels:
-        app: {{ .Values.app }}
+        app: {{ .Values.waku.nodes.app }}
     spec:
       dnsConfig:
         {{- toYaml .Values.waku.nodes.dnsConfig | nindent 8 }}
       volumes:
-      {{ with .Values.volumes }}
+      {{ with .Values.waku.nodes.volumes }}
         {{ toYaml . }}
       {{ end }}
       {{ if .Values.waku.nodes.includes.getEnr }}

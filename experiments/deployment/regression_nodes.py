@@ -3,7 +3,7 @@ from argparse import Namespace
 
 from ruamel import yaml
 
-from deployment.common import BaseExperiment
+from deployment.base_experiment import BaseExperiment
 from deployment.nimlibp2p.experiments.regression import NimRegressionNodes
 from deployment.waku.experiments.regression import WakuRegressionNodes
 from registry import experiment

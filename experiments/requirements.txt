@@ -1,6 +1,6 @@
 PyYAML==6.0.2
 Pygments==2.19.1
-black==25.1.
+black==25.1.0
 dateparser==1.2.1
 humanfriendly==10.0
 kubernetes==32.0.1

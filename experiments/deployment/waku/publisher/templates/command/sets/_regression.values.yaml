@@ -1,0 +1,13 @@
+waku:
+  publisher:
+    command:
+      protocolPresets:
+        regression:
+          relay: true
+      presets:
+        regression:
+          messages: 600
+          msgSizeKbytes: 1
+          delaySeconds: 1
+          pubsubTopic: "/waku/2/rs/2/"
+

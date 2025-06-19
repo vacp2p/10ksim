@@ -1,0 +1,9 @@
+# Example of regression values.yaml.
+waku:
+  publisher:
+    command:
+      type: "regression"
+      args:
+        messages: 10
+        msgSizeKbytes: 10
+        delaySeconds: 1

@@ -1,0 +1,22 @@
+waku:
+  nodes:
+    command:
+      presets:
+        regression:
+          relay : true
+          maxConnections : 150
+          rest : true
+          restAdmin : true
+          restAddress : 0.0.0.0
+          discv5Discovery : true
+          discv5EnrAutoUpdate : True
+          logLevel : INFO
+          metricsServer : True
+          metricsServerAddress : 0.0.0.0
+          discv5BootstrapNode:
+            - $ENR1
+            - $ENR2
+            - $ENR3
+          nat : extip:${IP}
+          clusterId : 2
+          shard : 0

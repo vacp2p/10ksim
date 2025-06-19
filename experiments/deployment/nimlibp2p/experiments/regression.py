@@ -6,7 +6,9 @@ import shutil
 import time
 from argparse import ArgumentParser
 from datetime import datetime, timedelta, timezone
-from typing import Literal, Optional
+from typing import List, Literal, Optional
+
+from kubernetes.client import ApiClient
 
 import humanfriendly
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,11 +30,12 @@ from kube_utils import (
     wait_for_rollout,
     wait_for_time,
 )
+from registry import experiment
 
 logger = logging.getLogger(__name__)
 
-
-class NimRegressionNodes(BaseModel):
+@experiment(name="nimlibp2p2-regression-nodes")
+class NimRegressionNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     release_name: str = Field(default="nim-regression-nodes")
 
@@ -54,31 +57,19 @@ class NimRegressionNodes(BaseModel):
         BaseExperiment.common_flags(subparser)
         NimRegressionNodes.add_args(subparser)
 
-    def run(
-        self,
-        values_yaml: yaml.YAMLObject,
-        workdir: Optional[str] = None,
-        skip_check: bool = False,
-        delay: Optional[timedelta] = None,
-    ):
-        with maybe_dir(workdir) as workdir:
-            try:
-                shutil.rmtree(workdir)
-            except FileNotFoundError:
-                pass
-            self._run(values_yaml, workdir, skip_check)
-
     def _run(
         self,
-        values_yaml: yaml.YAMLObject,
+        api_client: ApiClient,
         workdir: str,
-        skip_check: bool,
-        delay: Optional[timedelta] = None,
+        args: argparse.Namespace,
+        values_yaml: Optional[yaml.YAMLObject],
+        stack: ExitStack,
     ):
+
         # TODO [values param checking]: Add friendly error messages for missing/extraneous variables in values.yaml.
         logger.info("Building kubernetes configs.")
 
-        if delay is not None:
+        if args.delay is not None:
             delay = str_to_timedelta(delay)
             if values_yaml.get("minutes") or values_yaml.get("hours"):
                 logger.warning(
@@ -114,6 +105,14 @@ class NimRegressionNodes(BaseModel):
 
         namespace = deploy["metadata"]["namespace"]
         logger.info(f"Applying deployment to namespace: `{namespace}`")
+
+        cleanup = lambda : self.get_cleanup(
+            api_client=api_client,
+            namespace=namespace,
+            deployments=[bootstrap, nodes, publisher],
+        )
+        stack.callback(cleanup)
+
         try:
             if not skip_check:
                 wait_for_no_objs_in_namespace(namespace=namespace, api_client=self.api_client)
@@ -133,15 +132,17 @@ class NimRegressionNodes(BaseModel):
             wait_for_time(expected_start_time)  # Wait until the nodes begin.
             time.sleep(3000)  # TODO [regression nimlibp2p2 cleanup]: Test for nodes finished?
             logger.info("Test completed successfully.")
-        finally:
+
+
+    def cleanup(self, api_client: ApiClient, namespace: str, deployments: List[yaml.YAMLObject]):
             logger.info("Cleaning up resources.")
-            resources_to_cleanup = get_cleanup_resources([deploy])
+            resources_to_cleanup = get_cleanup_resources(deployments)
             logger.info(f"Resources to clean up: `{resources_to_cleanup}`")
 
             logger.info("Start cleanup.")
-            cleanup_resources(resources_to_cleanup, namespace, self.api_client)
+            cleanup_resources(resources_to_cleanup, namespace, api_client)
             logger.info("Waiting for cleanup.")
-            wait_for_cleanup(resources_to_cleanup, namespace, self.api_client)
+            wait_for_cleanup(resources_to_cleanup, namespace, api_client)
             logger.info("Finished cleanup.")
 
     def get_image_tag(version: str, tag_type: str):

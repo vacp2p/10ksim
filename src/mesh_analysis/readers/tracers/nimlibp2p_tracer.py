@@ -7,7 +7,6 @@ from typing import List, Optional, Self
 # Project Imports
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,9 +35,9 @@ class Nimlibp2pTracer(MessageTracer):
             r'Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)'
         ]
 
-        tracers = [self._trace_received_in_logs,
-                   # self._trace_recv_mixlibp2p_in_logs
-                   ]
+        tracers = [
+            self._trace_received_in_logs,
+        ]
 
         self._patterns.append(patterns)
         self._tracings.append(tracers)
@@ -49,9 +48,26 @@ class Nimlibp2pTracer(MessageTracer):
         patterns = [
             r'Publishing message.*?msgId=([\w*]+).*?timestamp=([\w*]+)'
         ]
-        tracers = [self._trace_sent_in_logs,
-                   #self._trace_sent_mixlibp2p_in_logs
-                   ]
+        tracers = [
+            self._trace_sent_in_logs,
+        ]
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
+
+        return self
+
+    def with_mix_pattern_group(self):
+        patterns = [
+            r'Sender.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)',
+            r'Intermediate.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)',
+            r'Exit.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)'
+        ]
+        tracers = [
+            self._trace_sender_mix_in_logs,
+            self._trace_intermediate_mix_in_logs,
+            self._trace_exit_mix_in_logs
+            ]
+
         self._patterns.append(patterns)
         self._tracings.append(tracers)
 
@@ -97,14 +113,53 @@ class Nimlibp2pTracer(MessageTracer):
 
         return df
 
-    def _trace_mixnet_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        raise NotImplemented
+    def _trace_sender_mix_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ['msgId', 'fromPeerID', 'toPeerID', 'myPeerID', 'orig', 'current', 'procDelay']
+        if self._extra_fields is not None:
+            columns.extend(self._extra_fields)
 
-    def _trace_recv_mixlibp2p_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        raise NotImplemented
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df['msgId'] = pd.to_numeric(df['msgId'], errors='coerce').fillna(-1).astype(int)
+        df['orig'] = df['orig'].astype(np.uint64)
+        df['orig'] = pd.to_datetime(df['orig'], unit='ns')
+        df['current'] = df['current'].astype(np.uint64)
+        df['current'] = pd.to_datetime(df['current'], unit='ns')
+        df['procDelay'] = pd.to_numeric(df['procDelay'], errors='coerce').fillna(-1).astype(float)
+        df['moment'] = 'Sender'
 
-    def _trace_sent_mixlibp2p_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        raise NotImplemented
+        return df
+
+    def _trace_intermediate_mix_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ['msgId', 'fromPeerID', 'toPeerID', 'myPeerID', 'orig', 'current', 'procDelay']
+        if self._extra_fields is not None:
+            columns.extend(self._extra_fields)
+
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df['msgId'] = pd.to_numeric(df['msgId'], errors='coerce').fillna(-1).astype(int)
+        df['orig'] = df['orig'].astype(np.uint64)
+        df['orig'] = pd.to_datetime(df['orig'], unit='ns')
+        df['current'] = df['current'].astype(np.uint64)
+        df['current'] = pd.to_datetime(df['current'], unit='ns')
+        df['procDelay'] = pd.to_numeric(df['procDelay'], errors='coerce').fillna(-1).astype(float)
+        df['moment'] = 'Intermediate'
+
+        return df
+
+    def _trace_exit_mix_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ['msgId', 'fromPeerID', 'toPeerID', 'myPeerID', 'orig', 'current', 'procDelay']
+        if self._extra_fields is not None:
+            columns.extend(self._extra_fields)
+
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df['msgId'] = pd.to_numeric(df['msgId'], errors='coerce').fillna(-1).astype(int)
+        df['orig'] = df['orig'].astype(np.uint64)
+        df['orig'] = pd.to_datetime(df['orig'], unit='ns')
+        df['current'] = df['current'].astype(np.uint64)
+        df['current'] = pd.to_datetime(df['current'], unit='ns')
+        df['procDelay'] = pd.to_numeric(df['procDelay'], errors='coerce').fillna(-1).astype(float)
+        df['moment'] = 'Exit'
+
+        return df
 
     def _trace_all_logs(self, parsed_logs: List) -> List:
         return parsed_logs

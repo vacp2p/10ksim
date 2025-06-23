@@ -1,22 +1,33 @@
+from contextlib import ExitStack
+from copy import deepcopy
+from datetime import timezone as dt_timezone
 import itertools
 import logging
 import os
+from pathlib import Path
 import re
 import shutil
 import time
 from argparse import ArgumentParser
 from datetime import datetime, timedelta, timezone
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Tuple
+from argparse import Namespace
 
 from kubernetes.client import ApiClient
 
 import humanfriendly
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from deployment.common import BaseExperiment
+from deployment.base_experiment import BaseExperiment
+from deployment.builders import build_deployment, build_deployment_type
+
+# from deployment.nimlibp2p.builders import Nimlibp2pBuilder
 from kube_utils import (
     cleanup_resources,
+    dict_get,
+    dict_set,
+    get_cleanup,
     get_cleanup_resources,
     get_future_time,
     helm_build_from_params,
@@ -34,10 +45,24 @@ from registry import experiment
 
 logger = logging.getLogger(__name__)
 
+
+def set_delay(
+    values_yaml: yaml.YAMLObject, hours_key: str, minutes_key: str, delay: str
+) -> yaml.YAMLObject:
+    result = deepcopy(values_yaml)
+    future_time = get_future_time(timedelta(seconds=int(delay)))
+    dict_set(result, minutes_key, future_time.minute, sep=".", replace_leaf=True)
+    dict_set(result, hours_key, future_time.hour, sep=".", replace_leaf=True)
+    return result
+
+
 @experiment(name="nimlibp2p2-regression-nodes")
 class NimRegressionNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     release_name: str = Field(default="nim-regression-nodes")
+    deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent)
+    hours_key: str = Field(default="nimlibp2p.nodes.hours", no_init=True)
+    minutes_key: str = Field(default="nimlibp2p.nodes.minutes", no_init=True)
 
     @staticmethod
     def add_args(subparser: ArgumentParser):
@@ -54,14 +79,34 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         subparser = subparsers.add_parser(
             "nimlibp2p-regression-nodes", help="Run a regression_nodes test using waku."
         )
-        BaseExperiment.common_flags(subparser)
+        BaseExperiment.add_args(subparser)
         NimRegressionNodes.add_args(subparser)
+
+    def _build(
+        self, workdir: str, cli_values: yaml.YAMLObject, delay: Optional[str]
+    ) -> Tuple[yaml.YAMLObject, PositiveInt]:
+        build = lambda values: build_deployment(
+            deployment_dir=os.path.join(self.deployment_dir, "nodes"),
+            workdir=os.path.join(workdir, "nodes"),
+            cli_values=values,
+            name=self.release_name,
+            extra_values_names=["regression.values.yaml"],
+        )
+        if delay is None:
+            deployment = build(cli_values)
+            num_nodes = deployment["spec"]["replicas"]
+            # Assume it takes ~3 seconds to bring up each node.
+            delay = (3 * 60) + (num_nodes * 3)
+            logger.info(f"Using default delay (in seconds): {delay}")
+
+        cli_values = set_delay(cli_values, self.hours_key, self.minutes_key, delay)
+        return build(cli_values), delay
 
     def _run(
         self,
         api_client: ApiClient,
         workdir: str,
-        args: argparse.Namespace,
+        args: Namespace,
         values_yaml: Optional[yaml.YAMLObject],
         stack: ExitStack,
     ):
@@ -69,127 +114,53 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         # TODO [values param checking]: Add friendly error messages for missing/extraneous variables in values.yaml.
         logger.info("Building kubernetes configs.")
 
-        if args.delay is not None:
-            delay = str_to_timedelta(delay)
-            if values_yaml.get("minutes") or values_yaml.get("hours"):
-                logger.warning(
-                    "values.yaml included fields (`minutes` and `hours`) are being overridden by parameter: --delay"
-                )
-            hours, minutes = get_future_time(timedelta(seconds=500))
-            values_yaml["minutes"] = str(minutes)
-            values_yaml["hours"] = str(hours)
-        else:
-            default_delay = (
-                values_yaml["replicas"] * 3
-            )  # Assume it takes ~3 seconds to bring up each node.
-            if not values_yaml.get("minutes") and not values_yaml.get("hours"):
-                logger.info(
-                    f"Node start time not included test params. Using calculated default of `{default_delay}` seconds after utc now."
-                )
-                delay = timedelta(seconds=default_delay)
-                hours, minutes = get_future_time(delay)
-                values_yaml["minutes"] = str(minutes)
-                values_yaml["hours"] = str(hours)
-            else:
-                delay = timedelta_until(
-                    hours=values_yaml.get("hours", "0"), minutes=values_yaml("minutes", "0")
-                )
-        expected_start_time = datetime.now(timezone.utc) + delay
+        deploy, delay = self._build(workdir, values_yaml, delay=args.delay)
+        logger.info(f"Using delay: {delay}")
 
-        deploy = helm_build_from_params(
-            "./deployment/nimlibp2p/regression/deploy.yaml",
-            values_yaml,
-            workdir,
-            self.release_name,
-        )
+        this_time = datetime.now(dt_timezone.utc)
+        logger.info(f"Current UTC time: {this_time.hour:02d}:{this_time.minute:02d}")
+
+        future_time = get_future_time(timedelta(seconds=int(delay)))
+        logger.info(f"Messages will begin at: {future_time.hour:02d}:{future_time.minute:02d}")
 
         namespace = deploy["metadata"]["namespace"]
         logger.info(f"Applying deployment to namespace: `{namespace}`")
 
-        cleanup = lambda : self.get_cleanup(
+        self._wait_until_clear(
             api_client=api_client,
             namespace=namespace,
-            deployments=[bootstrap, nodes, publisher],
+            skip_check=args.skip_check,
+        )
+
+        cleanup = get_cleanup(
+            api_client=api_client,
+            namespace=namespace,
+            deployments=[deploy],
         )
         stack.callback(cleanup)
 
-        try:
-            if not skip_check:
-                wait_for_no_objs_in_namespace(namespace=namespace, api_client=self.api_client)
-            else:
-                namepace_is_empty = poll_namespace_has_objects(
-                    namespace=namespace, api_client=self.api_client
-                )
-                if not namepace_is_empty:
-                    logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")
+        kubectl_apply(deploy, namespace=namespace)
+        logger.info("Deployment applied. Waiting for rollout.")
 
-            logger.info(f"Running a nimlibp2p regression test with values: `{values_yaml}`")
+        wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
+        logger.info("Rollout successful.")
 
-            kubectl_apply(deploy, namespace=namespace)
-            logger.info("Deployment applied. Waiting for rollout.")
-            wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
-            logger.info("Rollout successful.")
-            wait_for_time(expected_start_time)  # Wait until the nodes begin.
-            time.sleep(3000)  # TODO [regression nimlibp2p2 cleanup]: Test for nodes finished?
-            logger.info("Test completed successfully.")
+        logger.info(
+            f"Waiting for message begin time: {future_time.hour:02d}:{future_time.minute:02d}"
+        )
+        wait_for_time(future_time)  # Wait until the nodes begin.
 
+        num_nodes = deploy["spec"]["replicas"]
+        time_to_resolve = (60 * 3) + (num_nodes * 3)
+        logger.info(f"Waiting for messages to resolve. Sleep: {timedelta(seconds=time_to_resolve)}")
+        time.sleep(
+            time_to_resolve
+        )  # TODO [regression nimlibp2p2 cleanup]: Test for nodes finished?
 
-    def cleanup(self, api_client: ApiClient, namespace: str, deployments: List[yaml.YAMLObject]):
-            logger.info("Cleaning up resources.")
-            resources_to_cleanup = get_cleanup_resources(deployments)
-            logger.info(f"Resources to clean up: `{resources_to_cleanup}`")
-
-            logger.info("Start cleanup.")
-            cleanup_resources(resources_to_cleanup, namespace, api_client)
-            logger.info("Waiting for cleanup.")
-            wait_for_cleanup(resources_to_cleanup, namespace, api_client)
-            logger.info("Finished cleanup.")
-
-    def get_image_tag(version: str, tag_type: str):
-        table = {
-            "1.1.0": {
-                "yamux": "v1.1.0-yamux-1",
-                "mplex": "v1.1.0-mplex-2",
-            },
-            "1.2.0": {
-                "mplex": "v1.2.0-mplex",
-                "yamux": "v1.2.0-yamux",
-            },
-            "1.3.0": {
-                "mplex": "v1.3.0-mplex",
-                "yamux": "v1.3.0-yamux",
-            },
-            "1.4.0": {
-                "mplex": "v1.4.0-mplex",
-                "yamux": "v1.4.0-yamux",
-            },
-            "1.5.0": {
-                "mplex": "v1.5.0-mplex-hash-loop",
-                "yamux": "v1.5.0-yamux-hash-loop",
-            },
-            "1.6.0": {
-                "mplex": "v1.6.0-mplex",
-                "yamux": "v1.6.0-yamux",
-            },
-            "1.7.0": {
-                "mplex": "v1.7.0-mplex",
-                "yamux": "v1.7.0-yamux",
-            },
-            "1.7.1": {
-                "mplex": "v1.7.1-mplex",
-                "yamux": "v1.7.1-yamux",
-            },
-            "1.8.0": {
-                "mplex": "v1.8.0-mplex",
-                "yamux": "v1.8.0-yamux",
-            },
-        }
-        try:
-            return table[version][tag_type]
-        except KeyError as e:
-            e.add_note(
-                f"Unknown version/type combination. version: `{version}`, tag_type: `{tag_type}`"
-            )
+        this_time = datetime.now(dt_timezone.utc)
+        logger.info(
+            f"Test completed successfully at UTC time: {this_time.hour:02d}:{this_time.minute:02d}"
+        )
 
     def generate_values(
         version: str,
@@ -213,15 +184,20 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         else:
             tag_str = f"v{version}-{tag_suffix}"
 
-        hours, minutes = get_future_time(delay)
-        return {
+        future_time = get_future_time(delay)
+
+        values = {}
+        for key, value in {
             "messageSize": str(humanfriendly.parse_size(size)),
             "messageRate": "10000" if size == "500KB" else "1000",
             "replicas": "1000",
             "image": {"repository": "soutullostatus/dst-test-node", "tag": tag_str},
-            "minutes": str(minutes),
-            "hours": str(hours),
-        }
+            "minutes": str(future_time.minute),
+            "hours": str(future_time.hour),
+        }.items():
+            dict_set(values, ["nimlibp2p", "nodes", key], value)
+
+        return values
 
 
 def generate_deployments(workdir, versions, sizes, suffixes):
@@ -248,12 +224,7 @@ def generate_deployment(workdir, version, size, suffix):
         pass
 
     values = NimRegressionNodes.generate_values(version, size, suffix)
-    deploy = helm_build_from_params(
-        "./deployment/nimlibp2p/regression/deploy.yaml",
-        values,
-        os.path.join(workdir, ".."),
-        "pod",
-    )
+    deploy, _ = NimRegressionNodes()._build(workdir, values, None)
 
     with open(os.path.join(workdir, folder_name, filename), "w") as fout:
         yaml.safe_dump(deploy, fout)

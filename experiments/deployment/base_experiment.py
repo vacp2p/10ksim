@@ -3,6 +3,8 @@ import shutil
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from contextlib import ExitStack
+
+from ruamel.yaml.comments import CommentedMap
 from typing import Optional
 
 from kubernetes.client import ApiClient
@@ -45,6 +47,9 @@ class BaseExperiment(ABC, BaseModel):
         args: Namespace,
         values_yaml: Optional[yaml.YAMLObject],
     ):
+        if values_yaml is None:
+            values_yaml = CommentedMap()
+
         with ExitStack() as stack:
             workdir = args.workdir
             stack.enter_context(maybe_dir(workdir))

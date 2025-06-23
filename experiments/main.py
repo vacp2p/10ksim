@@ -27,7 +27,7 @@ def run_experiment(
 
     try:
         with open(values_path, "r") as values:
-            values_yaml = yaml.safe_load(values.read())
+            values_yaml = yaml.safe_load(values.read()) # todo: change to get_YAML().load()...
     except TypeError:
         # values_path is None.
         values_yaml = None

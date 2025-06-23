@@ -1,91 +1,67 @@
-#!/usr/bin/env python3
 
 
-import logging
-import os
-import shutil
-from typing import List, Literal, Optional
+# from datetime import timedelta
+# import logging
+# import os
+# import shutil
+# from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
-from yaml import YAMLObject
+# from pydantic import BaseModel, Field
+# from yaml import YAMLObject
 
-from ruamel.yaml.comments import CommentedMap
+# from ruamel.yaml.comments import CommentedMap
+# import yaml
 
-logger = logging.getLogger(__name__)
+# from deployment.builders import DeploymentBuilder
+# from kube_utils import get_future_time, get_values_yamls, merge_helm_values, relative_paths, timedelta_until
+
+# logger = logging.getLogger(__name__)
+
+# def get_yaml_delay(
+#     values_yaml: yaml.YAMLObject,
+#     minutes_key: str,
+#     hours_key: str,
+# ):
+#     if not values_yaml.get(minutes_key) and not values_yaml.get(hours_key):
+#         return None
+#     return timedelta_until(
+#         hours=values_yaml.get(hours_key, "0"), minutes=values_yaml(minutes_key, "0")
+#     )
+
+# def set_delay( values_yaml : yaml.YAMLObject, hours_key: str, minutes_key:str, delay : str) -> timedelta:
+#     hours, minutes = get_future_time(delay)
+#     values_yaml[minutes_key] = minutes
+#     values_yaml[hours_key] = hours
+
+# class Nimlibp2pBuilder(BaseModel):
+#     deployment_dir: str = Field(default=os.path.dirname(__file__))
 
 
-class Nimlibp2pBuilder(BaseModel):
+#     def build(
+#         self,
+#         workdir: str,
+#         cli_values: Optional[YAMLObject],
+#         extra_values_names: Optional[List[str]] = None,
+#         name: Optional[str] = None,
+#     ) -> YAMLObject:
+#         """
 
-    deployment_dir: str = Field(default=os.path.dirname(__file__))
+#         :param cli_values: Yaml object of values.yaml passed in main CLI.
+#         :type cli_values: Optional[yaml.YAMLObject],
 
-    def build(
-        self,
-        workdir: str,
-        cli_values: Optional[YAMLObject],
-        extra_values_names: Optional[List[str]] = None,
-        name: Optional[str] = None,
-    ) -> YAMLObject:
-        """
+#         :param extra_values_names: The names of the extra values yamls to use from the ./values/ subdirectory. Eg. ["regression.yaml"]
+#         :type extra_values_names: Optional[List[str]]
 
-        :param cli_values: Yaml object of values.yaml passed in main CLI.
-        :type cli_values: Optional[yaml.YAMLObject],
+#         """
+#         logger.debug(f"Building libnimp2p deployment file.")
+#         if extra_values_names is None:
+#             extra_values_names = []
+#         if cli_values is None:
+#             cli_values = CommentedMap()
 
-        :param extra_values_names: The names of the extra values yamls to use from the ./values/ subdirectory. Eg. ["regression.yaml"]
-        :type extra_values_names: Optional[List[str]]
+#         service_dir = os.path.join(self.deployment_dir, "nodes")
+#         delay = args.delay if args.delay is not None else default_delay
+#         set_delay(cli_values, "hours", "minutes", delay)
+#         # expected_start_time = datetime.now(timezone.utc) + delay
+#         # return super().build(workdir, cli_values, service, )
 
-        """
-        logger.debug(f"Building libnimp2p deployment file.")
-        if extra_values_names is None:
-            extra_values_names = []
-        if cli_values is None:
-            cli_values = CommentedMap()
-
-        work_sub_dir = os.path.join(workdir, "nimlibp2p")
-        logger.debug(f"Removing work subdir: {work_sub_dir}")
-        try:
-            shutil.rmtree(work_sub_dir)
-        except FileNotFoundError:
-            pass
-
-            # todo asdf curr
-        shutil.copytree(
-            os.path.join(self.deployment_dir, service),
-            work_sub_dir,
-        )
-
-        # TODO [error checking] Check for collision between service dir and common templates.
-        shutil.copytree(
-            os.path.join(self.deployment_dir, "templates"),
-            os.path.join(work_sub_dir, "templates"),
-            "templates",
-            dirs_exist_ok=True,
-        )
-
-        values_path = os.path.join(work_sub_dir, "cli_values.yaml")
-        yaml = get_YAML()
-        assert not os.path.exists(
-            values_path
-        ), "Unexpected: cli_values.yaml already exists in template path."
-        with open(values_path, "w") as out:
-            yaml.dump(cli_values, out)
-
-        # extra_values = [os.path.join(work_sub_dir, values, name) for name in extra_values_names]
-        all_values = (
-            self._get_values_yamls(work_sub_dir, service)
-            + [os.path.join("values", name) for name in extra_values_names]
-            + [
-                os.path.relpath(values_path, work_sub_dir)
-            ]  # It is significant that [values_path] is at the end.
-        )
-
-        deployment = helm_build_dir(
-            workdir=work_sub_dir,
-            values_paths=all_values,
-            name=name,
-        )
-
-        # Dump the constructed deployment yaml for debugging/reference.
-        with open(os.path.join(work_sub_dir, "out_deployment.yaml"), "w") as out:
-            yaml.dump(deployment, out)
-
-        return deployment

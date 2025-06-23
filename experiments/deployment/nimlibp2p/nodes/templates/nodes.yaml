@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pod
+  namespace: {{ default "zerotesting-nimlibp2p" .Values.nimlibp2p.nodes.namespace }}
+spec:
+  replicas: {{ .Values.nimlibp2p.nodes.replicas }}
+  podManagementPolicy: "Parallel"
+  serviceName: nimp2p-service
+  selector:
+    matchLabels:
+      app: {{ default "zerotenkay" .Values.nimlibp2p.nodes.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ default "zerotenkay" .Values.nimlibp2p.nodes.app }}
+    spec:
+      dnsConfig:
+        {{- toYaml .Values.nimlibp2p.nodes.dnsConfig | nindent 8 }}
+      initContainers:
+        - name: slowyourroll
+          image: soutullostatus/tc-container:1
+          securityContext:
+            capabilities:
+              add: [ "NET_ADMIN" ]
+          command:
+            - sh
+            - -c
+            - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+      containers:
+        - name: container-0
+          image: {{ default "soutullostatus/dst-test-node" .Values.nimlibp2p.nodes.image.repository }}:{{ default "v1.8.0-mplex" .Values.nimlibp2p.nodes.image.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+            - containerPort: 8008
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: PEERNUMBER
+              value: "0"
+            - name: PEERS
+              value: "1000"
+            - name: CONNECTTO
+              value: "10"
+            - name: MSGRATE
+              value: {{ quote .Values.nimlibp2p.nodes.messageRate }}
+            - name: MSGSIZE
+              value: {{ quote .Values.nimlibp2p.nodes.messageSize }}
+          args:
+            - {{ quote .Values.nimlibp2p.nodes.minutes }}
+            - {{ quote .Values.nimlibp2p.nodes.hours }}

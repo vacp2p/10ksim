@@ -1,0 +1,9 @@
+nimlibp2p:
+  nodes:
+    namespace: "zerotesting-nimlibp2p"
+    replicas: 20
+    messageRate: 1000
+    messageSize: 1000
+    image:
+      repository: soutullostatus/dst-test-node
+      tag: v1.8.0-mplex

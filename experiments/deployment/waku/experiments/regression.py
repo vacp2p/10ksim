@@ -1,4 +1,6 @@
 import logging
+import os
+from pathlib import Path
 import time
 from argparse import Namespace
 from contextlib import ExitStack
@@ -8,8 +10,8 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
-from deployment.common import BaseExperiment
-from deployment.waku.builders import WakuBuilder
+from deployment.base_experiment import BaseExperiment
+from deployment.builders import build_deployment_type
 from kube_utils import assert_equals, get_cleanup, get_flag_value, kubectl_apply, wait_for_rollout
 from registry import experiment
 
@@ -21,12 +23,28 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     release_name: str = Field(default="waku-regression-nodes")
 
+    deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent)
+
     @staticmethod
     def add_parser(subparsers) -> None:
         subparser = subparsers.add_parser(
             "waku-regression-nodes", help="Run a regression_nodes test using waku."
         )
         BaseExperiment.add_args(subparser)
+
+    def _build(
+        self,
+        workdir: str,
+        values_yaml: Optional[yaml.YAMLObject],
+        service : str,
+    ) -> yaml.YAMLObject:
+        return build_deployment_type(
+            deployment_dir=self.deployment_dir,
+            workdir=workdir,
+            cli_values=values_yaml,
+            service=service,
+            extra_values_names=["regression.values.yaml"],
+        )
 
     def _run(
         self,
@@ -38,10 +56,9 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
     ):
         # TODO [values param checking]: Add friendly error messages for missing/extraneous variables in values.yaml.
         logger.info("Building kubernetes configs.")
-        builder = WakuBuilder(api_client=api_client)
-        nodes = builder.build(workdir, values_yaml, "nodes", ["regression.values.yaml"])
-        bootstrap = builder.build(workdir, values_yaml, "bootstrap", ["regression.values.yaml"])
-        publisher = builder.build(workdir, values_yaml, "publisher", ["regression.values.yaml"])
+        nodes = self._build(workdir, values_yaml, "nodes")
+        bootstrap = self._build(workdir, values_yaml, "bootstrap")
+        publisher = self._build(workdir, values_yaml, "publisher")
 
         # Sanity check
         namespace = bootstrap["metadata"]["namespace"]

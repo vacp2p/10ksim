@@ -1,7 +1,7 @@
 {{- define "waku.nodes.readiness-probe.metrics" -}}
 - /bin/sh
 - -c
-- >
+- |
   curl_output=$(curl -s http://127.0.0.1:8008/metrics);
   curl_status=$?;
   if [ $curl_status -ne 0 ]; then

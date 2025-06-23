@@ -1,11 +1,9 @@
-name: nodes-0
-namespace: zerotesting
-
-serviceName: zerotesting-service
-app: zerotenkay
-
 waku:
   nodes:
+    name: nodes-0
+    namespace: zerotesting
+    serviceName: zerotesting-service
+    app: zerotenkay
     numNodes: 10
     getEnr:
       repo: "soutullostatus/getenr"
@@ -14,6 +12,7 @@ waku:
       serviceName: "zerotesting-bootstrap.zerotesting"
     command:
       type: "regression"
+      nice: 19
       args:
         maxConnections: 200
     readinessProbe:

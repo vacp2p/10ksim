@@ -65,12 +65,7 @@ class Nimlibp2pAnalyzer:
             self._analyze_reliability_local(n_jobs)
 
     def analyze_mix_trace(self, n_jobs: int):
-        result = self._assert_num_nodes()
-        if result.is_ok():
-            logger.info(result.ok_value)
-        else:
-            logger.error(result.err_value)
-            exit(1)
+        self._assert_num_nodes()
 
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs['extra_fields']) \
             .with_received_pattern_group() \
@@ -89,12 +84,7 @@ class Nimlibp2pAnalyzer:
             exit(1)
 
     def _analyze_reliability_cluster(self, n_jobs: int):
-        result = self._assert_num_nodes()
-        if result.is_ok():
-            logger.info(result.ok_value)
-        else:
-            logger.error(result.err_value)
-            exit(1)
+        self._assert_num_nodes()
 
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs['extra_fields']) \
             .with_received_pattern_group() \
@@ -118,7 +108,7 @@ class Nimlibp2pAnalyzer:
             logger.info('Dumping logs from nodes with issues')
             self._dump_logs(nodes_with_issues)
 
-    def _assert_num_nodes(self) -> Result[str, str]:
+    def _assert_num_nodes(self) -> None:
         tracer = Nimlibp2pTracer().with_wildcard_pattern()
         query = '*'
 
@@ -127,11 +117,10 @@ class Nimlibp2pAnalyzer:
 
         num_nodes_per_ss = stack_analysis.get_number_nodes()
         for i, num_nodes in enumerate(num_nodes_per_ss):
-            if num_nodes != self._kwargs['nodes_per_statefulset'][i]:
-                return Err(f'Number of nodes in cluster {num_nodes_per_ss} doesnt match'
-                             f'with provided {self._kwargs["nodes_per_statefulset"]} data.')
+            assert num_nodes == self._kwargs['nodes_per_statefulset'][i], \
+                f'Number of nodes in cluster {num_nodes_per_ss} doesnt match'
+            f'with provided {self._kwargs["nodes_per_statefulset"]} data.'
 
-        return Ok(f'Found {num_nodes_per_ss} nodes')
 
     def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
         logger.info("Merging and sorting information")

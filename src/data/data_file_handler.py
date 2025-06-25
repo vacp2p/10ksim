@@ -12,6 +12,18 @@ from src.data.data_handler import DataHandler
 logger = logging.getLogger(__name__)
 
 
+def sort_by_file_list(data: List[Path], file_list: Optional[List[str]]) -> List[Path]:
+    if not file_list:
+        return sorted(data)
+
+    order = {name: index for index, name in enumerate(file_list)}
+    sorted_data = sorted(
+        data,
+        key=lambda path: order.get(path.name, len(file_list))
+    )
+
+    return sorted_data
+
 class DataFileHandler(DataHandler):
 
     def __init__(self, ignore_columns: Optional[List] = None, include_files: Optional[List] = None):
@@ -22,8 +34,10 @@ class DataFileHandler(DataHandler):
         for folder in folders:
             folder_path = Path(folder)
             folder_df = pd.DataFrame()
-            match file_utils.get_files_from_folder_path(folder_path, self._include_files):
+            match file_utils.get_files_from_folder_path(folder_path):
                 case Ok(data_files_names):
+                    if self._include_files:
+                        data_files_names = reversed([name for name in self._include_files if name in data_files_names])
                     folder_df = self._concat_files_as_mean(folder_df, data_files_names, folder_path,
                                                            points)
                     folder_df["class"] = f"{folder_path.parent.name}/{folder_path.name}"

@@ -1,14 +1,16 @@
 general_config:
   times_names:
-    - [ "2025-06-23 16:45:00", "2025-06-23 16:53:00", "1k_1s_1KB" ]
-    - [ "2025-06-23 17:26:52", "2025-06-23 18:13:42", "1k_5s_1KB" ]
-    - [ "2025-06-23 18:42:03", "2025-06-23 20:16:55", "1k_10s_1KB" ]
-    - [ "2025-06-23 20:52:44", "2025-06-23 21:00:56", "2k_1s_1KB" ]
-    - [ "2025-06-23 21:24:37", "2025-06-23 22:12:46", "2k_5s_1KB" ]
-    - [ "2025-06-23 22:37:05", "2025-06-24 00:12:57", "2k_10s_1KB" ]
-    - [ "2025-06-24 01:47:49", "2025-06-24 01:55:46", "3k_1s_1KB" ]
-    - [ "2025-06-24 03:48:38", "2025-06-24 04:38:17", "3k_5s_1KB" ]
-    - [ "2025-06-24 13:51:12", "2025-06-24 13:58:26", "3k_10s_1KB" ]
+
+    - [ "2025-06-23 14:45:00", "2025-06-23 14:53:00", "1k_1s_1KB" ]
+    - [ "2025-06-23 15:26:52", "2025-06-23 16:13:42", "1k_5s_1KB" ]
+    - [ "2025-06-23 16:42:03", "2025-06-23 18:16:55", "1k_10s_1KB" ]
+    - [ "2025-06-23 18:52:44", "2025-06-23 19:00:56", "2k_1s_1KB" ]
+    - [ "2025-06-23 19:24:37", "2025-06-23 20:12:46", "2k_5s_1KB" ]
+    - [ "2025-06-23 20:37:05", "2025-06-23 22:12:57", "2k_10s_1KB" ]
+    - [ "2025-06-25 06:03:43", "2025-06-25 06:12:51", "3k_1s_1KB" ]
+    - [ "2025-06-25 06:37:31", "2025-06-25 07:24:13", "3k_5s_1KB" ]
+    - [ "2025-06-25 07:48:15", "2025-06-25 09:25:59", "3k_10s_1KB" ]
+
 scrape_config:
   $__rate_interval: "121s"
   step: "60s"
@@ -22,14 +24,27 @@ metrics_to_scrape:
   #   query: "libp2p_open_streams"
   #   extract_field: "instance-type-dir"
   #   folder_name: "libp2p-open-streams/"
+
+
   libp2p_network_in:
-    query: "rate(libp2p_network_bytes_total{direction='in', namespace='zerotesting'}[$__rate_interval])"
+    query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
+    # query: "rate(libp2p_network_bytes_total{direction='in', namespace='zerotesting'}[$__rate_interval])"
     extract_field: "instance"
     folder_name: "libp2p-in/"
   libp2p_network_out:
     query: "rate(libp2p_network_bytes_total{direction='out', namespace='zerotesting'}[$__rate_interval])"
     extract_field: "instance"
     folder_name: "libp2p-out/"
+  discv5_network_in:
+    query: "rate(discv5_network_bytes_total{direction='in', namespace='zerotesting'}[$__rate_interval])"
+    extract_field: "instance"
+    folder_name: "discv5-in/"
+  discv5_network_out:
+    query: "rate(discv5_network_bytes_total{direction='out', namespace='zerotesting'}[$__rate_interval])"
+    extract_field: "instance"
+    folder_name: "discv5-out/"
+
+
   # container_recv_bytes:
   #   query: "rate(container_network_receive_bytes_total{namespace='zerotesting'}[$__rate_interval])"
   #   extract_field: "pod-node"
@@ -55,7 +70,7 @@ metrics_to_scrape:
   #   extract_field: "pod-node"
   #   folder_name: "nim-gc-memory/"
 plotting:
-  "bandwidth-0-33-3K":
+  "bandwidth-0-36-3K":
     "ignore_columns": ["bootstrap", "midstrap"]
     "data_points": 25
     "folder":
@@ -63,10 +78,48 @@ plotting:
     "data":
       - "libp2p-in"
       - "libp2p-out"
-      #    "include_files":
-      # - "3K-1mgs-s-1KB"
-      # - "3K-1mgs-5s-1KB"
-      # - "3K-1mgs-10s-1KB"
+    "include_files":
+      - 3k_1s_1KB
+      - 3k_5s_1KB
+      - 3k_10s_1KB
+    "xlabel_name": "Simulation"
+    "ylabel_name": "KBytes/s"
+    "show_min_max": false
+    "outliers": true
+    "scale-x": 1000
+    "fig_size": [20, 20]
+
+  "bandwidth-0-36-2K":
+    "ignore_columns": ["bootstrap", "midstrap"]
+    "data_points": 25
+    "folder":
+      - "test/nwaku/v0.36.0-rc.0/"
+    "data":
+      - "libp2p-in"
+      - "libp2p-out"
+    "include_files":
+      - 2k_1s_1KB
+      - 2k_5s_1KB
+      - 2k_10s_1KB
+    "xlabel_name": "Simulation"
+    "ylabel_name": "KBytes/s"
+    "show_min_max": false
+    "outliers": true
+    "scale-x": 1000
+    "fig_size": [20, 20]
+
+  "bandwidth-0-36-1K":
+    "ignore_columns": ["bootstrap", "midstrap"]
+    "data_points": 25
+    "folder":
+      - "test/nwaku/v0.36.0-rc.0/"
+    "data":
+      - "libp2p-in"
+      - "libp2p-out"
+    "include_files":
+      - 1k_1s_1KB
+      - 1k_5s_1KB
+      - 1k_10s_1KB
     "xlabel_name": "Simulation"
     "ylabel_name": "KBytes/s"
     "show_min_max": false

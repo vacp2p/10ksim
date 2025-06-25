@@ -1,4 +1,8 @@
+import logging
+logging.basicConfig(level=logging.DEBUG, force=True)
+
 # Python Imports
+
 
 # Project Imports
 import src.logger.logger
@@ -9,10 +13,10 @@ from src.utils import file_utils
 
 
 def main():
-    url = "https://metrics.riff.cc/select/0/prometheus/api/v1/"
+    url = "https://metrics.vaclab.org/select/0/prometheus/api/v1/"
     scrape_config = "scrape.yaml"
 
-    scrapper = Scrapper("rubi.yaml", url, scrape_config)
+    scrapper = Scrapper("~/vac/configs/sapphire.yaml", url, scrape_config)
     scrapper.query_and_dump_metrics()
 
     config_dict = file_utils.read_yaml_file("scrape.yaml")

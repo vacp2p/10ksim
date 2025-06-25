@@ -27,24 +27,25 @@ if __name__ == "__main__":
 
     data = [
 
-        ("2025-06-23T18:36:44", "2025-06-23T18:59:09", "local_data/simulations_data/1k_1s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-23T19:01:04", "2025-06-23T20:21:38", "local_data/simulations_data/1k_5s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-23T20:22:57", "2025-06-23T22:32:38", "local_data/simulations_data/1k_10s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-23T22:35:15", "2025-06-23T23:09:16", "local_data/simulations_data/2k_1s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-23T23:08:20", "2025-06-24T00:21:30", "local_data/simulations_data/2k_5s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-24T00:19:33", "2025-06-24T02:29:44", "local_data/simulations_data/2k_10s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-24T03:22:18", "2025-06-24T04:23:57", "local_data/simulations_data/3k_1s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-24T05:33:01", "2025-06-24T06:45:14", "local_data/simulations_data/3k_5s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-24T15:33:51", "2025-06-24T16:14:10", "local_data/simulations_data/3k_10s_1KB/v0.36.0-rc.0/"),
+        ("2025-06-23T18:36:44", "2025-06-23T18:59:09", "local_data/simulations_data/1k_1s_1KB/v0.36.0-rc.0/", 1000),
+        ("2025-06-23T19:01:04", "2025-06-23T20:21:38", "local_data/simulations_data/1k_5s_1KB/v0.36.0-rc.0/", 1000),
+        ("2025-06-23T20:22:57", "2025-06-23T22:32:38", "local_data/simulations_data/1k_10s_1KB/v0.36.0-rc.0/", 1000),
+        ("2025-06-23T22:35:15", "2025-06-23T23:09:16", "local_data/simulations_data/2k_1s_1KB/v0.36.0-rc.0/", 2000),
+        ("2025-06-23T23:08:20", "2025-06-24T00:21:30", "local_data/simulations_data/2k_5s_1KB/v0.36.0-rc.0/", 2000),
+        ("2025-06-24T00:19:33", "2025-06-24T02:29:44", "local_data/simulations_data/2k_10s_1KB/v0.36.0-rc.0/", 2000),
+        ("2025-06-25T09:48:46", "2025-06-25T10:19:22", "local_data/simulations_data/3k_1s_1KB/v0.36.0-rc.0/", 3000),
+        ("2025-06-25T10:21:04", "2025-06-25T11:31:33", "local_data/simulations_data/3k_5s_1KB/v0.36.0-rc.0/", 3000),
+        ("2025-06-25T11:32:09", "2025-06-25T13:35:01", "local_data/simulations_data/3k_10s_1KB/v0.36.0-rc.0/", 3000),
 
     ]
 
-    for start, end, path in data:
+    for start, end, path, num_nodes in data:
         if not os.path.exists(os.path.join(path, "summary")):
             print("data summary DNE. create it.")
             stack["start_time"] = start
             stack["end_time"] = end
-            print(f"gen: {start} {end} {path}")
+            stack["nodes_per_statefulset"] = [num_nodes]
+            print(f"gen: [{start}, {end}] {path}")
             log_analyzer = WakuAnalyzer(dump_analysis_dir=path,
                                         **stack)
             log_analyzer.analyze_reliability(n_jobs=6)

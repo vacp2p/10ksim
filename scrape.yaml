@@ -1,18 +1,18 @@
 general_config:
   times_names:
-    - [ "2024-05-15 12:31:00", "2024-05-15 12:47:00", "3K-1mgs-s-1KB" ]
-    - [ "2024-05-15 13:10:00", "2024-05-15 13:30:00", "2K-1mgs-s-1KB" ]
-    - [ "2024-05-15 16:34:00", "2024-05-15 16:56:00", "1K-1mgs-s-1KB" ]
-    - [ "2024-05-15 19:34:00", "2024-05-15 19:59:00", "3K-1mgs-5s-1KB" ]
-    - [ "2024-05-15 21:10:00", "2024-05-15 22:10:00", "2K-1mgs-5s-1KB" ]
-    - [ "2024-05-16 11:11:00", "2024-05-16 11:29:00", "1K-1mgs-5s-1KB" ]
-    - [ "2024-05-16 11:54:00", "2024-05-16 12:22:00", "3K-1mgs-10s-1KB" ]
-    - [ "2024-05-16 12:55:00", "2024-05-16 13:19:00", "2K-1mgs-10s-1KB" ]
-    - [ "2024-05-16 16:35:00", "2024-05-16 16:58:00", "1K-1mgs-10s-1KB" ]
+    - [ "2025-06-23 16:45:00", "2025-06-23 16:53:00", "1k_1s_1KB" ]
+    - [ "2025-06-23 17:26:52", "2025-06-23 18:13:42", "1k_5s_1KB" ]
+    - [ "2025-06-23 18:42:03", "2025-06-23 20:16:55", "1k_10s_1KB" ]
+    - [ "2025-06-23 20:52:44", "2025-06-23 21:00:56", "2k_1s_1KB" ]
+    - [ "2025-06-23 21:24:37", "2025-06-23 22:12:46", "2k_5s_1KB" ]
+    - [ "2025-06-23 22:37:05", "2025-06-24 00:12:57", "2k_10s_1KB" ]
+    - [ "2025-06-24 01:47:49", "2025-06-24 01:55:46", "3k_1s_1KB" ]
+    - [ "2025-06-24 03:48:38", "2025-06-24 04:38:17", "3k_5s_1KB" ]
+    - [ "2025-06-24 13:51:12", "2025-06-24 13:58:26", "3k_10s_1KB" ]
 scrape_config:
   $__rate_interval: "121s"
   step: "60s"
-  dump_location: "test/nwaku0.26-f/"
+  dump_location: "test/nwaku/v0.36.0-rc.0/"
 metrics_to_scrape:
   # libp2p_peers:
   #   query: "libp2p-peers"
@@ -23,11 +23,11 @@ metrics_to_scrape:
   #   extract_field: "instance-type-dir"
   #   folder_name: "libp2p-open-streams/"
   libp2p_network_in:
-    query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
+    query: "rate(libp2p_network_bytes_total{direction='in', namespace='zerotesting'}[$__rate_interval])"
     extract_field: "instance"
     folder_name: "libp2p-in/"
   libp2p_network_out:
-    query: "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])"
+    query: "rate(libp2p_network_bytes_total{direction='out', namespace='zerotesting'}[$__rate_interval])"
     extract_field: "instance"
     folder_name: "libp2p-out/"
   # container_recv_bytes:
@@ -59,14 +59,14 @@ plotting:
     "ignore_columns": ["bootstrap", "midstrap"]
     "data_points": 25
     "folder":
-      - "test/nwaku0.26-f/"
+      - "test/nwaku/v0.36.0-rc.0/"
     "data":
       - "libp2p-in"
       - "libp2p-out"
-    "include_files":
-      - "3K-1mgs-s-1KB"
-      - "3K-1mgs-5s-1KB"
-      - "3K-1mgs-10s-1KB"
+      #    "include_files":
+      # - "3K-1mgs-s-1KB"
+      # - "3K-1mgs-5s-1KB"
+      # - "3K-1mgs-10s-1KB"
     "xlabel_name": "Simulation"
     "ylabel_name": "KBytes/s"
     "show_min_max": false

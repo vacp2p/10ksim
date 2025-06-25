@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
         ("2025-06-23T18:36:44", "2025-06-23T18:59:09", "local_data/simulations_data/1k_1s_1KB/v0.36.0-rc.0/"),
         ("2025-06-23T19:01:04", "2025-06-23T20:21:38", "local_data/simulations_data/1k_5s_1KB/v0.36.0-rc.0/"),
-        ("2025-06-23T20:25:24", "2025-06-23T20:25:24", "local_data/simulations_data/1k_10s_1KB/v0.36.0-rc.0/"),
+        ("2025-06-23T20:22:57", "2025-06-23T22:32:38", "local_data/simulations_data/1k_10s_1KB/v0.36.0-rc.0/"),
         ("2025-06-23T22:35:15", "2025-06-23T23:09:16", "local_data/simulations_data/2k_1s_1KB/v0.36.0-rc.0/"),
         ("2025-06-23T23:08:20", "2025-06-24T00:21:30", "local_data/simulations_data/2k_5s_1KB/v0.36.0-rc.0/"),
         ("2025-06-24T00:19:33", "2025-06-24T02:29:44", "local_data/simulations_data/2k_10s_1KB/v0.36.0-rc.0/"),
@@ -44,6 +44,7 @@ if __name__ == "__main__":
             print("data summary DNE. create it.")
             stack["start_time"] = start
             stack["end_time"] = end
+            print(f"gen: {start} {end} {path}")
             log_analyzer = WakuAnalyzer(dump_analysis_dir=path,
                                         **stack)
             log_analyzer.analyze_reliability(n_jobs=6)

@@ -64,13 +64,26 @@ class Nimlibp2pAnalyzer:
         else:
             self._analyze_reliability_local(n_jobs)
 
+    def analyze_mix_trace(self, n_jobs: int):
+        self._assert_num_nodes()
+
+        tracer = Nimlibp2pTracer(extra_fields=self._kwargs['extra_fields']) \
+            .with_received_pattern_group() \
+            .with_sent_pattern_group() \
+            .with_mix_pattern_group()
+
+        queries = ['Received message', 'Publishing message', '("Sender " OR "Intermediate " OR "Exit ")']
+        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
+        dfs = self._merge_mix_dfs(dfs)
+        result = self._dump_mix_dfs(dfs)
+        if result.is_err():
+            logger.error(f'Issue dumping message summary. {result.err_value}')
+
     def _analyze_reliability_cluster(self, n_jobs: int):
-        result = self._assert_num_nodes()
-        if result.is_ok():
-            logger.info(result.ok_value)
-        else:
-            logger.error(result.err_value)
-            exit(1)
+        self._assert_num_nodes()
 
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs['extra_fields']) \
             .with_received_pattern_group() \
@@ -85,8 +98,8 @@ class Nimlibp2pAnalyzer:
 
         result = self._dump_dfs(dfs)
         if result.is_err():
-            logger.warning(f'Issue dumping message summary. {result.err_value}')
-            exit(1)
+            logger.error(f'Issue dumping message summary. {result.err_value}')
+            return None
 
         nodes_with_issues = self._has_message_reliability_issues('msgId', 'kubernetes.pod_name', dfs[0], dfs[1],
                                                                  self._dump_analysis_path)
@@ -94,7 +107,7 @@ class Nimlibp2pAnalyzer:
             logger.info('Dumping logs from nodes with issues')
             self._dump_logs(nodes_with_issues)
 
-    def _assert_num_nodes(self) -> Result[str, str]:
+    def _assert_num_nodes(self) -> None:
         tracer = Nimlibp2pTracer().with_wildcard_pattern()
         query = '*'
 
@@ -103,11 +116,10 @@ class Nimlibp2pAnalyzer:
 
         num_nodes_per_ss = stack_analysis.get_number_nodes()
         for i, num_nodes in enumerate(num_nodes_per_ss):
-            if num_nodes != self._kwargs['nodes_per_statefulset'][i]:
-                return Err(f'Number of nodes in cluster {num_nodes_per_ss} doesnt match'
-                             f'with provided {self._kwargs["nodes_per_statefulset"]} data.')
+            assert num_nodes == self._kwargs['nodes_per_statefulset'][i], \
+                f'Number of nodes in cluster {num_nodes_per_ss} doesnt match'
+            f'with provided {self._kwargs["nodes_per_statefulset"]} data.'
 
-        return Ok(f'Found {num_nodes_per_ss} nodes')
 
     def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
         logger.info("Merging and sorting information")
@@ -122,6 +134,23 @@ class Nimlibp2pAnalyzer:
 
         return [received_df, sent_df]
 
+    def _merge_mix_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
+        logger.info("Merging and sorting information")
+
+        received_df = pd.concat([pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True)
+        received_df.set_index(['msgId', 'current'], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        sent_df = pd.concat([pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True)
+        sent_df.set_index(['msgId', 'timestamp'], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        mix_df = pd.concat([pd.concat(group[2], ignore_index=True) for group in dfs], ignore_index=True)
+        mix_df.set_index(['msgId', 'current'], inplace=True)
+        mix_df.sort_index(inplace=True)
+
+        return [received_df, sent_df, mix_df]
+
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
         received = dfs[0].reset_index()
         received = received.astype(str)
@@ -135,6 +164,33 @@ class Nimlibp2pAnalyzer:
         sent = sent.astype(str)
         logger.info("Dumping sent information")
         result = file_utils.dump_df_as_csv(sent, self._dump_analysis_path / 'summary' / 'sent.csv', False)
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        return Ok(None)
+
+    def _dump_mix_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+        received = dfs[0].reset_index()
+        received = received.astype(str)
+        logger.info("Dumping received information")
+        result = file_utils.dump_df_as_csv(received, self._dump_analysis_path / 'summary' / 'received.csv', False)
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        sent = dfs[1].reset_index()
+        sent = sent.astype(str)
+        logger.info("Dumping sent information")
+        result = file_utils.dump_df_as_csv(sent, self._dump_analysis_path / 'summary' / 'sent.csv', False)
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        mix = dfs[2].reset_index()
+        mix = mix.astype(str)
+        logger.info("Dumping sent information")
+        result = file_utils.dump_df_as_csv(mix, self._dump_analysis_path / 'summary' / 'mix.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)

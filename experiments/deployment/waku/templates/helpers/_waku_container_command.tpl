@@ -16,11 +16,14 @@
   echo ENRs are{{- range $i, $ := until (int $includes.getEnr.numEnrs) }} $ENR{{ add1 $i }}{{- end }}
 {{- end }}
 
-  {{- if ($command.full).waku }}
+{{- if ($command.full).waku }}
     {{- $command.full.waku | indent 1 }}
-  {{- else }}
+{{- else }}
   {{- if $command.sleep }}
   sleep 10
+  {{- end }}
+  {{- if $command.nice }}
+  {{ printf "nice -n %d \\" (int $command.nice) }}
   {{- end }}
   /usr/bin/wakunode \
     {{- $preset := $command.type | default "basic" -}}

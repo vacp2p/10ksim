@@ -10,16 +10,17 @@ import shutil
 import subprocess
 import tempfile
 import time
+from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import dateparser
 from kubernetes import client, utils
 from kubernetes.client import ApiClient
 from kubernetes.client.rest import ApiException
-from pydantic import PositiveInt
 from ruamel import yaml
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 
 def get_log_level(verbosity: Union[str, int]) -> int:
@@ -588,35 +589,77 @@ def gen_argparse(arg_defs):
     raise NotImplementedError()
 
 
-def dict_add(dict: Dict, path: str | List[str], value, sep=os.path.sep) -> None:
-    """Add a value to `dict` at `path`, creating sub-dicts at path nodes
-    if they do not already exist.
+def dict_get(
+    dict: Dict, path: str | List[str], *, default: Any = None, sep: Optional[str] = os.path.sep
+) -> Any:
+    if isinstance(path, str):
+        path = [node for node in path.split(sep) if node]
+    if len(path) < 1:
+        raise KeyError(f"Invalid path. Path: `{path}`")
 
-    Raises KeyError if any node on the path is not a dict
-    or if a value already exists at the given path.
+    if len(path) == 1:
+        return dict.get(path[0], default)
+
+    try:
+        return dict_get(dict[path[0]], path[1:], default=default, sep=sep)
+    except (TypeError, KeyError):
+        return default
+
+
+def dict_set(
+    dict: Dict,
+    path: str | List[str],
+    value: Any,
+    *,
+    replace_leaf: bool = False,
+    replace_nondict_stems: bool = False,
+    sep: Optional[str] = os.path.sep,
+) -> Optional[Any]:
+    """Set value in `dict` at `path`, creating sub-dicts at path nodes if they do not already exist.
+
+    :param dict: `dict` or `dict`-like object.
+    :type dict: Dict
+    :param path: If given as a str, uses `sep` as separator to make a list of separators.
+    :type path: str | List[str]
+    :param value: Value to be set or add to the dict.
+    :type value: Any
+    :param replace_leaf: If False, raises KeyError if there is already a value at `path` in `dict`.
+    :type replace_leaf: bool
+    :param replace_nondict_stems: If True, replaces existing values in `dict` with empty `dict`s while traversing the `path`.
+    :type replace_nondict_stems: bool
+    :param sep: Separator to use for getting the list of path components from `path.
+    :type sep: str | None
+
+    :return: The value that already existed at `path` in `dict` and `replace_leaf == True`, or `None` if no value existed.
+    :rvalue: Optional[Any]
+
+    Raises KeyError if any node on the path is not a dict unless `replace_nondict_stems== True`.
+    Raises KeyError if a value already exists at the given path unless `replace_leaf == True`.
     """
     if isinstance(path, str):
         path = [node for node in path.split(sep) if node]
     if len(path) < 1:
         raise KeyError(f"Invalid path. Path: `{path}`")
-    for i in range(0, len(path) - 1):
+    for i, node in enumerate(path[:-1]):
         node = path[i]
         try:
-            if node not in dict.keys():
+            if node not in dict.keys() or replace_nondict_stems:
                 dict[node] = {}
             dict = dict[node]
         except (AttributeError, TypeError):
             raise KeyError(
                 f"Non-dict value already exists at path. Path: `{path[0:i]}`\tKey: `{node}`\tValue: `{dict}`"
             )
-    try:
-        if path[-1] in dict:
+
+    previous = None
+    if path[-1] in dict:
+        if not replace_leaf:
             raise KeyError(
                 f"Value already exists at path. Path: `{path}`\tValue: `{dict[path[-1]]}`"
             )
-    except TypeError:
-        raise KeyError(f"Non-dict value already exists at path. Path: `{path[:]}`\tValue: `{dict}`")
+        previous = dict[path[-1]]
     dict[path[-1]] = value
+    return previous
 
 
 def default_chart_yaml_str(name) -> str:
@@ -635,6 +678,7 @@ def helm_build_dir(workdir: str, values_paths: List[str], name: str) -> yaml.YAM
         itertools.chain(*values)
     )
     logger.info(f"Running helm template command. cwd: `{workdir}`\tcommand: `{command}`")
+    # import pdb; pdb.set_trace() # todo asdf
     logger.info(f"Usable command: `{' '.join(command)}`")
     result = subprocess.run(
         command,
@@ -664,6 +708,7 @@ def get_YAML():
     yaml = ruamel.yaml.YAML()
     yaml.Representer.add_representer(str, str_representer)
     yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.width = 4096  # Prevent wrapping for long values such as bash scripts.
     return yaml
 
 
@@ -727,6 +772,10 @@ def helm_build_from_params(
     return helm_build([template_path], values, workdir, name, chart_yaml)
 
 
+def prepend_paths(base_path: str, paths: List[str]) -> List[str]:
+    return [os.path.join(base_path, path) for path in paths]
+
+
 def relative_paths(base_path: str, paths: List[str]) -> List[str]:
     return [
         os.path.relpath(
@@ -736,16 +785,95 @@ def relative_paths(base_path: str, paths: List[str]) -> List[str]:
     ]
 
 
-def get_values_yamls(work_sub_dir):
+def get_values_yamls(
+    work_sub_dir,
+    *,
+    include_default: bool = False,
+    base_dir: Optional[str] = None,
+    absolute_paths: bool = False,
+) -> List[str]:
     """Get all *.yaml files from this experiment that should be included in `--values <values.yaml>` args.
 
-    Make sure to add your own values.yaml passed through the CLI.
+    :param include_default: If True, includes the "values.yaml",
+                            which is included by default in `helm` projects.
+                            The default values.yaml will be the first value in returned list.
+    :param absolute_paths: If True, return list as absolute paths. Overrides `base_dir`.
+    :param base_dir: If True, return list as relative paths using `base_dir` as the root path.
+    :return: A list of all relevant *.yaml files according to the options provided.
+    :rtype: List[str]
+
+    Make sure to add your own cli_values.yaml passed through the CLI.
     """
     templates_dir = os.path.join(work_sub_dir, "templates")
-    return [
+    paths = [
         os.path.relpath(path, work_sub_dir)
         for path in glob.glob(os.path.join(templates_dir, "**", "*.values.yaml"), recursive=True)
     ]
+
+    if include_default:
+        default_path = os.path.join(work_sub_dir), "values.yaml"
+        if os.path.exists(default_path):
+            paths = [default_path] + paths
+
+    absolute_values = [os.path.join(work_sub_dir, path) for path in paths]
+    if absolute_paths:
+        return absolute_values
+
+    if base_dir:
+        return relative_paths(base_dir, absolute_values)
+
+    return paths
+
+
+def merge_yaml_values(base, override) -> object:
+    """Return the result of merging `override` into `base`.
+
+    # Yaml merging rules
+
+    maps: Merged recursively, favoring `override`.
+    The combined map should have have all key value pairs
+    between `base` and `override` with unique keys. For non-unique keys,
+    if the value is map, then the map is merge recursively,
+    otherwise, the `override` value is used.
+
+    lists and other values: The value from `base` is overridden entirely
+    by the value from `override`. No merging is done for lists or any
+    other non-map type.
+
+    :param base: Base value in a Yaml object
+    :type base: object
+    :param override: Yaml oject value to merge into `base`
+    :type override: object
+    :return: The yaml value resulting from merging `override` into `base`
+    :rtype: object
+    """
+    if isinstance(base, CommentedMap) and isinstance(override, CommentedMap):
+        merged = deepcopy(base)
+        for key in override:
+            if key in merged:
+                merged[key] = merge_yaml_values(merged[key], override[key])
+            else:
+                merged[key] = deepcopy(override[key])
+        return merged
+    return override
+
+
+def merge_helm_values(
+    yamls: List[Union[str, CommentedMap, CommentedSeq]],
+) -> Optional[yaml.YAMLObject]:
+    if not yamls:
+        return None
+
+    def load_yaml(item: Union[str, CommentedMap, CommentedSeq]) -> yaml.YAMLObject:
+        if isinstance(item, str):
+            with open(item, "r") as fin:
+                return yaml.safe_load(fin)
+        return item
+
+    merged_yaml = load_yaml(item[0])
+    for item in yamls[1:]:
+        merged_yaml = merge_yaml_values(merged_yaml, load_yaml(item))
+    return merged_yaml
 
 
 @contextlib.contextmanager
@@ -761,21 +889,18 @@ def assert_equals(obj_1, obj_2):
     assert obj_1 == obj_2, f"Assertion failed: `{obj_1}` == `{obj_2}`"
 
 
-def get_future_time(
-    delay: timedelta, timezone: Optional[dt_timezone] = None
-) -> Tuple[PositiveInt, PositiveInt]:
+def get_future_time(delay: timedelta, timezone: Optional[dt_timezone] = None) -> datetime:
     """
     Get the time it will be in `timezone` after `delay`.
 
     :param delay: The delay from current time.
     :param timezone: The timezone of the future time.
-    :return: (hour, minute) in `timezone` of the now + `delay`.
-    :rtype: Tuple[PositiveInt, PositiveInt]
+    :return: datetime in `timezone` of the now + `delay`.
+    :rtype: datetime
     """
     timezone = timezone if timezone else dt_timezone.utc
     current_time_utc = datetime.now(timezone)
-    future_time_utc = current_time_utc + delay
-    return future_time_utc.hour, future_time_utc.minute
+    return current_time_utc + delay
 
 
 def wait_for_time(target_dt: datetime):

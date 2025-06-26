@@ -80,8 +80,7 @@ class Nimlibp2pAnalyzer:
         dfs = self._merge_mix_dfs(dfs)
         result = self._dump_mix_dfs(dfs)
         if result.is_err():
-            logger.warning(f'Issue dumping message summary. {result.err_value}')
-            exit(1)
+            logger.error(f'Issue dumping message summary. {result.err_value}')
 
     def _analyze_reliability_cluster(self, n_jobs: int):
         self._assert_num_nodes()
@@ -99,8 +98,8 @@ class Nimlibp2pAnalyzer:
 
         result = self._dump_dfs(dfs)
         if result.is_err():
-            logger.warning(f'Issue dumping message summary. {result.err_value}')
-            exit(1)
+            logger.error(f'Issue dumping message summary. {result.err_value}')
+            return None
 
         nodes_with_issues = self._has_message_reliability_issues('msgId', 'kubernetes.pod_name', dfs[0], dfs[1],
                                                                  self._dump_analysis_path)

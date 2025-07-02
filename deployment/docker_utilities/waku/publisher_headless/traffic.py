@@ -27,7 +27,7 @@ async def check_dns_time(service: str) -> tuple[str, str, str]:
         except Exception as e:
             logging.error(f"Failed. Service: `{service}`\nip_address: {ip_address}\nelapsed: {elapsed}\nentire_hostname: {entire_hostname}: `{e}`")
             raise RuntimeError("Failed to split") from e
-    except Exception as e:
+    except (IndexError, ValueError) as e:
         logging.error(f"Failed. Service: `{service}`: `{e}`")
         raise RuntimeError("Failed check_dns_time") from e
 

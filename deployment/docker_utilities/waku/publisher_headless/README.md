@@ -65,6 +65,7 @@ Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
   - Added extra debugging to `check_dns_time`
   - Changed `send_to_lightpush` to use v3 api endpoint.
     - [lightpush endpoint](https://waku-org.github.io/waku-rest-api/#post-/lightpush/v3/message)
+  - Working for nWaku v0.35.1 and v0.36.0
 - `v1.0.2`:
   - Fixed wrong calculation of success_rate when logging information.
 - `v1.0.1`:

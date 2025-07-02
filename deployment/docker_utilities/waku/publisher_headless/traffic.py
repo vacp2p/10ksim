@@ -15,13 +15,21 @@ logging.basicConfig(level=logging.INFO)
 
 async def check_dns_time(service: str) -> tuple[str, str, str]:
     start_time = time.time()
-    ip_address = socket.gethostbyname(service)
-    elapsed = (time.time() - start_time) * 1000
-    entire_hostname = socket.gethostbyaddr(ip_address)
-    hostname = entire_hostname[0].split('.')[0]
-    node_shard = int(hostname.split('-')[1])
-    logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname} with shard {node_shard}.')
-    return f'{ip_address}', hostname, f'{node_shard}'
+    try:
+        ip_address = socket.gethostbyname(service)
+        elapsed = (time.time() - start_time) * 1000
+        entire_hostname = socket.gethostbyaddr(ip_address)
+        try:
+            hostname = entire_hostname[0].split('.')[0]
+            node_shard = int(hostname.split('-')[1])
+            logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname} with shard {node_shard}.')
+            return f'{ip_address}', hostname, f'{node_shard}'
+        except Exception as e:
+            logging.error(f"Failed. Service: `{service}`\nip_address: {ip_address}\nelapsed: {elapsed}\nentire_hostname: {entire_hostname}: `{e}`")
+            raise RuntimeError("Failed to split") from e
+    except Exception as e:
+        logging.error(f"Failed. Service: `{service}`: `{e}`")
+        raise RuntimeError("Failed check_dns_time") from e
 
 
 async def send_to_relay(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
@@ -38,7 +46,7 @@ async def send_to_relay(args: argparse.Namespace) -> Tuple[str, Dict[str, str], 
 
 async def send_to_lightpush(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, dict[str, str | int]], str]:
     node_address, node_hostname, shard = await check_dns_time('zerotesting-lightpush-client')
-    url = f'http://{node_address}:{args.port}/lightpush/v1/message'
+    url = f'http://{node_address}:{args.port}/lightpush/v3/message'
 
     payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode('ascii').rstrip("=")
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}

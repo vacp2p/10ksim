@@ -1,13 +1,13 @@
 ## Waku message injector
 
 This script is designed to send messages to a Waku node
-using either the relay or lightpush protocols. 
+using either the relay or lightpush protocols.
 It allows to specify the number of messages, their size,
 delay between messages, and the target pubsub/content topics.
 
-The script performs DNS resolution timing, 
-message payload generation, 
-and HTTP requests to a Waku REST interface. 
+The script performs DNS resolution timing,
+message payload generation,
+and HTTP requests to a Waku REST interface.
 The results, including response times and success rates, are logged.
 
 ### Usage
@@ -61,8 +61,12 @@ Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
 
 ### Changelog
 
+- `v1.0.3`:
+  - Added extra debugging to `check_dns_time`
+  - Changed `send_to_lightpush` to use v3 api endpoint.
+    - [lightpush endpoint](https://waku-org.github.io/waku-rest-api/#post-/lightpush/v3/message)
+- `v1.0.2`:
+  - Fixed wrong calculation of success_rate when logging information.
 - `v1.0.1`:
   - Log url, headers and body when injecting a message
   - Log url, headers and body when raising an exception
-- `v1.0.2`:
-  - Fixed wrong calculation of success_rate when logging information.

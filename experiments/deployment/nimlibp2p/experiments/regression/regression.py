@@ -44,11 +44,11 @@ def set_delay(
     return result
 
 
-@experiment(name="nimlibp2p2-regression-nodes")
+@experiment(name="nimlibp2p-regression-nodes")
 class NimRegressionNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     release_name: str = Field(default="nim-regression-nodes")
-    deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent)
+    this_dir: str = Field(default=Path(os.path.dirname(__file__)))
     hours_key: str = Field(default="nimlibp2p.nodes.hours", no_init=True)
     minutes_key: str = Field(default="nimlibp2p.nodes.minutes", no_init=True)
 
@@ -74,11 +74,12 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         self, workdir: str, cli_values: yaml.YAMLObject, delay: Optional[str]
     ) -> Tuple[yaml.YAMLObject, PositiveInt]:
         build = lambda values: build_deployment(
-            deployment_dir=os.path.join(self.deployment_dir, "nodes"),
+            deployment_dir=os.path.join(self.this_dir, "..", "..", "nodes"),
             workdir=os.path.join(workdir, "nodes"),
             cli_values=values,
             name=self.release_name,
-            extra_values_names=["regression.values.yaml"],
+            extra_values_names=[],
+            extra_values_paths=[os.path.join(self.this_dir, f"nodes.values.yaml")],
         )
         if delay is None:
             deployment = build(cli_values)

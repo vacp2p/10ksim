@@ -1,2 +1,2 @@
-docker build -t <your-registry>/publisher:v1.0.2 .
-docker push <your-registry>/publisher:v1.0.2
+docker build -t <your-registry>/publisher:v1.0.3 .
+docker push <your-registry>/publisher:v1.0.3

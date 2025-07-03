@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
 from deployment.base_experiment import BaseExperiment
-from deployment.builders import build_deployment_type
+from deployment.builders import build_deployment
 from kube_utils import assert_equals, get_cleanup, get_flag_value, kubectl_apply, wait_for_rollout
 from registry import experiment
 
@@ -23,7 +23,7 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     release_name: str = Field(default="waku-regression-nodes")
 
-    deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent)
+    this_dir: str = Field(default=Path(os.path.dirname(__file__)))
 
     @staticmethod
     def add_parser(subparsers) -> None:
@@ -38,12 +38,13 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         values_yaml: Optional[yaml.YAMLObject],
         service: str,
     ) -> yaml.YAMLObject:
-        return build_deployment_type(
-            deployment_dir=self.deployment_dir,
-            workdir=workdir,
+        return build_deployment(
+            deployment_dir=os.path.join(self.this_dir, "..", "..", service),
+            workdir=os.path.join(workdir, service),
             cli_values=values_yaml,
-            service=service,
-            extra_values_names=["regression.values.yaml"],
+            name="waku-regression-nodes",
+            extra_values_names=[],
+            extra_values_paths=[os.path.join(self.this_dir, f"{service}.values.yaml")],
         )
 
     def _run(

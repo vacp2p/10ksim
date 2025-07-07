@@ -33,22 +33,22 @@ Usage:
   {{- end -}}
 {{- end }}
 
-
 {{/*
 command.genArgs
 
-Generates command-line arguments from a combination of user overrides and preset values.
+Generates command-line arguments from user overrides and preset values.
 - Accepts a dict with:
     - "args": map of user-supplied arguments (can be empty or undefined).
     - "presets": map of preset argument sets (e.g., .Values.presets).
     - "preset": name of the preset to use.
+    - "hyphenate": (optional, default true) if false, disables hyphen-case conversion of argument keys.
 - For each unique key in either `args` or the selected preset:
     - If the value is nil or empty, outputs a switch: --flag
     - If the value is a list, outputs multiple: --flag="item" (one per list item)
     - `value` is from `args` if in `args`, otherwise from the preset.
 
 Usage:
-  {{ include "command.genArgs" (dict "args" .Values.command.args "presets" .Values.presets "preset" .Values.preset) }}
+  {{ include "command.genArgs" (dict "args" .Values.command.args "presets" .Values.presets "preset" .Values.preset "hyphenate" true) }}
 
 Example output:
 --log-level=INFO \
@@ -61,6 +61,10 @@ Example output:
   {{- $presets := .presets | default dict -}}
   {{- $presetName := .preset | default "" -}}
   {{- $preset := (index $presets $presetName) | default dict -}}
+  {{- $hyphenate := true -}}
+  {{- if hasKey . "hyphenate" }}
+    {{- $hyphenate = .hyphenate }}
+  {{- end }}
 
   {{- /* Collect all unique keys */ -}}
   {{- $allKeys := dict -}}
@@ -75,7 +79,10 @@ Example output:
   {{- $lines := list -}}
   {{- range $i, $key := $keys }}
     {{- $value := (index $args $key) | default (index $preset $key) -}}
-    {{- $flag := include "toHyphenCase" $key -}}
+    {{- $flag := $key -}}
+    {{- if $hyphenate }}
+      {{- $flag = include "toHyphenCase" $key }}
+    {{- end }}
     {{- if eq $value nil }}
       {{- $lines = append $lines (printf "--%s" $flag) }}
     {{- else if kindIs "slice" $value }}

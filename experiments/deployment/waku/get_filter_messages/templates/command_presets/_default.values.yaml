@@ -1,0 +1,8 @@
+waku:
+  getFilterMessages:
+    command:
+      presets:
+        default:
+          contentTopic: "/my-app/1/dst/proto"
+          numNodes: 500
+          numShards: 1

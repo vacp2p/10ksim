@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: get-store-messages
+  namespace: {{ default "zerotesting" .Values.waku.getStoreMessages.namespace }}
+spec:
+  restartPolicy: Never
+  dnsConfig:
+    searches:
+      - zerotesting-store.zerotesting.svc.cluster.local
+  containers:
+    - name: container
+      image: {{ default "soutullostatus/get_store_messages" .Values.waku.getStoreMessages.image.repository }}:{{ default "v0.1.11" .Values.waku.getStoreMessages.image.tag }}
+      imagePullPolicy: Always
+      command:
+        {{- include "helpers.container.command" ( dict
+          "command" "python /app/store_msg_retriever.py"
+          "values" .Values.waku.getStoreMessages.command
+          "hyphenate" false
+        ) | nindent 8 }}

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: get-filter-messages
+  namespace: {{ default "zerotesting" .Values.waku.getFilterMessages.namespace }}
+spec:
+  restartPolicy: Never
+  dnsConfig:
+    searches:
+      - zerotesting-filter.zerotesting.svc.cluster.local
+  containers:
+    - name: container
+      image: {{ default "soutullostatus/get_filter_messages" .Values.waku.getFilterMessages.image.repository }}:{{ default "v0.2.0" .Values.waku.getFilterMessages.image.tag }}
+      imagePullPolicy: Always
+      command:
+        {{- include "helpers.container.command" ( dict
+          "command" "python /app/filter_msg_retriever.py"
+          "values" .Values.waku.getFilterMessages.command
+          "hyphenate" false
+        ) | nindent 8 }}

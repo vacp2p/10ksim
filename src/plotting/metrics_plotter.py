@@ -67,7 +67,7 @@ class MetricsPlotter:
         box_plot.xaxis.set_tick_params(rotation=45)
         box_plot.legend(loc='upper right', bbox_to_anchor=(1, 1))
 
-        result = add_boxplot_stat_labels(box_plot, scale_by=0.001)
+        result = add_boxplot_stat_labels(box_plot, scale_by=1/plot_specs['scale-x'])
         if result.is_err():
             logger.error(result.err_value)
 

@@ -1,12 +1,16 @@
+import json
 import logging
+import os
 import shutil
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from contextlib import ExitStack
-from typing import Optional
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
 
 from kubernetes.client import ApiClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
 
@@ -24,6 +28,8 @@ class BaseExperiment(ABC, BaseModel):
         - Implement `_run` in the child class.
     """
 
+    events_log_path: Path = Field(default=Path("events.log"))
+
     @staticmethod
     def add_args(subparser: ArgumentParser):
         subparser.add_argument(
@@ -40,6 +46,16 @@ class BaseExperiment(ABC, BaseModel):
             help="If present, does not wait until the namespace is empty before running the test.",
         )
 
+    def _set_events_log(self, workdir: Optional[str]) -> None:
+        if self.events_log_path.is_absolute():
+            return
+        if not self.events_log_path.is_absolute():
+            if workdir is None:
+                raise ValueError(
+                    f"Logging event requires absolute events_log_path or non-None workdir. Path: `{self.events_log_path}` workdir: `{workdir}` experiment type: `{type(self)}`"
+                )
+            self.events_log_path = Path(workdir) / self.events_log_path
+
     def run(
         self,
         api_client: ApiClient,
@@ -50,12 +66,16 @@ class BaseExperiment(ABC, BaseModel):
             values_yaml = CommentedMap()
 
         with ExitStack() as stack:
+            stack.callback(lambda: self.log_event("cleanup_finished"))
+            # TODO [temporary workdir] allow None for temporary folder
             workdir = args.workdir
             stack.enter_context(maybe_dir(workdir))
             try:
                 shutil.rmtree(workdir)
             except FileNotFoundError:
                 pass
+            os.makedirs(workdir, exist_ok=True)
+            self._set_events_log(workdir)
             self._run(
                 api_client=api_client,
                 workdir=workdir,
@@ -63,10 +83,14 @@ class BaseExperiment(ABC, BaseModel):
                 values_yaml=values_yaml,
                 stack=stack,
             )
+            stack.callback(lambda: self.log_event("cleanup_start"))
+
+        self.log_event("run_finished")
 
     @abstractmethod
     def _run(
         self,
+        # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
         api_client: ApiClient,
         workdir: str,
         args: Namespace,
@@ -78,10 +102,28 @@ class BaseExperiment(ABC, BaseModel):
     def _wait_until_clear(self, api_client: ApiClient, namespace: str, skip_check: bool):
         # Wait for namespace to be clear unless --skip-check flag was used.
         if not skip_check:
+            self.log_event("wait_for_clear_start")
             wait_for_no_objs_in_namespace(namespace=namespace, api_client=api_client)
+            self.log_event("wait_for_clear_finished")
         else:
             namepace_is_empty = poll_namespace_has_objects(
                 namespace=namespace, api_client=api_client
             )
             if not namepace_is_empty:
                 logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")
+
+    def _preprocess_event(self, event: Any) -> Any:
+        if isinstance(event, str):
+            event = {"event": event}
+
+        if isinstance(event, dict):
+            event["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            return json.dumps(event)
+        else:
+            return event
+
+    def log_event(self, event: Any):
+        out_path = Path(self.events_log_path)
+        with open(out_path, "a") as out_file:
+            out_file.write(self._preprocess_event(event))
+            out_file.write("\n")

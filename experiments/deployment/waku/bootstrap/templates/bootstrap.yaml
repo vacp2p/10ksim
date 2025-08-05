@@ -4,7 +4,7 @@ metadata:
   name: bootstrap
   namespace: {{ default "zerotesting" .Values.namespace }}
 spec:
-  replicas: 3
+  replicas: {{ default 3 .Values.waku.bootstrap.numNodes }}
   podManagementPolicy: "Parallel"
   serviceName: {{ default "zerotesting-bootstrap" .Values.serviceName }}
   selector:

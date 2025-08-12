@@ -1,5 +1,6 @@
 # Python Imports
 import logging
+import urllib
 from typing import Dict, List, Optional
 from result import Ok, Err
 
@@ -56,6 +57,5 @@ class Scrapper:
             metric = metric.replace('$__rate_interval', scrape_config['$__rate_interval'])
         promql = scrape_utils.create_promql(self._url, metric,
                                             time_name[0], time_name[1], scrape_config['step'])
-        promql = promql.replace(" ", "%20")
 
         return promql

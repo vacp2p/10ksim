@@ -1,122 +1,81 @@
-# Distributed deployer framework (Template name)
+# Experiment Deployment & Analysis Toolkit
 
-**Python Version**: 3.11.5
+## Overview
+This repository contains internal tools for running, managing, and analyzing experiments on distributed systems.
+It is currently used to:
+- Launch experiments on Kubernetes clusters
+- Collect metrics and logs from previously run experiments
+- Analyze experiment metrics (e.g., bandwidth analysis, message reliability, message latency, etc.)
 
-## Yaml config:
+These tools were originally designed to test scalability for nim-libp2p and Waku, but adaptable for a wide variety of experiments.
 
-### General configuration
-Important parameters for modifying when scrapping for simulation data.
-```
-general_config:
-  times_names: # List of timestamps 
-    - ["timestamp_init", "timestamp_end", "column_name"] # Last value is used to group data in the same spot in the plot
-```
-Example:
-```
-general_config:
-  times_names:
-    - [ "2024-05-15 12:31:00", "2024-05-15 12:47:00", "3K-1mgs-s-1KB" ]
-    - [ "2024-05-15 13:10:00", "2024-05-15 13:30:00", "2K-1mgs-s-1KB" ]
-    - [ "2024-05-15 16:34:00", "2024-05-15 16:56:00", "1K-1mgs-s-1KB" ]
-```
+Note: This is a work in progress. Tooling and folder structure may change in the future.
 
-### Scrape configuration
+---
 
-Scrape parameters like step, interval, and dump location:
+## Repository Structure
+
 ```
-scrape_config:
-  $__rate_interval: "rate"
-  step: "step"
-  dump_location: "folder_to_dump"
-```
-Example:
-```
-scrape_config:
-  $__rate_interval: "121s"
-  step: "60s"
-  dump_location: "test/nwaku0.32/"
+analysis/
+  ├── scrape.py               # Scrape tool
+  ├── example_log_analysis.py # Analysis tool
+  ├── scrape.yaml             # Scrape config
+  └── requirements.txt        # Requirements for scrape and analysis tools
+deployment/
+  ├── docker_utilities/       # Dockerfiles & resources to build experiment containers
+  ├── kubernetes-utilities/   # Services required on Kubernetes for certain experiments
+  ├── experiment_scripts/     # Legacy bash scripts for deployments
+experiments/
+  ├── deployment.py           # Experiment deployment script (generates & deploys)
+  ├── README.md               # Usage guide for deployment script
+  └── requirements.txt        # Requirements for deployment script
 ```
 
-### Metrics to scrape configuration
+---
 
-Important parameters for which metrics to scrape:
-```
-metrics_to_scrape:
-  scrape_name:
-    query: "query" # Query to extract data from
-    extract_field: "instance" # Instance values, same as in Grafana panels
-    folder_name: "folder" # This will be set inside `dump_location`
-```
-Example of what metrics to select:
-```
-metrics_to_scrape:
-  libp2p_network_in:
-    query: "rate(libp2p_network_bytes_total{direction='in'}[$__rate_interval])"
-    extract_field: "instance"
-    folder_name: "libp2p-in/"
-  libp2p_network_out:
-    query: "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])"
-    extract_field: "instance"
-    folder_name: "libp2p-out/"
-```
+### `./experiments/`
+Python scripts and Kubernetes templates for generating deployments and running experiments.
 
-Important parameters for plotting:
-```
-plotting:
-  "name_of_the_plot":
-    "ignore": ["name"] # Pod names that starts with this string
-    "data_points": number_of_points # 1 point per minute
-    "folder": # Folders to get the data from
-      - "folder_name_1"
-      - "folder_name_2"
-    "data": # Specific data from folder that will be used for the plot, needs to match `folder_name` from `metrics_to_scrape`
-       - "data_from_folder"
-    "xlabel_name": "xlabel"
-    "ylabel_name": "ylabel"
-    "scale-x": scale_number # If division is needed. Ie: y axis is bytes, we want KBytes, so we divide by 1000
-```
+`deployment.py`:
+- Generates Kubernetes manifests for experiments
+- Deploys them to the cluster
+- Automatically cleans up resources on completion or abort
 
-Example of plotting bandwidth comparison between nWaku versions 26 27 and 28:
-```
-plotting:
-  "bandwidth":
-    "ignore": ["bootstrap", "midstrap"]
-    "data_points": 25
-    "folder":
-      - "test/nwaku0.26/"
-      - "test/nwaku0.27/"
-      - "test/nwaku0.28/"
-    "data":
-      - "libp2p-in"
-      - "libp2p-out"
-    "xlabel_name": "NºNodes-MsgRate"
-    "ylabel_name": "KBytes/s"
-    "scale-x": 1000
-```
-We will have as many plots as keywords under `plotting`.
-Inside each plot, we will have as many subplots as metrics in `data`.
+See `./experiments/README.md` for usage instructions.
 
+---
 
-### Main objectives
-- [X] Automatic deployment of any P2P utils
-  - [X] Waku
-  - [X] Bandwidth usage per node
-  - [X] Log data for analysis
-### Secondary objectives
-- [X] Add QoS parameter support to the 10k tool
-- [X] Run further Waku protocols:
-  - [X] Filter
-  - [X] Lightpush
-  - [X] Store
-  - [X] Peer exchange
+### `./analysis/`
+Tools for scraping metrics and analyzing results.
 
+#### Scraping
+`scrape.py`:
+- Queries metric sources and creates plots.
+- Metrics to scrape and plots to generate are defined in `scrape.yaml`
 
-## Acknowledgment
+#### Analysis
+`log_analysis.py`
+- Processes scraped data
+- Further analyses (eg. check that messages appear in store nodes)
+- Generates plots (eg. message time distribution plots)
 
-Inspired in the [Codex](https://codex.storage/) framework https://github.com/codex-storage/cs-codex-dist-tests
+---
 
-**Original Authors**: 
-- [Ben Bierens](https://github.com/benbierens)
-- [Slava Doina](https://github.com/veaceslavdoina)
-- [Shaun Orssaud](https://github.com/Shorssaud)
-- [Eric Mastro](https://github.com/emizzle)
+## Typical Workflow
+
+1. Run an experiment
+   ```
+   cd experiments
+   python ./deployment.py --config ~/sapphire.yaml waku-regression-nodes --workdir ./workdir
+   ```
+
+2. Scrape data from the finished experiment
+   ```
+   cd analysis
+   python3 scrape.py
+   ```
+
+3. Analyze results
+   ```
+   python3 log_analysis.py
+   ```

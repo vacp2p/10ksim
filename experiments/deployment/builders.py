@@ -48,7 +48,7 @@ def build_deployment(
         pass
 
     shutil.copytree(
-        os.path.join(deployment_dir),
+        deployment_dir,
         workdir,
     )
 

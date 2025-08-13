@@ -6,7 +6,7 @@ from result import Ok, Err
 
 # Project Imports
 from src.metrics import scrape_utils
-from src.metrics import kubernetes
+from src.metrics import kubernetes_manager
 from src.data.data_request_handler import DataRequestHandler
 from src.utils.file_utils import read_yaml_file
 
@@ -19,7 +19,7 @@ class Scrapper:
         self._query_config = None
         self._query_config_file = query_config_file
         self._set_query_config()
-        self._k8s = kubernetes.KubernetesManager(kube_config)
+        self._k8s = kubernetes_manager.KubernetesManager(kube_config)
 
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py

@@ -1,6 +1,7 @@
 # Pyton Imports
 import json
 import logging
+import urllib
 import six.moves.urllib.request as urllib_request
 from datetime import datetime
 from result import Result, Ok, Err
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_promql(address: str, query: str, start_scrape: str, finish_scrape: str, step: int) -> str:
+    query = urllib.parse.quote(query)
     promql = address + "query_range?query=" + query
 
     start = datetime.strptime(start_scrape, "%Y-%m-%d %H:%M:%S").timestamp()

@@ -92,13 +92,13 @@ retrieving the enrUri from its debug API.
 3. **Validate ENRs**: Ensures that the retrieved ENR
 start with `enr:`, indicating a valid ENR format.
 4. **Store Valid Addresses**: Saves valid ENRs
-as environment variables in default file `/etc/enr/enr.env`.
+as environment variables in default file `/etc/enr/ENR`.
 
 ### Output
-If successful, the script stores ENRs in default file `/etc/enr/enr.env`
+If successful, the script stores ENRs in default file `/etc/enr/ENR`
 as environment variables:
 ```
-export enr1='enr:-MS4QGcHBZAnpu6qNYe_T6TGDCV6c9_3UsXlj5XlXY6QvLCUQKqajqDfs0aKOs7BISJzGxA7TuDzYXap4sP6JYUZ2Y9GAYh2F0dG5ldHOIAAAAAAAAAACEZXRoMpEJZZp0BAAAAf__________gmlkgnY0gmlwhC5QoeSJc2VjcDI1NmsxoQOZxJYJVoTfwo7zEom6U6L5Txrs3H9X0P_XBJbbOZBczYYN1ZHCCdl8'
+export ENR1='enr:-MS4QGcHBZAnpu6qNYe_T6TGDCV6c9_3UsXlj5XlXY6QvLCUQKqajqDfs0aKOs7BISJzGxA7TuDzYXap4sP6JYUZ2Y9GAYh2F0dG5ldHOIAAAAAAAAAACEZXRoMpEJZZp0BAAAAf__________gmlkgnY0gmlwhC5QoeSJc2VjcDI1NmsxoQOZxJYJVoTfwo7zEom6U6L5Txrs3H9X0P_XBJbbOZBczYYN1ZHCCdl8'
 ```
 
 ### Changelog:

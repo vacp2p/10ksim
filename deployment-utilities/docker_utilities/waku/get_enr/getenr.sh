@@ -6,15 +6,16 @@ num_enrs=${1:-3}
 # Service name to query, default to "zerotesting-bootstrap.zerotesting" if not specified
 service_name=${2:-zerotesting-bootstrap.zerotesting}
 
-# Find the IPv4 IPs of "zerotesting-bootstrap.zerotesting" using nslookup
-readarray -t pod_ips < <(nslookup "$service_name" | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
+# Output file for the ENR data, default to "/etc/enr/ENR" if not specified
+output_file=${3:-/etc/enr/ENR}
 
-# Prepare the directory for ENR data
-mkdir -p /etc/enr
-enr_file="/etc/enr/enr.env"
-> "$enr_file" # Clear the file to start fresh
+# Ensure the directory for the output file exists
+mkdir -p "$(dirname "$output_file")"
+> "$output_file" # Clear the file to start fresh
 
-# Function to validate ENR
+# Extract basename
+base_name=$(basename "$output_file")
+
 validate_enr() {
     if [[ $1 =~ ^enr:- ]]; then
         return 0 # Valid
@@ -23,7 +24,9 @@ validate_enr() {
     fi
 }
 
-# Counter for valid ENRs
+# Find the IPv4 IPs of the service using nslookup
+readarray -t pod_ips < <(nslookup "$service_name" | awk '/^Address: / { print $2 }' | head -n "$num_enrs")
+
 valid_enr_count=0
 
 # Get and validate the ENR data from up to the specified number of IPs
@@ -31,26 +34,22 @@ for pod_ip in "${pod_ips[@]}"; do
     echo "Querying IP: $pod_ip"
     enr=$(curl -X GET "http://$pod_ip:8645/debug/v1/info" -H "accept: application/json" | sed -n 's/.*"enrUri":"\([^"]*\)".*/\1/p')
 
-    # Validate the ENR
     validate_enr "$enr"
     if [ $? -eq 0 ]; then
-        # Save the valid ENR to the file
         ((valid_enr_count++))
-        echo "export ENR$valid_enr_count='$enr'" >> "$enr_file"
+        echo "export ${base_name}${valid_enr_count}='$enr'" >> "$output_file"
         if [ $valid_enr_count -eq "$num_enrs" ]; then
-            break # Exit loop after the specified number of valid ENRs
+            break
         fi
     else
         echo "Invalid ENR data received from IP $pod_ip"
     fi
 done
 
-# Check if we got at least one valid ENR
 if [ $valid_enr_count -eq 0 ]; then
     echo "No valid ENR data received from any IPs"
     exit 1
 fi
 
-# Output for debugging
-echo "ENR data saved successfully:"
-cat "$enr_file"
+echo "ENR data saved successfully to $output_file:"
+cat "$output_file"

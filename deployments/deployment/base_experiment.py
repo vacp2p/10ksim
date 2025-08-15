@@ -4,6 +4,7 @@ import os
 import shutil
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
+from collections import defaultdict
 from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,15 @@ from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
 
-from kube_utils import poll_namespace_has_objects, wait_for_no_objs_in_namespace
+from deployment.builders import build_deployment
+from kube_utils import (
+    dict_get,
+    get_cleanup,
+    kubectl_apply,
+    poll_namespace_has_objects,
+    wait_for_no_objs_in_namespace,
+    wait_for_rollout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +38,11 @@ class BaseExperiment(ABC, BaseModel):
     """
 
     events_log_path: Path = Field(default=Path("events.log"))
+
+    deployed: dict[str, list] = defaultdict(list)
+    """Dict of [namespace : yamls] for every yaml deployed with self.deploy.
+
+    Used to determine whether or not to call `_wait_until_clear`."""
 
     @staticmethod
     def add_args(subparser: ArgumentParser):
@@ -45,6 +59,87 @@ class BaseExperiment(ABC, BaseModel):
             required=False,
             help="If present, does not wait until the namespace is empty before running the test.",
         )
+        subparser.add_argument(
+            "--dry-run",
+            action="store_true",
+            required=False,
+            default=False,
+            help="If True, does not actually deploy kubernetes configs but run kubectl apply --dry-run.",
+        )
+
+    def deploy(
+        self,
+        api_client: ApiClient,
+        stack,
+        args: Namespace,
+        values_yaml,
+        workdir,
+        service: str,
+        *,
+        wait_for_ready=True,
+        extra_values_paths=None,
+        timeout=3600,
+    ):
+
+        yaml_obj = build_deployment(
+            deployment_dir=Path(os.path.dirname(__file__)) / service,
+            workdir=os.path.join(workdir, service),
+            cli_values=values_yaml,
+            name=service,
+            extra_values_names=[],
+            extra_values_paths=extra_values_paths,
+        )
+
+        required_fields = ["metadata/namespace", "metadata/name", "kind"]
+        for field in required_fields:
+            if dict_get(yaml_obj, field) is None:
+                raise ValueError(
+                    f"Deployment yaml must have an explicit value for field. Field: `{field}`"
+                )
+
+        try:
+            dry_run = args.dry_run
+        except AttributeError:
+            dry_run = False
+
+        namespace = yaml_obj["metadata"]["namespace"]
+
+        if len(self.deployed[namespace]) == 0:
+            self._wait_until_clear(
+                api_client=api_client,
+                namespace=namespace,
+                skip_check=args.skip_check,
+            )
+
+        if not dry_run:
+            cleanup = get_cleanup(
+                api_client=api_client,
+                namespace=namespace,
+                deployments=[yaml_obj],
+            )
+            stack.callback(cleanup)
+
+        self.log_event(
+            {"event": "deployment", "phase": "start", "service": service, "namespace": namespace}
+        )
+        self.deployed[namespace].append(yaml_obj)
+        kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run)
+
+        if not dry_run:
+            if wait_for_ready:
+                wait_for_rollout(
+                    yaml_obj["kind"],
+                    yaml_obj["metadata"]["name"],
+                    namespace,
+                    timeout,
+                    api_client,
+                    ("Ready", "True"),
+                )
+        self.log_event(
+            {"event": "deployment", "phase": "finished", "service": service, "namespace": namespace}
+        )
+
+        return yaml_obj
 
     def _set_events_log(self, workdir: Optional[str]) -> None:
         if self.events_log_path.is_absolute():
@@ -65,7 +160,11 @@ class BaseExperiment(ABC, BaseModel):
         if values_yaml is None:
             values_yaml = CommentedMap()
 
+        self.deployed.clear()
+
         workdir = args.output_folder
+        if args.workdir:
+            workdir = os.path.join(workdir, args.workdir)
 
         with ExitStack() as stack:
             stack.callback(lambda: self.log_event("cleanup_finished"))

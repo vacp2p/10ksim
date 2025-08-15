@@ -16,15 +16,12 @@ from ruamel import yaml
 from deployment.base_experiment import BaseExperiment
 from deployment.builders import build_deployment
 from kube_utils import (
-    assert_equals,
     dict_apply,
     dict_get,
     dict_partial_compare,
     dict_set,
     dict_visit,
-    get_cleanup,
     get_flag_value,
-    kubectl_apply,
     wait_for_rollout,
 )
 from registry import experiment
@@ -112,6 +109,11 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
     release_name: str = Field(default="waku-regression-nodes")
 
     deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent.parent)
+    extra_paths: List[Path] = [
+        Path(os.path.dirname(__file__)) / f"bootstrap.values.yaml",
+        Path(os.path.dirname(__file__)) / f"nodes.values.yaml",
+        Path(os.path.dirname(__file__)) / f"publisher.values.yaml",
+    ]
 
     @classmethod
     def add_parser(cls, subparsers) -> None:
@@ -183,6 +185,14 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
     def _metadata_event(self, events_log_path: str):
         self.log_event(self.__class__._get_metadata_event(self.events_log_path))
 
+    def log_event(self, event):
+        logger.info(event)
+        return super().log_event(event)
+
+    def log_event(self, event):
+        logger.info(event)
+        return super().log_event(event)
+
     def _run(
         self,
         api_client: ApiClient,
@@ -191,103 +201,63 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         values_yaml: Optional[yaml.YAMLObject],
         stack: ExitStack,
     ):
+        def deploy(service, values, *, wait_for_ready=False):
+            try:
+                values = values._data
+            except AttributeError:
+                pass
+            return self.deploy(
+                api_client,
+                stack,
+                args,
+                values,
+                workdir,
+                service,
+                wait_for_ready=wait_for_ready,
+                extra_values_paths=self.extra_paths,
+            )
+
         self.log_event("run_start")
 
-        # TODO [values param checking]: Add friendly error messages for missing/extraneous variables in values.yaml.
-        logger.info("Building kubernetes configs.")
-        nodes = self._build(workdir, values_yaml, "nodes")
-        bootstrap = self._build(workdir, values_yaml, "bootstrap")
+        deploy("waku/bootstrap", values_yaml, wait_for_ready=True)
 
-        self.log_event({"event": "deployment", "service": "waku/publisher", "phase": "start"})
-        publisher = self._build(workdir, values_yaml, "publisher")
-
-        # Sanity check
-        namespace = bootstrap["metadata"]["namespace"]
-        logger.info(f"namespace={namespace}")
-        assert_equals(nodes["metadata"]["namespace"], namespace)
-        assert_equals(publisher["metadata"]["namespace"], namespace)
-
-        # TODO [metadata output]: log start time to output file here.
-        logger.info("Applying kubernetes configs.")
-
-        cleanup = get_cleanup(
-            api_client=api_client,
-            namespace=namespace,
-            deployments=[bootstrap, nodes, publisher],
-        )
-        stack.callback(cleanup)
-
-        self._wait_until_clear(
-            api_client=api_client,
-            namespace=namespace,
-            skip_check=args.skip_check,
-        )
-
-        self.log_event("deployments_start")
-
-        # Apply bootstrap
-        logger.info("Applying bootstrap")
-        kubectl_apply(bootstrap, namespace=namespace)
-        logger.info("bootstrap applied. Waiting for rollout.")
-        wait_for_rollout(bootstrap["kind"], bootstrap["metadata"]["name"], namespace, 2000)
-
+        nodes = deploy("waku/nodes", values_yaml, wait_for_ready=True)
         num_nodes = nodes["spec"]["replicas"]
+
+        publisher = deploy("waku/publisher", values_yaml, wait_for_ready=True)
         messages = get_flag_value("messages", publisher["spec"]["containers"][0]["command"])
         delay_seconds = get_flag_value(
             "delay-seconds", publisher["spec"]["containers"][0]["command"]
         )
 
-        # Apply nodes configuration
-        logger.info("Applying nodes")
-        kubectl_apply(nodes, namespace=namespace)
-        logger.info("nodes applied. Waiting for rollout.")
-        timeout = num_nodes * 3000
-        wait_for_rollout(nodes["kind"], nodes["metadata"]["name"], namespace, timeout)
-
-        self.log_event("nodes_deploy_finished")
-        logger.info("nodes rolled out. wait to stablize")
-        time.sleep(60)
-        self.log_event("publisher_deploy_start")
-        logger.info("delay over")
-
-        # TODO [metadata output]: log publish message start time
-        # Apply publisher configuration
-        logger.info("applying publisher")
-        kubectl_apply(publisher, namespace=namespace)
-        logger.info("publisher applied. Waiting for rollout.")
-        wait_for_rollout(
-            publisher["kind"],
-            publisher["metadata"]["name"],
-            namespace,
-            20,
-            api_client,
-            ("Ready", "True"),
-            # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
-        )
+        if not args.dry_run:
+            wait_for_rollout(
+                publisher["kind"],
+                publisher["metadata"]["name"],
+                publisher["metadata"]["namespace"],
+                20,
+                api_client,
+                ("Ready", "True"),
+                # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
+            )
         self.log_event("publisher_deploy_finished")
-        logger.info("publisher rollout done.")
 
-        logger.info("---publisher is up. begin messages")
-
-        timeout = num_nodes * messages * delay_seconds * 120
+        timeout = (num_nodes + 5) * messages * delay_seconds * 120
         logger.info(f"Waiting for Ready=False. Timeout: {timeout}")
 
-        wait_for_rollout(
-            publisher["kind"],
-            publisher["metadata"]["name"],
-            namespace,
-            timeout,
-            api_client,
-            ("Ready", "False"),
-        )
-        # TODO: consider state.reason == .completed
-        logger.info("---publisher messages finished. wait 20 seconds")
+        if not args.dry_run:
+            wait_for_rollout(
+                publisher["kind"],
+                publisher["metadata"]["name"],
+                publisher["metadata"]["namespace"],
+                timeout,
+                api_client,
+                ("Ready", "False"),
+                # TODO: consider state.reason == .completed
+            )
         self.log_event("publisher_messages_finished")
         time.sleep(20)
         self.log_event("publisher_wait_finished")
-        logger.info("---20seconds is over.")
-        # TODO [metadata output]: log publish message end time
 
-        logger.info("Finished waku regression test.")
         self.log_event("internal_run_finished")
         self._metadata_event(self.events_log_path)

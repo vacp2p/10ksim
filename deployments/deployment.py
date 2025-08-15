@@ -9,7 +9,7 @@ from kubernetes import config
 from kubernetes.client import ApiClient
 from ruamel import yaml
 
-from kube_utils import init_logger
+from kube_utils import init_logger, set_config_file
 from registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ def run_experiment(
     if not kube_config:
         kube_config = "~/.kube/config"
     config.load_kube_config(config_file=kube_config)
+    set_config_file(kube_config)
     api_client = ApiClient()
 
     try:

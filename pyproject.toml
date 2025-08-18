@@ -13,6 +13,6 @@ dependencies = [
     "pyyaml>=6.0.2",
     "requests>=2.32.4",
     "result>=0.17.0",
-    "ruamel-yaml>=0.18.14",
+    "ruamel-yaml==0.17.21",
     "seaborn>=0.13.2",
 ]

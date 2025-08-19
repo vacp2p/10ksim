@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import requests
-from kubernetes import config
 from pydantic import BaseModel, Field, PositiveInt
 
 
@@ -285,12 +284,6 @@ def serializer(obj):
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
-def get_this_namespace() -> str:
-    ns_path = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-    with open(ns_path, "r") as f:
-        return f.read().strip()
-
-
 def resolve_dns(node: str) -> Tuple[str, str]:
     start_time = time.time()
     name, port = node.split(":")
@@ -315,7 +308,7 @@ class NodeType(BaseModel):
         """Return name for DNS lookup.
         <pod-name>.<headless-service-name>.<namespace>.svc.cluster.local
         """
-        return f"{self.get_node_name(index)}.{self.service}.{self.namespace}.svc.cluster.local"
+        return f"{self.get_node_name(index)}.{self.service}"
 
     def get_node_name(self, index: PositiveInt) -> str:
         return self.name_template.format(index=index)
@@ -370,17 +363,13 @@ def get_ips_by_type(args: dict, *, namespace=None) -> List[Tuple[str, str]]:
     :rtype: List[str, str]
     """
     # TODO: Handle multiple shards.
-    logger.info(f"Loading incluster config")
-    config.load_incluster_config()
 
     results = []
     for node_type in node_types:
         start_index = args.get("start_index", 0)
         if args[node_type.count_key] == "all":
-            namespace = namespace if namespace is not None else get_this_namespace()
-            full_domain_name = f"{node_type.service}.{namespace}.svc.cluster.local"
             try:
-                _, _, ip_list = socket.gethostbyname_ex(full_domain_name)
+                _, _, ip_list = socket.gethostbyname_ex(node_type.service)
                 count = len(ip_list) - start_index
             except socket.gaierror:
                 # This happens when either:
@@ -404,8 +393,8 @@ def get_ips_by_type(args: dict, *, namespace=None) -> List[Tuple[str, str]]:
         for index in range(start_index, start_index + count):
             dns = node_type.dns_name(index)
             try:
-                ip = socket.gethostbyname(dns)
-                results.append((node_type.get_node_name(index), ip))
+                _, _, ips = socket.gethostbyname_ex(dns)
+                results.append((node_type.get_node_name(index), ips[0]))
             except Exception as e:
                 error = traceback.format_exc()
                 logger.error(

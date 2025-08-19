@@ -306,7 +306,7 @@ class NodeType(BaseModel):
 
     def dns_name(self, index: PositiveInt) -> str:
         """Return name for DNS lookup.
-        <pod-name>.<headless-service-name>.<namespace>.svc.cluster.local
+        <pod-name>.<headless-service-name>
         """
         return f"{self.get_node_name(index)}.{self.service}"
 

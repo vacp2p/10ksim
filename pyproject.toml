@@ -1,0 +1,18 @@
+[project]
+name = "10ksim"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "dateparser>=1.2.2",
+    "httpx>=0.28.1",
+    "humanfriendly>=10.0",
+    "kubernetes>=33.1.0",
+    "pandas>=2.3.1",
+    "pydantic>=2.11.7",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.4",
+    "result>=0.17.0",
+    "ruamel-yaml==0.17.21",
+    "seaborn>=0.13.2",
+]

@@ -13,6 +13,16 @@ Note: This is a work in progress. Tooling and folder structure may change in the
 
 ---
 
+## Dependencies
+
+### uv
+
+Install [uv](https://docs.astral.sh/uv/#installation) and just run:
+```shell
+uv sync
+```
+Required python version will be installed if not present in the system, alongside with the necessary requirements.
+
 ## Repository Structure
 
 ```
@@ -20,7 +30,6 @@ analysis/
   ├── scrape.py               # Scrape tool
   ├── example_log_analysis.py # Analysis tool
   ├── scrape.yaml             # Scrape config
-  └── requirements.txt        # Requirements for scrape and analysis tools
 deployment/
   ├── docker_utilities/       # Dockerfiles & resources to build experiment containers
   ├── kubernetes-utilities/   # Services required on Kubernetes for certain experiments
@@ -28,7 +37,6 @@ deployment/
 experiments/
   ├── deployment.py           # Experiment deployment script (generates & deploys)
   ├── README.md               # Usage guide for deployment script
-  └── requirements.txt        # Requirements for deployment script
 ```
 
 ---

@@ -13,9 +13,11 @@ import time
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
 import dateparser
+import ruamel.yaml
 from kubernetes import client, utils
 from kubernetes.client import ApiClient
 from kubernetes.client.rest import ApiException
@@ -95,13 +97,101 @@ def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Op
 
 logger = logging.getLogger(__name__)
 
+_kube_config = None
 
-def kubectl_apply(kube_yaml: yaml.YAMLObject, namespace="zerotesting"):
+
+def set_config_file(config: str):
+    global _kube_config
+    _kube_config = config
+
+
+def kubectl_apply(
+    kube_yaml: yaml.YAMLObject, namespace="zerotesting", *, config_file=None, dry_run=False
+):
+    if dry_run:
+        _kubectl_apply_dry_run(kube_yaml, namespace, config_file=config_file)
+    else:
+        _kubectl_apply(kube_yaml, namespace)
+
+
+def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace="zerotesting"):
     logger.debug(f"kubectl_apply the following config:\n{str(yaml.dump(kube_yaml))}")
+    kind = kube_yaml.get("kind")
+    name = kube_yaml.get("metadata", {}).get("name")
+    if not kind or not name:
+        raise ValueError(
+            f"YAML missing nessesary attributes 'kind' and 'metadata.name'. yaml: `{kube_yaml}`"
+        )
+
+    api_client = client.ApiClient()
+
+    replace_map = {
+        "Deployment": lambda: client.AppsV1Api(api_client).replace_namespaced_deployment(
+            name, namespace, kube_yaml
+        ),
+        "StatefulSet": lambda: client.AppsV1Api(api_client).replace_namespaced_stateful_set(
+            name, namespace, kube_yaml
+        ),
+        "DaemonSet": lambda: client.AppsV1Api(api_client).replace_namespaced_daemon_set(
+            name, namespace, kube_yaml
+        ),
+        "ReplicaSet": lambda: client.AppsV1Api(api_client).replace_namespaced_replica_set(
+            name, namespace, kube_yaml
+        ),
+        "Job": lambda: client.BatchV1Api(api_client).replace_namespaced_job(
+            name, namespace, kube_yaml
+        ),
+        "CronJob": lambda: client.BatchV1Api(api_client).replace_namespaced_cron_job(
+            name, namespace, kube_yaml
+        ),
+        "ReplicationController": lambda: client.CoreV1Api(
+            api_client
+        ).replace_namespaced_replication_controller(name, namespace, kube_yaml),
+        "Pod": lambda: client.CoreV1Api(api_client).replace_namespaced_pod(
+            name, namespace, kube_yaml
+        ),
+        "Service": lambda: client.CoreV1Api(api_client).replace_namespaced_service(
+            name, namespace, kube_yaml
+        ),
+    }
+
+    try:
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as temp:
+            yaml.dump(kube_yaml, temp)
+            temp.flush()
+            utils.create_from_yaml(client.ApiClient(), yaml_file=temp.name, namespace=namespace)
+    except utils.FailToCreateError:
+        replace_fn = replace_map.get(kind)
+        if not replace_fn:
+            raise ValueError(f"Replace operation not supported for resource. kind: `{kind}`")
+        replace_fn()
+
+
+def _kubectl_apply_dry_run(kube_yaml: yaml.YAMLObject, namespace: str, *, config_file: str):
+    config = config_file if config_file else _kube_config
+
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as temp:
         yaml.dump(kube_yaml, temp)
         temp.flush()
-        utils.create_from_yaml(client.ApiClient(), yaml_file=temp.name, namespace=namespace)
+        config_segment = ["--kubeconfig", config] if config else []
+        cmd = (
+            ["kubectl"]
+            + config_segment
+            + ["apply", "-f", temp.name, "--namespace", namespace, "--dry-run=server"]
+        )
+        logger.info(f"Running command: `{' '.join(cmd)}`")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(
+                f"Dry run for applying kubernetes config failed."
+                f"deploy.yaml: `{kube_yaml}`"
+                f"returncode: `{result.returncode}`"
+                f"stdout: `{result.stdout}`"
+                f"stderr: `{result.stderr}`"
+            )
+            raise ValueError("Dry run for applying kubernetes config failed.")
+        logger.debug(f"Dry run deploying `{kube_yaml}`" f"stdout: `{result.stdout}`")
+        return result
 
 
 def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str]] = None):
@@ -131,6 +221,17 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         except KeyError:
             pass
     return {resource[0]: resource[1] for resource in resources.items() if resource[1]}
+
+
+def delete_pod(name, namespace, *, grace_period=0):
+    v1 = client.CoreV1Api()
+    v1.delete_namespaced_pod(
+        name=name,
+        namespace=namespace,
+        body=client.V1DeleteOptions(grace_period_seconds=grace_period),
+        grace_period_seconds=grace_period,
+        propagation_policy="Foreground",
+    )
 
 
 def cleanup_resources(
@@ -292,15 +393,21 @@ def get_cleanup(
     api_client: ApiClient, namespace: str, deployments: List[yaml.YAMLObject]
 ) -> Callable[[], None]:
     def cleanup():
-        logger.info("Cleaning up resources.")
+        logger.debug("Cleaning up resources.")
         resources_to_cleanup = get_cleanup_resources(deployments)
-        logger.info(f"Resources to clean up: `{resources_to_cleanup}`")
+        logger.debug(f"Resources to clean up: `{resources_to_cleanup}`")
 
-        logger.info("Start cleanup.")
-        cleanup_resources(resources_to_cleanup, namespace, api_client)
-        logger.info("Waiting for cleanup.")
+        logger.debug(f"Start cleanup.")
+        try:
+            cleanup_resources(resources_to_cleanup, namespace, api_client)
+        except client.exceptions.ApiException as e:
+            logger.error(
+                f"Exception cleaning up resources. Resources: `{resources_to_cleanup}` exception: `{e}`",
+                exc_info=True,
+            )
+        logger.debug(f"Waiting for cleanup. Resources: `{resources_to_cleanup}`")
         wait_for_cleanup(resources_to_cleanup, namespace, api_client)
-        logger.info("Finished cleanup.")
+        logger.info(f"Finished cleanup. Resources: `{resources_to_cleanup}`")
 
     return cleanup
 
@@ -590,30 +697,39 @@ def gen_argparse(arg_defs):
 
 
 def dict_get(
-    dict: Dict, path: str | List[str], *, default: Any = None, sep: Optional[str] = os.path.sep
+    obj: Dict | list,
+    path: str | List[str | int] | Path,
+    *,
+    default: Any = None,
+    sep: Optional[str] = "/",
 ) -> Any:
     if isinstance(path, str):
         path = [node for node in path.split(sep) if node]
+    if isinstance(path, Path):
+        path = [node for node in path.parts]
     if len(path) < 1:
         raise KeyError(f"Invalid path. Path: `{path}`")
 
     if len(path) == 1:
-        return dict.get(path[0], default)
+        if isinstance(obj, list):
+            return obj[int(path[0])]
+        return obj.get(path[0], default)
 
     try:
-        return dict_get(dict[path[0]], path[1:], default=default, sep=sep)
+        key = int(path[0]) if isinstance(obj, list) else path[0]
+        return dict_get(obj[key], path[1:], default=default, sep=sep)
     except (TypeError, KeyError):
         return default
 
 
 def dict_set(
-    dict: Dict,
-    path: str | List[str],
+    obj: Dict,
+    path: str | List[str] | Path,
     value: Any,
     *,
     replace_leaf: bool = False,
     replace_nondict_stems: bool = False,
-    sep: Optional[str] = os.path.sep,
+    sep: Optional[str] = "/",
 ) -> Optional[Any]:
     """Set value in `dict` at `path`, creating sub-dicts at path nodes if they do not already exist.
 
@@ -638,28 +754,116 @@ def dict_set(
     """
     if isinstance(path, str):
         path = [node for node in path.split(sep) if node]
+    if isinstance(path, Path):
+        path = path.parts
     if len(path) < 1:
         raise KeyError(f"Invalid path. Path: `{path}`")
     for i, node in enumerate(path[:-1]):
         node = path[i]
         try:
-            if node not in dict.keys() or replace_nondict_stems:
-                dict[node] = {}
-            dict = dict[node]
+            if isinstance(obj, list):
+                node = int(node)
+                if node == len(obj):
+                    obj[node].append({})
+                obj = obj[node]
+            else:
+                if node not in obj.keys() or replace_nondict_stems:
+                    obj[node] = {}
+                obj = obj[node]
         except (AttributeError, TypeError):
             raise KeyError(
-                f"Non-dict value already exists at path. Path: `{path[0:i]}`\tKey: `{node}`\tValue: `{dict}`"
+                f"Non-dict value already exists at path. Path: `{path[0:i]}`\tKey: `{node}`\tValue: `{obj}`"
             )
 
     previous = None
-    if path[-1] in dict:
+    key = int(path[-1]) if isinstance(obj, list) else path[-1]
+    if key in obj:
         if not replace_leaf:
-            raise KeyError(
-                f"Value already exists at path. Path: `{path}`\tValue: `{dict[path[-1]]}`"
-            )
-        previous = dict[path[-1]]
-    dict[path[-1]] = value
+            raise KeyError(f"Value already exists at path. Path: `{path}`\tValue: `{obj[key]}`")
+        previous = obj[key]
+    obj[key] = value
     return previous
+
+
+def dict_partial_compare(complete_dict: Dict[Any, Any], partial_dict: Dict[Any, Any]) -> bool:
+    """
+    Compare two dictionaries, but only check keys present in partial_dict.
+
+    :param complete_dict: The complete dictionary to compare against.
+    :param partial_dict: The partial dictionary containing keys to test.
+
+    :return: True if for every key in partial_dict, complete_dict has the same key and value. False otherwise.
+    :rtype: bool
+    """
+    for key, partial_value in partial_dict.items():
+        if key not in complete_dict:
+            return False
+        if complete_dict[key] != partial_value:
+            return False
+    return True
+
+
+def dict_apply(
+    obj: Any,
+    func: Callable[[Any], Any],
+    path: Path | None = None,
+    *,
+    order: Literal["pre", "post"] = "pre",
+) -> dict:
+    """Applies `func(obj)` to every obj in `node` and adds the result to the same path in a new dict.
+    Wrapper around `dict_visit` that returns a new dict using the provided `func`.
+
+    Note: `None` values are ignored and not added to the new dict.
+    """
+    new_dict = {}
+
+    def apply(path, node):
+        nonlocal new_dict
+        new_value = func(node)
+        if new_value is not None:
+            if path == Path():
+                new_dict = new_value
+            else:
+                dict_set(new_dict, path, new_value)
+
+    dict_visit(obj, apply, path, order=order)
+    return new_dict
+
+
+def dict_visit(
+    node: Any,
+    func: Callable[[Path, Any], Any],
+    path: Path | None = None,
+    *,
+    order: Literal["pre", "post"] = "pre",
+):
+    """Calls `func(path, obj)` for every obj in `node`. `path` is Path used to retreive that value from the dict.
+    In other words, `dict_get(node, path)` would return `obj`.
+
+    Calls `func(path, value)` for value in dict.items()
+
+    Calls `func(path, item)` for each list item in list.
+
+    Calls `func(path, node)` for each other node.
+    """
+    if order not in ["pre", "post"]:
+        raise ValueError(f'Invalid order. Expected "pre" or "post". order: `{order}`')
+
+    if path is None:
+        path = Path()
+
+    if order == "pre":
+        func(path, node)
+
+    if isinstance(node, dict):
+        for key, value in node.items():
+            dict_visit(value, func, path / str(key), order=order)
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            dict_visit(item, func, path / str(index), order=order)
+
+    if order == "post":
+        func(path, node)
 
 
 def default_chart_yaml_str(name) -> str:
@@ -678,7 +882,6 @@ def helm_build_dir(workdir: str, values_paths: List[str], name: str) -> yaml.YAM
         itertools.chain(*values)
     )
     logger.info(f"Running helm template command. cwd: `{workdir}`\tcommand: `{command}`")
-    # import pdb; pdb.set_trace() # todo asdf
     logger.info(f"Usable command: `{' '.join(command)}`")
     result = subprocess.run(
         command,
@@ -692,9 +895,6 @@ def helm_build_dir(workdir: str, values_paths: List[str], name: str) -> yaml.YAM
         )
 
     return yaml.safe_load(result.stdout)
-
-
-import ruamel.yaml
 
 
 def get_YAML():

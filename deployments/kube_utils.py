@@ -13,7 +13,8 @@ import time
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
 import dateparser
 from kubernetes import client, utils
@@ -638,6 +639,8 @@ def dict_set(
     """
     if isinstance(path, str):
         path = [node for node in path.split(sep) if node]
+    if isinstance(path, Path):
+        path = path.parts
     if len(path) < 1:
         raise KeyError(f"Invalid path. Path: `{path}`")
     for i, node in enumerate(path[:-1]):
@@ -660,6 +663,87 @@ def dict_set(
         previous = dict[path[-1]]
     dict[path[-1]] = value
     return previous
+
+
+def dict_partial_compare(complete_dict: Dict[Any, Any], partial_dict: Dict[Any, Any]) -> bool:
+    """
+    Compare two dictionaries, but only check keys present in partial_dict.
+
+    :param complete_dict: The complete dictionary to compare against.
+    :param partial_dict: The partial dictionary containing keys to test.
+
+    :return: True if for every key in partial_dict, complete_dict has the same key and value. False otherwise.
+    :rtype: bool
+    """
+    for key, partial_value in partial_dict.items():
+        if key not in complete_dict:
+            return False
+        if complete_dict[key] != partial_value:
+            return False
+    return True
+
+
+def dict_apply(
+    obj: Any,
+    func: Callable[[Any], Any],
+    path: Path | None = None,
+    *,
+    order: Literal["pre", "post"] = "pre",
+) -> dict:
+    """Applies `func(obj)` to every obj in `node` and adds the result to the same path in a new dict.
+    Wrapper around `dict_visit` that returns a new dict using the provided `func`.
+
+    Note: `None` values are ignored and not added to the new dict.
+    """
+    new_dict = {}
+
+    def apply(path, node):
+        nonlocal new_dict
+        new_value = func(node)
+        if new_value is not None:
+            if path == Path():
+                new_dict = new_value
+            else:
+                dict_set(new_dict, path, new_value)
+
+    dict_visit(obj, apply, path, order=order)
+    return new_dict
+
+
+def dict_visit(
+    node: Any,
+    func: Callable[[Path, Any], Any],
+    path: Path | None = None,
+    *,
+    order: Literal["pre", "post"] = "pre",
+):
+    """Calls `func(path, obj)` for every obj in `node`. `path` is Path used to retreive that value from the dict.
+    In other words, `dict_get(node, path)` would return `obj`.
+
+    Calls `func(path, value)` for value in dict.items()
+
+    Calls `func(path, item)` for each list item in list.
+
+    Calls `func(path, node)` for each other node.
+    """
+    if order not in ["pre", "post"]:
+        raise ValueError(f'Invalid order. Expected "pre" or "post". order: `{order}`')
+
+    if path is None:
+        path = Path()
+
+    if order == "pre":
+        func(path, node)
+
+    if isinstance(node, dict):
+        for key, value in node.items():
+            dict_visit(value, func, path / str(key), order=order)
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            dict_visit(item, func, path / str(index), order=order)
+
+    if order == "post":
+        func(path, node)
 
 
 def default_chart_yaml_str(name) -> str:

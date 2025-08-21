@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
 
-from kube_utils import maybe_dir, poll_namespace_has_objects, wait_for_no_objs_in_namespace
+from kube_utils import poll_namespace_has_objects, wait_for_no_objs_in_namespace
 
 logger = logging.getLogger(__name__)
 
@@ -65,17 +65,13 @@ class BaseExperiment(ABC, BaseModel):
         if values_yaml is None:
             values_yaml = CommentedMap()
 
+        workdir = args.output_folder
+
         with ExitStack() as stack:
             stack.callback(lambda: self.log_event("cleanup_finished"))
-            # TODO [temporary workdir] allow None for temporary folder
-            workdir = args.workdir
-            stack.enter_context(maybe_dir(workdir))
-            try:
-                shutil.rmtree(workdir)
-            except FileNotFoundError:
-                pass
             os.makedirs(workdir, exist_ok=True)
             self._set_events_log(workdir)
+            shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
             self._run(
                 api_client=api_client,
                 workdir=workdir,

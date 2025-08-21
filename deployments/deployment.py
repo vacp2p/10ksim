@@ -1,6 +1,8 @@
 import argparse
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from kubernetes import config
@@ -37,6 +39,19 @@ def run_experiment(
     experiment.run(api_client, args, values_yaml)
 
 
+def setup_output_folder(args: argparse.Namespace) -> Path:
+    base_out_dir = Path(__file__).parent / "out"
+    if args.out_folder is not None:
+        out_dir = (
+            args.out_folder if args.out_folder.is_absolute() else base_out_dir / args.out_folder
+        )
+    else:
+        out_dir = base_out_dir / datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
+
+    out_dir.mkdir(parents=True, exist_ok=False)
+    return out_dir
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="A tool to run experiments. Generates deployment yaml with helm and deploys using the given kubeconfig. Dependencies: helm must be installed and in $PATH."
@@ -61,11 +76,14 @@ def main():
     )
     parser.add_argument(
         "-l",
-        "--log-file",
-        type=str,
-        dest="log_file_path",
+        "--out-folder",
+        type=Path,
+        dest="out_folder",
+        default=None,
         required=False,
-        help="Pipes the log to given file in addition to stdout/stderr.",
+        help="Output folder to contain all experiment output. "
+        "Path is relative to `__file__/out/` unless given as absolute path. "
+        "Default path uses `__file__/out/{{datetime}}`.",
     )
 
     # Scan for experiments.
@@ -79,8 +97,10 @@ def main():
             raise AttributeError(f"{info}") from e
 
     args = parser.parse_args()
+    out_folder = setup_output_folder(args)
+    args.output_folder = out_folder
     verbosity = args.verbosity or 2
-    init_logger(logging.getLogger(), verbosity, args.log_file_path)
+    init_logger(logging.getLogger(), verbosity, out_folder / "out.log")
     try:
         run_experiment(
             name=args.experiment,

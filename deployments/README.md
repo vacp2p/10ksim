@@ -11,7 +11,7 @@ However, it is flexible enough that it can be adapted to other workflows.
 
 # Example usage
 ```
-python ./deployment.py -vv --config ~/<kube_config>.yaml regression-nodes --type waku --workdir ./workdir
+python ./deployment.py -vv --config ~/<kube_config>.yaml regression-nodes --type waku
 ```
 Here we use the values.yaml already in the deployment folder, which already has all the required parameters.
 
@@ -19,15 +19,7 @@ Here we use the values.yaml already in the deployment folder, which already has 
 >
 > For long-running experiments, make sure your computer doesn't fall asleep. A good way to do this on Mac is to use `caffeinate` like this:
 >
-> `caffeinate -s -m -i python ./deployment.py -vv --config ~/<kube_config>.yaml regression-nodes --type waku --workdir ./workdir`
-
-> 💡 **Tip**
->
-> It's usually a good idea to name or date your workdir so you can keep track of which experiment was which. It's common to run many experiments and it can be easy to lose track of parameters.
->
-> At some point, the tool will be improved to do this automatically, but for now it can be done like this:
->
-> `values=cli_values.yaml ; dt=$(date +"%Y.%m.%d_%H.%M") ; mkdir $dt && cp ./${values} ./$dt && caffeinate -s -m -i python ./deployment.py --values ./${values} -vv --log-file=$dt/out.log --config ~/<kube_config>.yaml waku-regression-nodes --workdir ./$dt/workdir`
+> `caffeinate -s -m -i python ./deployment.py -vv --config ~/<kube_config>.yaml regression-nodes --type waku`
 
 
 # Requirements

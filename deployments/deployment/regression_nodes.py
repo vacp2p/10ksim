@@ -15,11 +15,9 @@ logger = logging.getLogger(__name__)
 class RegressionNodes:
     """Proxy for running waku-regression-nodes or nim-regression-nodes."""
 
-    @staticmethod
-    def add_parser(subparsers) -> None:
-        regression_nodes = subparsers.add_parser(
-            "regression-nodes", help="Run a regression_nodes test."
-        )
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        regression_nodes = subparsers.add_parser(cls.name, help="Run a regression_nodes test.")
         regression_nodes.add_argument(
             "--type", type=str, choices=["waku", "nim"], required=True, help=""
         )

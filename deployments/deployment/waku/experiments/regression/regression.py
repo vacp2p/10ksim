@@ -115,11 +115,9 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         Path(os.path.dirname(__file__)) / f"publisher.values.yaml",
     ]
 
-    @staticmethod
-    def add_parser(subparsers) -> None:
-        subparser = subparsers.add_parser(
-            "waku-regression-nodes", help="Run a regression_nodes test using waku."
-        )
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        subparser = subparsers.add_parser(cls.name, help="Run a regression_nodes test using waku.")
         BaseExperiment.add_args(subparser)
 
     def _build(

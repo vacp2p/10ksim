@@ -8,7 +8,7 @@ waku:
     getEnr:
       repo: "soutullostatus/getenr"
       tag: "v0.5.0"
-      numEnrs: 3
+      num: 3
       serviceName: "zerotesting-bootstrap.zerotesting"
     command:
       type: "regression"

@@ -15,8 +15,10 @@ spec:
       labels:
         app: {{ .Values.waku.nodes.app }}
     spec:
+    {{- if .Values.waku.nodes.dnsConfig }}
       dnsConfig:
         {{- toYaml .Values.waku.nodes.dnsConfig | nindent 8 }}
+    {{ end }}
       volumes:
       {{ with .Values.waku.nodes.volumes }}
         {{ toYaml . }}
@@ -38,14 +40,14 @@ spec:
           {{ toYaml .Values.waku.nodes.initContainers }}
         {{ end }}
         {{- if .Values.waku.nodes.includes.getAddress }}
-          {{- include "waku.nodes.getAddress" ( dict "Values" .Values.waku.nodes ) | nindent 8 }}
+          {{- include "waku.nodes.getEnrOrAddress" ( dict "values" .Values.waku.nodes "type" "address" ) | nindent 8 }}
         {{- end }}
         {{- if .Values.waku.nodes.includes.getEnr }}
-          {{- include "waku.nodes.getEnr" ( dict "Values" .Values.waku.nodes ) | nindent 8 }}
+          {{- include "waku.nodes.getEnrOrAddress" ( dict "values" .Values.waku.nodes "type" "enr" ) | nindent 8 }}
         {{- end }}
       containers:
         {{- if .Values.waku.nodes.storeNode }}
-          {{- include "waku.nodes.postgress.container" . | indent 5 }}
+        {{- include "waku.nodes.postgress.container" . | nindent 8 }}
         {{- end }}
         - name: waku
           image: {{ default "soutullostatus/nwaku-jq-curl" .Values.waku.nodes.image.repository }}:{{ default "v0.34.0-rc1" .Values.waku.nodes.image.tag }}
@@ -91,13 +93,13 @@ spec:
                   fieldPath: status.podIP
             {{- if .Values.waku.nodes.storeNode }}
             - name: POSTGRES_URL
-            value: "postgres://wakuuser:wakupassword@127.0.0.1:5432/wakumessages"
+              value: "postgres://wakuuser:wakupassword@127.0.0.1:5432/wakumessages"
             {{- end }}
           command:
             {{- include "waku.container.command" ( dict
               "includes" (dict
                 "getEnr" .Values.waku.nodes.getEnr
-                "getAddress" .Values.waku.nodes.address
+                "getAddress" .Values.waku.nodes.getAddress
               )
               "command" .Values.waku.nodes.command
             ) | nindent 14 }}

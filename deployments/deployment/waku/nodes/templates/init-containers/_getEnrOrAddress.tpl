@@ -1,5 +1,5 @@
 {{/*
-waku.nodes.getEorA
+waku.nodes.getEnrOrAddress
 
 Generates initContainer section for getEnr or getAddress.
 Args dict:
@@ -17,10 +17,10 @@ If $values.getEnr.num is 5, then there should be 5 --discv5-bootstrap-node flags
 This check is not applied when the full container command is given with $values.command.full).container
 
 Usage:
-  {{- include "waku.nodes.getEorA" ( dict "values" .Values.waku.nodes "type" "address" ) | nindent 8 }}
+  {{- include "waku.nodes.getEnrOrAddress" ( dict "values" .Values.waku.nodes "type" "address" ) | nindent 8 }}
 
 */}}
-{{- define "waku.nodes.getEorA" -}}
+{{- define "waku.nodes.getEnrOrAddress" -}}
 {{- $values := .values }}
 {{- $type := .type }}
 {{- $settings := dict

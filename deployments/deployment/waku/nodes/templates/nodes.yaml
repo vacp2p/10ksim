@@ -40,10 +40,10 @@ spec:
           {{ toYaml .Values.waku.nodes.initContainers }}
         {{ end }}
         {{- if .Values.waku.nodes.includes.getAddress }}
-          {{- include "waku.nodes.getEorA" ( dict "values" .Values.waku.nodes "type" "address" ) | nindent 8 }}
+          {{- include "waku.nodes.getEnrOrAddress" ( dict "values" .Values.waku.nodes "type" "address" ) | nindent 8 }}
         {{- end }}
         {{- if .Values.waku.nodes.includes.getEnr }}
-          {{- include "waku.nodes.getEorA" ( dict "values" .Values.waku.nodes "type" "enr" ) | nindent 8 }}
+          {{- include "waku.nodes.getEnrOrAddress" ( dict "values" .Values.waku.nodes "type" "enr" ) | nindent 8 }}
         {{- end }}
       containers:
         {{- if .Values.waku.nodes.storeNode }}

@@ -102,6 +102,7 @@ def experiment(name, **metadata):
         metadata["module_path"] = sys.modules[cls.__module__].__file__
         exp_name = name if name is not None else cls.__name__
         registry.add(exp_name, cls, **metadata)
+        cls.name = exp_name
         return cls
 
     return decorator

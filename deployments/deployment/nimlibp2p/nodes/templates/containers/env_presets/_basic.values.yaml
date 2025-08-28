@@ -1,0 +1,14 @@
+nimlibp2p:
+  nodes:
+    env:
+      presets:
+        basic:
+          peerNumber: "0"
+          # Number of nodes total
+          peers: 1000
+          # Number of peers per node
+          connectTo: 10
+          # Number of ms to sleep between messages
+          msgRate: 1000
+          # Size of messages in bytes
+          msgSize: 1000

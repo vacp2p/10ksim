@@ -1,0 +1,20 @@
+nimlibp2p:
+  nodes:
+    dnsConfig:
+      searches:
+        - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
+    env:
+      presets:
+        mix:
+          # Number of nodes total
+          nodes: 1000
+          # Number of messages
+          messages: 10
+          # Number of ms to sleep between messages
+          msgRate: 1000
+          # Size of message in bytes
+          msgSize: 1000
+          # Number of publishers in the cluster
+          publishers: 4
+          # Number of peers per nodes
+          connectTo: 10

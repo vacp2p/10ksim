@@ -4,7 +4,8 @@ metadata:
   name: pod
   namespace: {{ default "zerotesting-nimlibp2p" .Values.nimlibp2p.nodes.namespace }}
 spec:
-  replicas: {{ .Values.nimlibp2p.nodes.replicas }}
+  {{ $isMixNode := eq .Values.nimlibp2p.nodes.env.type "mix" }}
+  replicas: {{ .Values.nimlibp2p.nodes.numNodes }}
   podManagementPolicy: "Parallel"
   serviceName: nimp2p-service
   selector:
@@ -26,7 +27,7 @@ spec:
           command:
             - sh
             - -c
-            - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+            - "tc qdisc add dev eth0 root netem delay {{ .Values.nimlibp2p.nodes.network.delay }}ms {{ .Values.nimlibp2p.nodes.network.jitter }}ms distribution normal"
       containers:
         - name: container-0
           image: {{ default "soutullostatus/dst-test-node" .Values.nimlibp2p.nodes.image.repository }}:{{ default "v1.8.0-mplex" .Values.nimlibp2p.nodes.image.tag }}
@@ -42,16 +43,23 @@ spec:
               memory: "600Mi"
               cpu: "400m"
           env:
-            - name: PEERNUMBER
-              value: "0"
-            - name: PEERS
-              value: "1000"
-            - name: CONNECTTO
-              value: "10"
-            - name: MSGRATE
-              value: {{ quote .Values.nimlibp2p.nodes.messageRate }}
-            - name: MSGSIZE
-              value: {{ quote .Values.nimlibp2p.nodes.messageSize }}
+            {{- $envArgs := .Values.nimlibp2p.nodes.env }}
+            {{- $preset := $envArgs.type | default "basic" -}}
+            {{- include "env.genVars" ( dict
+              "args" $envArgs.vars
+              "presets" $envArgs.presets
+              "preset" $preset)  | nindent 16 }}
           args:
             - {{ quote .Values.nimlibp2p.nodes.minutes }}
             - {{ quote .Values.nimlibp2p.nodes.hours }}
+          {{ if $isMixNode -}}
+          volumeMounts:
+            - name: pubkeys
+              mountPath: /data
+          {{- end }}
+      {{ if $isMixNode -}}
+      volumes:
+        - name: pubkeys
+          persistentVolumeClaim:
+            claimName: pubkeys-pvc
+      {{- end }}

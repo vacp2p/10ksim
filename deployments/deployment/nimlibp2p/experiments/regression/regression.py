@@ -138,7 +138,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         wait_for_time(future_time)  # Wait until the nodes begin.
 
         num_nodes = deploy["spec"]["replicas"]
-        time_to_resolve = (60 * 3) + (num_nodes * 3)
+        time_to_resolve = 3 + (num_nodes * 2)
         logger.info(f"Waiting for messages to resolve. Sleep: {timedelta(seconds=time_to_resolve)}")
         time.sleep(
             time_to_resolve

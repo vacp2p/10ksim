@@ -1,19 +1,78 @@
 # Python Imports
+
+import functools
 import logging
+from copy import deepcopy
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 import pandas as pd
-from typing import List, Optional, Tuple
-from result import Result, Err, Ok
+from result import Err, Ok, Result
 
 from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-
-# Project Imports
-from src.utils import path_utils, file_utils
+from src.utils import file_utils, path_utils
 
 logger = logging.getLogger(__name__)
+
+
+def disk_cache_dir(cache_dir_param: str, dump_func_name: str, load_func_name: str):
+    """
+    Decorator for caching function returning List[pd.DataFrame].
+
+    - `cache_dir_param`: name of runtime argument for cache directory (Path or None).
+    - `dump_func_name`: instance method name to dump List[pd.DataFrame].
+    - `load_func_name`: instance method name to load cached List[pd.DataFrame].
+
+    If `cache_dir` is None, no caching is done and function always fetches fresh data.
+
+    Supports a 'force' kwarg to force refresh.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            force = kwargs.pop("force", False)
+
+            arg_names = func.__code__.co_varnames
+            try:
+                if cache_dir_param in kwargs:
+                    cache_dir = kwargs[cache_dir_param]
+                else:
+                    index = arg_names.index(cache_dir_param)
+                    # args does NOT contain 'self'. Adjust index by -1.
+                    adjusted_idx = index - 1
+                    if adjusted_idx < 0 or adjusted_idx >= len(args):
+                        cache_dir = None
+                    else:
+                        cache_dir = args[adjusted_idx]
+            except ValueError:
+                cache_dir = None
+
+            if cache_dir is None:
+                # No caching, always run function.
+                return func(self, *args, **kwargs)
+
+            cache_dir = Path(cache_dir)
+
+            if not cache_dir.exists():
+                cache_dir.mkdir(parents=True)
+
+            if not force:
+                try:
+                    cached = getattr(self, load_func_name)(cache_dir)
+                    return cached
+                except:
+                    pass
+
+            dfs = func(self, *args, **kwargs)
+            getattr(self, dump_func_name)(dfs, cache_dir)
+            return dfs
+
+        return wrapper
+
+    return decorator
 
 
 class Nimlibp2pAnalyzer:
@@ -70,7 +129,9 @@ class Nimlibp2pAnalyzer:
         else:
             self._analyze_reliability_local(n_jobs)
 
-    def analyze_mix_trace(self, n_jobs: int):
+    @disk_cache_dir("dump_path", "mix_dump", "mix_load")
+    def mix_scrape(self, n_jobs, dump_path, *, force=False):
+        logger.info("mix_scrape")
         self._assert_num_nodes()
 
         tracer = (
@@ -90,11 +151,42 @@ class Nimlibp2pAnalyzer:
 
         dfs = stack_analysis.get_all_node_dataframes(n_jobs)
         dfs = self._merge_mix_dfs(dfs)
-        result = self._dump_mix_dfs(dfs)
+
+        for df in dfs:
+            try:
+                df.index.rename("timestamp", level="current", inplace=True)
+            except KeyError:
+                pass
+
+        return dfs
+
+    def mix_dump(self, dfs, dump_path):
+        logger.info("mix_dump")
+        result = self._dump_mix_dfs(dfs, dump_path)
         if result.is_err():
             logger.error(f"Issue dumping message summary. {result.err_value}")
 
-    def _analyze_reliability_cluster(self, n_jobs: int):
+    def mix_load(self, local_data_folder):
+        logger.info("mix_load")
+        logger.info("loading local data")
+        sent = pd.read_csv(local_data_folder / "summary" / "sent.csv")
+        received = pd.read_csv(local_data_folder / "summary" / "received.csv")
+        mix = pd.read_csv(local_data_folder / "summary" / "mix.csv")
+        return [sent, received, mix]
+
+    def analyze_mix_trace(self, n_jobs: int):
+        logger.info("analyze_mix_trace")
+        dfs = self.mix_scrape(n_jobs, self._dump_analysis_path, force=False)
+
+    def _load_data(self, local_data_folder):
+        logger.info("loading local data")
+        sent = pd.read_csv(local_data_folder / "summary" / "sent.csv")
+        received = pd.read_csv(local_data_folder / "summary" / "received.csv")
+        return [sent, received]
+
+    @disk_cache_dir("dump_path", "_dump_dfs", "_load_data")
+    def scrape__analyze_reliability_cluster_data(self, n_jobs: int, dump_path: str):
+        logger.info("scraping data")
         self._assert_num_nodes()
 
         tracer = (
@@ -110,10 +202,10 @@ class Nimlibp2pAnalyzer:
         dfs = stack_analysis.get_all_node_dataframes(n_jobs)
         dfs = self._merge_dfs(dfs)
 
-        result = self._dump_dfs(dfs)
-        if result.is_err():
-            logger.error(f"Issue dumping message summary. {result.err_value}")
-            return None
+        return dfs
+
+    def _analyze_reliability_cluster(self, n_jobs: int):
+        dfs = self.mix_scrape(n_jobs, self._dump_analysis_path)
 
         nodes_with_issues = self._has_message_reliability_issues(
             "msgId", "kubernetes.pod_name", dfs[0], dfs[1], self._dump_analysis_path
@@ -131,6 +223,7 @@ class Nimlibp2pAnalyzer:
 
         num_nodes_per_ss = stack_analysis.get_number_nodes()
         for i, num_nodes in enumerate(num_nodes_per_ss):
+            print(f"{num_nodes} == {self._kwargs['nodes_per_statefulset'][i]}")
             assert (
                 num_nodes == self._kwargs["nodes_per_statefulset"][i]
             ), f"Number of nodes in cluster {num_nodes_per_ss} doesnt match"
@@ -176,12 +269,13 @@ class Nimlibp2pAnalyzer:
 
         return [received_df, sent_df, mix_df]
 
-    def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+    def _dump_dfs(self, dfs: List[pd.DataFrame], local_data_folder: Path) -> Result:
+        logger.info("_dump_dfs")
         received = dfs[0].reset_index()
         received = received.astype(str)
         logger.info("Dumping received information")
         result = file_utils.dump_df_as_csv(
-            received, self._dump_analysis_path / "summary" / "received.csv", False
+            received, local_data_folder / "summary" / "received.csv", False
         )
         if result.is_err():
             logger.warning(result.err_value)
@@ -190,22 +284,18 @@ class Nimlibp2pAnalyzer:
         sent = dfs[1].reset_index()
         sent = sent.astype(str)
         logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(
-            sent, self._dump_analysis_path / "summary" / "sent.csv", False
-        )
+        result = file_utils.dump_df_as_csv(sent, local_data_folder / "summary" / "sent.csv", False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
 
         return Ok(None)
 
-    def _dump_mix_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+    def _dump_mix_dfs(self, dfs: List[pd.DataFrame], data_path) -> Result:
         received = dfs[0].reset_index()
         received = received.astype(str)
         logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(
-            received, self._dump_analysis_path / "summary" / "received.csv", False
-        )
+        result = file_utils.dump_df_as_csv(received, data_path / "summary" / "received.csv", False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -213,19 +303,15 @@ class Nimlibp2pAnalyzer:
         sent = dfs[1].reset_index()
         sent = sent.astype(str)
         logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(
-            sent, self._dump_analysis_path / "summary" / "sent.csv", False
-        )
+        result = file_utils.dump_df_as_csv(sent, data_path / "summary" / "sent.csv", False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
 
         mix = dfs[2].reset_index()
         mix = mix.astype(str)
-        logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(
-            mix, self._dump_analysis_path / "summary" / "mix.csv", False
-        )
+        logger.info("Dumping mix information")
+        result = file_utils.dump_df_as_csv(mix, data_path / "summary" / "mix.csv", False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)
@@ -267,10 +353,14 @@ class Nimlibp2pAnalyzer:
         return None
 
     def _get_peers_missed_messages(
-        self, msg_identifier: str, peer_identifier: str, df: pd.DataFrame
+        self, msg_identifier: str, peer_identifier: str, sent_df: pd.DataFrame
     ) -> Tuple[List, List]:
         all_peers_missed_messages = []
         all_missing_messages = []
+
+        df = deepcopy(sent_df)
+        df.set_index(["msgId", "timestamp"], inplace=True)
+        df.sort_index(inplace=True)
 
         unique_messages = len(df.index.get_level_values(msg_identifier).unique())
 
@@ -322,10 +412,14 @@ class Nimlibp2pAnalyzer:
     def _check_if_msg_has_been_sent(
         self, peers: List, missed_messages: List, sent_df: pd.DataFrame
     ) -> List:
+        sent_df = sent_df.reset_index()
+        sent_df.set_index(["msgId", "timestamp"], inplace=True)
+        sent_df.sort_index(inplace=True)
+
         messages_sent_to_peer = []
         for peer in peers:
             try:
-                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
+                filtered_df = sent_df.loc[pd.IndexSlice[missed_messages, :], :]
                 filtered_df = filtered_df[filtered_df["receiver_peer_id"] == peer]
                 messages_sent_to_peer.append((peer, filtered_df))
             except KeyError as _:

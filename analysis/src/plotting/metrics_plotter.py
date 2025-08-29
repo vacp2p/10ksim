@@ -48,7 +48,6 @@ class MetricsPlotter:
     def _save_plot(self, plot_name: str):
         plt.tight_layout()
         plt.savefig(plot_name)
-        plt.show()
 
     def _add_subplot_df_to_axs(self, df: pd.DataFrame, index: int, axs: np.ndarray,
                                plot_specs: Dict):

@@ -32,7 +32,7 @@ class Nimlibp2pTracer(MessageTracer):
 
     def with_received_pattern_group(self) -> Self:
         patterns = [
-            r'Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)'
+            r'INF (.*?) Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)'
         ]
 
         tracers = [
@@ -46,7 +46,7 @@ class Nimlibp2pTracer(MessageTracer):
 
     def with_sent_pattern_group(self) -> Self:
         patterns = [
-            r'Publishing message.*?msgId=([\w*]+).*?timestamp=([\w*]+)'
+            r'INF (.*?) Publishing message.*?msgId=([\w*]+).*?timestamp=([\w*]+)'
         ]
         tracers = [
             self._trace_sent_in_logs,
@@ -58,9 +58,9 @@ class Nimlibp2pTracer(MessageTracer):
 
     def with_mix_pattern_group(self):
         patterns = [
-            r'Sender.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)',
-            r'Intermediate.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)',
-            r'Exit.*?msgid=([\w*]+).*?fromPeerID=([\w*]+).*?toPeerID=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([\w*]+).*?procDelay=([\w*]+)'
+            r'Sender.*?msgId=([\w*]+).*?fromPeerId=([\w*]+).*?toPeerId=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([^\s*]+).*?procDelay=([\w*]+)',
+            r'Intermediate.*?msgId=([\w*]+).*?fromPeerId=([\w*]+).*?toPeerId=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([^\s*]+).*?procDelay=([\w*]+)',
+            r'Exit.*?msgId=([\w*]+).*?fromPeerId=([\w*]+).*?toPeerId=([\w*]+).*?myPeerId=([\w*]+).*?orig=([\w*]+).*?current=([^\s*]+).*?procDelay=([\w*]+)'
         ]
         tracers = [
             self._trace_sender_mix_in_logs,
@@ -79,20 +79,35 @@ class Nimlibp2pTracer(MessageTracer):
 
         return self
 
+    # TODO: move to base_class
     def trace(self, parsed_logs: List[List]) -> List[List]:
         """Returns one Dataframe per pattern string. ie: received patterns (2) and sent patterns (2), will
         return a List with 2 positions (received + send patterns). Inside each position, it will have as
         many Dataframes as string patterns there are. In total, 4 Dataframes.
         """
+
+        o_index=0
+        for tracers, log_group in zip(self._tracings, parsed_logs):
+            i_index = 0
+            for tracer, log in zip(tracers, log_group):
+                result = tracer(log)
+                logger.debug(f"LOGS {o_index}-{i_index}: {log_group}")
+                logger.debug(f"REGEX {o_index}-{i_index}: {tracer}")
+                logger.debug(f"RESULT {o_index}-{i_index}: {result}")
+
+                i_index += 1
+            o_index += 1
+
         return [[tracer(log) for tracer, log in zip(tracers, log_group)]
                 for tracers, log_group in zip(self._tracings, parsed_logs)]
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        columns = ['msgId', 'sentAt', 'current', 'delayMs']
+        columns = ['utc', 'msgId', 'sentAt', 'current', 'delayMs']
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
         df = pd.DataFrame(parsed_logs, columns=columns)
+        df['utc'] = pd.to_datetime(df['utc'])
         df['msgId'] = pd.to_numeric(df['msgId'], errors='coerce').fillna(-1).astype(int)
         df['sentAt'] = df['sentAt'].astype(np.uint64)
         df['sentAt'] = pd.to_datetime(df['sentAt'], unit='ns')
@@ -102,7 +117,7 @@ class Nimlibp2pTracer(MessageTracer):
         return df
 
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
-        columns = ['msgId', 'timestamp']
+        columns = ['utc', 'msgId', 'timestamp']
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 
@@ -110,6 +125,7 @@ class Nimlibp2pTracer(MessageTracer):
         df['msgId'] = pd.to_numeric(df['msgId'], errors='coerce').fillna(-1).astype(int)
         df['timestamp'] = df['timestamp'].astype(np.uint64)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ns')
+        df['utc'] = pd.to_datetime(df['utc'])
 
         return df
 

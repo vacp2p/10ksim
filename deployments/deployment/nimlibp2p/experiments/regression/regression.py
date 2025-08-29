@@ -75,7 +75,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
     @classmethod
     def get_metadata_event(_cls, events_log_path: str):
         events_list = [
-            ({"event": "wait_for_clear_finished"}, ("experiment.start", timedelta(seconds=0))),
+            ({"event": "wait_for_clear_finished"}, ("times.start", timedelta(seconds=0))),
             ({"event": "begin_messages"}, ("messages.start", timedelta(seconds=0))),
             ({"event": "end_messages"}, ("messages.end", timedelta(seconds=3))),
         ]
@@ -194,9 +194,15 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
             except AttributeError:
                 return {"delay": None, "jitter": None}
 
-        network_params = extract_delay_and_jitter(
-            deploy["spec"]["template"]["spec"]["initContainers"][0]["command"][2]
-        )
+        try:
+            network_params = extract_delay_and_jitter(
+                deploy["spec"]["template"]["spec"]["initContainers"][0]["command"][2]
+            )
+        except KeyError:
+            network_params = {"delay": 0, "jitter": 0}
+
+        container_image = deploy["spec"]["template"]["spec"]["containers"][0]["image"]
+        image, tag = container_image.split(":")
 
         self.log_event(
             {
@@ -204,6 +210,10 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
                 "type": "nimlibp2p",
                 "name": deploy["metadata"]["name"],
                 "nodes": deploy["spec"]["replicas"],
+                "image": {
+                    "repo": image,
+                    "tag": tag,
+                },
                 "delay": network_params.get("delay") or 0,
                 "jitter": network_params.get("jitter") or 0,
                 "phase": "start",

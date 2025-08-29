@@ -1,106 +1,30 @@
-import json
 import logging
 import os
 import time
 from argparse import Namespace
 from contextlib import ExitStack
-from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
-from deployment.base_experiment import BaseExperiment
+from deployment.base_experiment import (
+    BaseExperiment,
+    format_metadata_timestamps,
+    get_valid_shifted_times,
+    parse_events_log,
+)
 from deployment.builders import build_deployment
 from kube_utils import (
-    dict_apply,
-    dict_get,
-    dict_partial_compare,
-    dict_set,
-    dict_visit,
     get_flag_value,
     wait_for_rollout,
 )
 from registry import experiment
 
 logger = logging.getLogger(__name__)
-
-
-def parse_events_log(
-    log_path: str,
-    events_list: List[Tuple[Dict[str, str], str]],
-    *,
-    extract: Callable[[dict], Any] | None = None,
-) -> dict:
-    """
-    Return a new dict constructed by parsing the event log.
-    Each line in `log_path` is converted to an event (dict).
-    If the event contains all of the (key, value) items from a dict in `events_list`, then the event is converted to a new value using `extract(event)` and added at `path` in the new dict, where `path` is the value from the `events_list`.
-
-    :param log_path: Path to events log.
-    :param events_list: List of tuples mapping a dict to compare to the line to a path in the return dict.
-    :param extract: A function mapping the json loaded from the event log to the value in the return dict.
-    :return: dict constructed from extracting matchign lines from log_path and converting them to values using `extract`.
-    :rtype: dict
-    """
-    if extract is None:
-        extract = lambda event: datetime.strptime(event["timestamp"], "%Y-%m-%d %H:%M:%S")
-    return_dict = {}
-    with open(log_path, "r") as events_log:
-        for line in events_log:
-            event = json.loads(line)
-            for key, path in events_list:
-                try:
-                    if dict_partial_compare(event, key):
-                        new_value = extract(event)
-                        dict_set(
-                            return_dict,
-                            path,
-                            new_value,
-                            sep=".",
-                        )
-                except KeyError:
-                    pass
-    return return_dict
-
-
-def format_metadata_timestamps(metadata: dict) -> dict:
-    def format_item(node):
-        try:
-            return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        except AttributeError:
-            pass
-
-    return dict_apply(metadata, format_item)
-
-
-def get_valid_shifted_times(deltatime_map: dict[str, timedelta], metadata: dict) -> dict:
-    shifted = deepcopy(metadata)
-    for path, delta in deltatime_map.items():
-        time_value = dict_get(shifted, path, default=None, sep=".")
-        if time_value is not None:
-            shifted_time = time_value + delta
-            dict_set(shifted, path, shifted_time, sep=".", replace_leaf=True)
-
-    filtered = {}
-
-    def filter(path, obj):
-        try:
-            start_dt = obj["start"]
-            end_dt = obj["end"]
-            if end_dt <= start_dt:
-                return
-            dict_set(filtered, path / "start", start_dt)
-            dict_set(filtered, path / "end", end_dt)
-        except (KeyError, TypeError) as e:
-            pass
-
-    dict_visit(shifted, filter)
-
-    return filtered
 
 
 @experiment(name="waku-regression-nodes")

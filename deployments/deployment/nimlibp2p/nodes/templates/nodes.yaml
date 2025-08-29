@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: pod
+  name: {{ .Values.nimlibp2p.nodes.name }}
   namespace: {{ default "zerotesting-nimlibp2p" .Values.nimlibp2p.nodes.namespace }}
 spec:
   replicas: {{ .Values.nimlibp2p.nodes.replicas }}
@@ -42,16 +42,16 @@ spec:
               memory: "600Mi"
               cpu: "400m"
           env:
-            - name: PEERNUMBER
-              value: "0"
-            - name: PEERS
-              value: "1000"
-            - name: CONNECTTO
-              value: "10"
-            - name: MSGRATE
-              value: {{ quote .Values.nimlibp2p.nodes.messageRate }}
-            - name: MSGSIZE
-              value: {{ quote .Values.nimlibp2p.nodes.messageSize }}
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+            {{- $envArgs := .Values.nimlibp2p.nodes.env }}
+            {{- $preset := $envArgs.type | default "basic" -}}
+            {{- include "env.genVars" ( dict
+              "args" $envArgs.vars
+              "presets" $envArgs.presets
+              "preset" $preset)  | nindent 16 }}
           args:
             - {{ quote .Values.nimlibp2p.nodes.minutes }}
             - {{ quote .Values.nimlibp2p.nodes.hours }}

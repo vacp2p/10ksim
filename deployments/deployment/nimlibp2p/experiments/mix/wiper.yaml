@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-pubkeys
+  namespace: "zerotesting-nimlibp2p"
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: cleaner
+        image: busybox
+        command: ["sh", "-c", "rm -rf /data/*"]
+        volumeMounts:
+        - name: pubkeys
+          mountPath: /data
+      volumes:
+      - name: pubkeys
+        persistentVolumeClaim:
+          claimName: pubkeys-pvc

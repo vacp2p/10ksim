@@ -213,7 +213,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Pod": [],
         "Service": [],
     }
-    types = types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod"]
+    types = types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job"]
     for yaml in yamls:
         try:
             if yaml["kind"] in types:
@@ -272,7 +272,7 @@ def cleanup_resources(
         "ReplicationController": lambda name: client.CoreV1Api(
             api_client
         ).delete_namespaced_replication_controller(name, namespace),
-        "Job": lambda name: client.BatchV1Api(api_client).delete_namespaced_job(name, namespace),
+        "Job": lambda name: client.BatchV1Api(api_client).delete_namespaced_job(name, namespace, body=client.V1DeleteOptions(propagation_policy='Foreground')),
         "CronJob": lambda name: client.BatchV1beta1Api(api_client).delete_namespaced_cron_job(
             name, namespace
         ),

@@ -17,7 +17,12 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from deployment.base_experiment import BaseExperiment
+from deployment.base_experiment import (
+    BaseExperiment,
+    format_metadata_timestamps,
+    get_valid_shifted_times,
+    parse_events_log,
+)
 from deployment.builders import build_deployment
 
 # from deployment.nimlibp2p.builders import Nimlibp2pBuilder
@@ -26,7 +31,6 @@ from kube_utils import (
     get_cleanup,
     get_future_time,
     kubectl_apply,
-    wait_for_rollout,
     wait_for_time,
 )
 from registry import experiment
@@ -67,6 +71,57 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         subparser = subparsers.add_parser(cls.name, help="Run a regression_nodes test using waku.")
         BaseExperiment.add_args(subparser)
         NimRegressionNodes.add_args(subparser)
+
+    @classmethod
+    def get_metadata_event(_cls, events_log_path: str):
+        events_list = [
+            ({"event": "wait_for_clear_finished"}, ("experiment.start", timedelta(seconds=0))),
+            ({"event": "begin_messages"}, ("messages.start", timedelta(seconds=0))),
+            ({"event": "end_messages"}, ("messages.end", timedelta(seconds=3))),
+        ]
+
+        # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].
+        events_maps = [(obj[0], obj[1][0]) for obj in events_list]
+        metadata = parse_events_log(events_log_path, events_maps)
+
+        # Get timedeltas for each path. dict of {path : timedelta}.
+        deltatime_map = {obj[1][0]: obj[1][1] for obj in events_list}
+        shifted = get_valid_shifted_times(deltatime_map, metadata)
+        metadata.update(shifted)
+
+        metadata = format_metadata_timestamps(metadata)
+
+        # Add links.
+        links_map = {
+            "grafana": "https://grafana.vaclab.org/d/jIrqsZTIz/nwaku?orgId=1&from={start}&to={end}&timezone=utc",
+            "victoria": "https://vlselect.vaclab.org/select/vmui/?#/?query=*&g0.start_input={start}&g0.end_input={end}&g0.relative_time=none",
+        }
+        # For interval_type in [completed, stable] (if they were added).
+        for interval_type in metadata.keys():
+            try:
+                for link_type, base in links_map.items():
+                    metadata[interval_type][link_type] = base.format(
+                        start=metadata[interval_type]["start"], end=metadata[interval_type]["end"]
+                    )
+            except KeyError:
+                pass
+
+        # Get experiment parameter data
+        params_event = [
+            ({"event": "deployment", "type": "nimlibp2p", "phase": "start"}, "experiment.params")
+        ]
+        extract = lambda item: item
+        param_metadata = parse_events_log(events_log_path, params_event, extract=extract)
+        metadata.update(param_metadata)
+
+        return metadata
+
+    def _metadata_event(self):
+        self.log_event(self.__class__.get_metadata_event(self.events_log_path))
+
+    def log_event(self, event):
+        logger.info(event)
+        return super().log_event(event)
 
     def _build(
         self, workdir: str, cli_values: yaml.YAMLObject, delay: Optional[str]
@@ -127,15 +182,43 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         stack.callback(cleanup)
 
         kubectl_apply(deploy, namespace=namespace)
+
+        # "tc qdisc add dev eth0 root netem delay {{ .Values.nimlibp2p.nodes.network.delay }}ms {{ .Values.nimlibp2p.nodes.network.jitter }}ms distribution normal"
+        def extract_delay_and_jitter(command_str: str):
+            try:
+                match = re.search(
+                    r"delay (?P<delay>\d+)ms(?: (?P<jitter>\d+)ms)?(?: distribution normal)?",
+                    command_str,
+                )
+                return match.groupdict()
+            except AttributeError:
+                return {"delay": None, "jitter": None}
+
+        network_params = extract_delay_and_jitter(
+            deploy["spec"]["template"]["spec"]["initContainers"][0]["command"][2]
+        )
+
+        self.log_event(
+            {
+                "event": "deployment",
+                "type": "nimlibp2p",
+                "name": deploy["metadata"]["name"],
+                "nodes": deploy["spec"]["replicas"],
+                "delay": network_params.get("delay") or 0,
+                "jitter": network_params.get("jitter") or 0,
+                "phase": "start",
+            }
+        )
         logger.info("Deployment applied. Waiting for rollout.")
 
-        wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
+        # wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
         logger.info("Rollout successful.")
 
         logger.info(
             f"Waiting for message begin time: {future_time.hour:02d}:{future_time.minute:02d}"
         )
         wait_for_time(future_time)  # Wait until the nodes begin.
+        self.log_event("begin_messages")
 
         num_nodes = deploy["spec"]["replicas"]
         time_to_resolve = 3 + (num_nodes * 2)
@@ -143,6 +226,9 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         time.sleep(
             time_to_resolve
         )  # TODO [regression nimlibp2p2 cleanup]: Test for nodes finished?
+        self.log_event("end_messages")
+
+        self._metadata_event()
 
         this_time = datetime.now(dt_timezone.utc)
         logger.info(

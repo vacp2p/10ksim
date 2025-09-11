@@ -62,11 +62,9 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
             help="For nimlibp2p tests only. The delay before nodes activate in string format (eg. 1hr20min)",
         )
 
-    @staticmethod
-    def add_parser(subparsers) -> None:
-        subparser = subparsers.add_parser(
-            "nimlibp2p-regression-nodes", help="Run a regression_nodes test using waku."
-        )
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        subparser = subparsers.add_parser(cls.name, help="Run a regression_nodes test using waku.")
         BaseExperiment.add_args(subparser)
         NimRegressionNodes.add_args(subparser)
 

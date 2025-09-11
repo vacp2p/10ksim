@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--values", default=None, help="Path to values.yaml", dest="values_path")
     parser.add_argument(
         "--config",
-        required=True,
+        required=False,
         help="Config passed to --kubeconfig in kubernetes commands.",
         dest="kube_config",
     )

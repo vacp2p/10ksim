@@ -1,0 +1,131 @@
+import aiohttp
+import argparse
+import asyncio
+import base64
+import logging
+import os
+import random
+import socket
+import time
+import urllib.parse
+from typing import Tuple, Dict
+
+logging.basicConfig(level=logging.INFO)
+
+
+async def check_dns_time(service: str) -> tuple[str, str, str]:
+    start_time = time.time()
+    try:
+        ip_address = socket.gethostbyname(service)
+        elapsed = (time.time() - start_time) * 1000
+        entire_hostname = socket.gethostbyaddr(ip_address)
+        try:
+            hostname = entire_hostname[0].split('.')[0]
+            node_shard = int(hostname.split('-')[1])
+            logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname} with shard {node_shard}.')
+            return f'{ip_address}', hostname, f'{node_shard}'
+        except Exception as e:
+            logging.error(f"Failed. Service: `{service}`\nip_address: {ip_address}\nelapsed: {elapsed}\nentire_hostname: {entire_hostname}: `{e}`")
+            raise RuntimeError("Failed to split") from e
+    except (IndexError, ValueError) as e:
+        logging.error(f"Failed. Service: `{service}`: `{e}`")
+        raise RuntimeError("Failed check_dns_time") from e
+
+
+async def send_to_publisher(args: argparse.Namespace, publisher: int) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
+
+    if publisher == 0:             #make random publisher selection if publisher = 0
+        #use env and random selection to replace DNS?
+        node_address, node_hostname, node_shard = await check_dns_time('nimp2p-service')
+    else:
+        node_shard = publisher
+        node_hostname = f"pod-{node_shard}"
+        node_address = f"pod-{node_shard}.nimp2p-service"
+
+    url = f'http://{node_address}:{args.port}/publish'
+    payload = base64.b64encode(os.urandom(args.msg_size_bytes)).decode('ascii').rstrip("=")
+    headers = {'Content-Type': 'application/json'}
+    body = {'payload': payload, 'topic': args.pubsub_topic, 'version': 1}
+
+    return url, headers, body, node_hostname
+
+async def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
+                          i: int, publisher: int):
+    
+    url, headers, body, node_hostname = await send_to_publisher(args, publisher)
+    logging.info(f"Message {i + 1} sent at {time.strftime('%H:%M:%S')}")
+    start_time = time.time()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=body, headers=headers) as response:
+                elapsed_time = (time.time() - start_time) * 1000
+                response_text = await response.text()
+                log_line = f"Response from message {i + 1} sent to {node_hostname} status:{response.status}, {response_text},\n"
+
+                if response.status == 200:
+                    stats['success'] += 1
+                else:
+                    stats['failure'] += 1
+                    log_line += f"Url: {url}, headers: {headers}, body: {body},\n"
+                stats['total'] += 1
+
+                success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
+                logging.info(f"{log_line}"
+                    f"Time: [{elapsed_time:.4f} ms], "
+                    f"Success: {stats['success']}, Failure: {stats['failure']}, "
+                    f"Success Rate: {success_rate:.2f}%")
+    except Exception as e:
+        elapsed_time = (time.time() - start_time) * 1000
+        stats['failure'] += 1
+        stats['total'] += 1
+        success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
+        logging.info(
+            f"Exception during message {i} sent to {node_hostname} : {str(e)}, Time: [{elapsed_time:.4f} ms], "
+            f"Url: {url}, headers: {headers}, body: {body}"
+            f"Success: {stats['success']}, Failure: {stats['failure']}, "
+            f"Success Rate: {success_rate:.2f}%")
+
+
+async def inject_message(background_tasks: set, args: argparse.Namespace, 
+                         stats: Dict[str, int], i: int, publisher: int):
+    task = asyncio.create_task(send_libp2p_msg(args, stats, i, publisher))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
+
+
+async def main(args: argparse.Namespace):
+    background_tasks = set()
+    stats = {'success': 0, 'failure': 0, 'total': 0}
+
+    senders = args.last_sender - args.first_sender + 1
+    for i in range(args.messages):
+        publisher = args.first_sender + (i % senders)
+        await inject_message(background_tasks, args, stats, i, publisher)
+        await asyncio.sleep(args.delay_seconds)
+
+    await asyncio.gather(*background_tasks)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="nim-libp2p message injector")
+    parser.add_argument('-pt', '--pubsub-topic', type=str, help='Pubsub topic',
+                        default="test")
+    parser.add_argument('-s', '--msg-size-bytes', type=int, help='Message size in Bytes',
+                        default=1000)
+    parser.add_argument('-d', '--delay-seconds', type=float, help='Delay between messages',
+                        default=1)
+    parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
+                        default=10)
+    parser.add_argument('-fs', '--first-sender', type=int, help='The first peer to start publishing',
+                        default=1)
+    parser.add_argument('-ls', '--last-sender', type=int, help='The last peer to publish a message',
+                        default=1)
+    parser.add_argument('-p', '--port', type=int, default=8645, help='libp2p testnode REST port')
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    logging.info(f'{args}')
+    asyncio.run(main(args))

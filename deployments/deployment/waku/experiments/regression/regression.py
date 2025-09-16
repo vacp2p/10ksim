@@ -211,8 +211,8 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
                 stack,
                 args,
                 values,
-                workdir,
-                service,
+                workdir=workdir,
+                service=service,
                 wait_for_ready=wait_for_ready,
                 extra_values_paths=self.extra_paths,
             )

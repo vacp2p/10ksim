@@ -120,23 +120,6 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         subparser = subparsers.add_parser(cls.name, help="Run a regression_nodes test using waku.")
         BaseExperiment.add_args(subparser)
 
-    def _build(
-        self,
-        workdir: str,
-        values_yaml: Optional[yaml.YAMLObject],
-        service: str,
-    ) -> yaml.YAMLObject:
-        this_dir = Path(os.path.dirname(__file__))
-
-        return build_deployment(
-            deployment_dir=self.deployment_dir / service,
-            workdir=os.path.join(workdir, service),
-            cli_values=values_yaml,
-            name="waku-regression-nodes",
-            extra_values_names=[],
-            extra_values_paths=[this_dir / f"{service}.values.yaml"],
-        )
-
     def _preprocess_event(self, event: Any) -> Any:
         if isinstance(event, str):
             event = {"event": event}

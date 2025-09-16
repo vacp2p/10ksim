@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, Field
@@ -148,20 +148,7 @@ class BaseExperiment(ABC, BaseModel):
             help="If True, does not actually deploy kubernetes configs but run kubectl apply --dry-run.",
         )
 
-    def deploy(
-        self,
-        api_client: ApiClient,
-        stack,
-        args: Namespace,
-        values_yaml,
-        workdir,
-        service: str,
-        *,
-        wait_for_ready=True,
-        extra_values_paths=None,
-        timeout=3600,
-    ):
-
+    def build(self, values_yaml, workdir, service: str, *, extra_values_paths=None):
         yaml_obj = build_deployment(
             deployment_dir=Path(os.path.dirname(__file__)) / service,
             workdir=os.path.join(workdir, service),
@@ -177,6 +164,32 @@ class BaseExperiment(ABC, BaseModel):
                 raise ValueError(
                     f"Deployment yaml must have an explicit value for field. Field: `{field}`"
                 )
+
+        return yaml_obj
+
+    def deploy(
+        self,
+        api_client: ApiClient,
+        stack,
+        args: Namespace,
+        values_yaml,
+        *,
+        service: Optional[str] = None,
+        workdir: Optional[str] = None,
+        deployment_yaml: Optional[yaml.YAMLObject] = None,
+        wait_for_ready: bool = True,
+        extra_values_paths: List[str] = None,
+        timeout=3600,
+    ):
+        def given(var):
+            return var is not None
+
+        if given(deployment_yaml) == (given(service) and given(workdir)):
+            raise ValueError(
+                "Invalid arguments. Pass `deployment_yaml` xor (`service` and `workdir`) as arguments."
+            )
+
+        yaml_obj = self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
 
         try:
             dry_run = args.dry_run

@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
 from deployment.base_experiment import BaseExperiment
-from deployment.builders import build_deployment
 from kube_utils import (
     dict_apply,
     dict_get,

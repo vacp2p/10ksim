@@ -32,28 +32,33 @@ async def check_dns_time(service: str) -> tuple[str, str, str]:
         raise RuntimeError("Failed check_dns_time") from e
 
 
-async def send_to_publisher(args: argparse.Namespace, publisher: int) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
+async def get_publisher_details(args: argparse.Namespace, publisher: int, 
+                                action: str) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
 
     if publisher == 0:             #make random publisher selection if publisher = 0
-        #use env and random selection to replace DNS?
         node_address, node_hostname, node_shard = await check_dns_time('nimp2p-service')
     else:
         node_shard = publisher
         node_hostname = f"pod-{node_shard}"
-        node_address = f"pod-{node_shard}.nimp2p-service"
+        entire_hostname = f"pod-{node_shard}.nimp2p-service"
+        node_address = socket.gethostbyname(entire_hostname)
 
-    url = f'http://{node_address}:{args.port}/publish'
-    payload = base64.b64encode(os.urandom(args.msg_size_bytes)).decode('ascii').rstrip("=")
+    url = f'http://{node_address}:{args.port}/{action}'
     headers = {'Content-Type': 'application/json'}
+    if action == "relay":
+        #We create payload only for relay (Ideally, fetch it from some application)
+        payload = base64.b64encode(os.urandom(args.msg_size_bytes)).decode('ascii').rstrip("=")
+    else:
+        payload = ""
     body = {'payload': payload, 'topic': args.pubsub_topic, 'version': 1}
 
     return url, headers, body, node_hostname
 
 async def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
                           i: int, publisher: int):
-    
-    url, headers, body, node_hostname = await send_to_publisher(args, publisher)
-    logging.info(f"Message {i + 1} sent at {time.strftime('%H:%M:%S')}")
+    # Use `publish` for message info only, `relay` for complete message, `health` for fetching mesh size 
+    url, headers, body, node_hostname = await get_publisher_details(args, publisher, "publish")
+    logging.info(f"Message {i} sending at {time.strftime('%H:%M:%S')} to publisher {node_hostname} url: {url}")
     start_time = time.time()
     try:
         async with aiohttp.ClientSession() as session:

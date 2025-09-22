@@ -50,7 +50,7 @@ async def get_publisher_details(args: argparse.Namespace, publisher: int,
         payload = base64.b64encode(os.urandom(args.msg_size_bytes)).decode('ascii').rstrip("=")
     else:
         payload = ""
-    body = {'payload': payload, 'topic': args.pubsub_topic, 'version': 1}
+    body = {'payload': payload, 'topic': args.pubsub_topic, 'msgSize': args.msg_size_bytes, 'version': 1}
 
     return url, headers, body, node_hostname
 

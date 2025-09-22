@@ -39,7 +39,7 @@ def build_deployment(
         extra_values_paths = []
     if cli_values is None:
         cli_values = CommentedMap()
-    name = name.replace("_", "-")
+    name = name.replace("_", "-").replace("/", "-")
 
     logger.debug(f"Removing work dir: {workdir}")
     try:

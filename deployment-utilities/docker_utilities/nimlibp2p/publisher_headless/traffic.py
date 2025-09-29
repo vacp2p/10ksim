@@ -1,19 +1,20 @@
-import aiohttp
+#import aiohttp
 import argparse
-import asyncio
-import base64
+#import asyncio
+#import base64
 import logging
 import os
 import random
 import socket
 import time
-import urllib.parse
+#import urllib.parse
+import requests
 from typing import Tuple, Dict
 
 logging.basicConfig(level=logging.INFO)
 
 
-async def check_dns_time(service: str) -> tuple[str, str, str]:
+def check_dns_time(service: str) -> tuple[str, str, str]:
     start_time = time.time()
     try:
         ip_address = socket.gethostbyname(service)
@@ -32,15 +33,15 @@ async def check_dns_time(service: str) -> tuple[str, str, str]:
         raise RuntimeError("Failed check_dns_time") from e
 
 
-async def get_publisher_details(args: argparse.Namespace, publisher: int, 
+def get_publisher_details(args: argparse.Namespace, publisher: int, 
                                 action: str) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
 
     if publisher == 0:             #make random publisher selection if publisher = 0
-        node_address, node_hostname, node_shard = await check_dns_time('nimp2p-service')
+        node_address, node_hostname, node_shard = check_dns_time('nimp2p-service')
     else:
         node_shard = publisher
-        node_hostname = f"pod-{node_shard}"
-        entire_hostname = f"pod-{node_shard}.nimp2p-service"
+        node_hostname = f"peer{node_shard}"
+        entire_hostname = node_hostname
         node_address = socket.gethostbyname(entire_hostname)
 
     url = f'http://{node_address}:{args.port}/{action}'
@@ -49,31 +50,29 @@ async def get_publisher_details(args: argparse.Namespace, publisher: int,
 
     return url, headers, body, node_hostname
 
-async def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
+def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
                           i: int, publisher: int):
     # Create request message 
-    url, headers, body, node_hostname = await get_publisher_details(args, publisher, "publish")
+    url, headers, body, node_hostname = get_publisher_details(args, publisher, "publish")
     logging.info(f"Message {i} sending at {time.strftime('%H:%M:%S')} to publisher {node_hostname} url: {url}")
     start_time = time.time()
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=body, headers=headers) as response:
-                elapsed_time = (time.time() - start_time) * 1000
-                response_text = await response.text()
-                log_line = f"Response from message {i + 1} sent to {node_hostname} status:{response.status}, {response_text},\n"
+        response = requests.post(url, json=body, headers=headers, timeout=10)
+        elapsed_time = (time.time() - start_time) * 1000
+        log_line = f"Response from message {i + 1} sent to {node_hostname} status:{response.status_code}, {response.text},\n"
 
-                if response.status == 200:
-                    stats['success'] += 1
-                else:
-                    stats['failure'] += 1
-                    log_line += f"Url: {url}, headers: {headers}, body: {body},\n"
-                stats['total'] += 1
+        if response.status_code == 200:
+            stats['success'] += 1
+        else:
+            stats['failure'] += 1
+            log_line += f"Url: {url}, headers: {headers}, body: {body},\n"
+        stats['total'] += 1
 
-                success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
-                logging.info(f"{log_line}"
-                    f"Time: [{elapsed_time:.4f} ms], "
-                    f"Success: {stats['success']}, Failure: {stats['failure']}, "
-                    f"Success Rate: {success_rate:.2f}%")
+        success_rate = (stats['success'] / stats['total']) * 100 if stats['total'] > 0 else 0
+        logging.info(f"{log_line}"
+            f"Time: [{elapsed_time:.4f} ms], "
+            f"Success: {stats['success']}, Failure: {stats['failure']}, "
+            f"Success Rate: {success_rate:.2f}%")
     except Exception as e:
         elapsed_time = (time.time() - start_time) * 1000
         stats['failure'] += 1
@@ -86,24 +85,16 @@ async def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int],
             f"Success Rate: {success_rate:.2f}%")
 
 
-async def inject_message(background_tasks: set, args: argparse.Namespace, 
-                         stats: Dict[str, int], i: int, publisher: int):
-    task = asyncio.create_task(send_libp2p_msg(args, stats, i, publisher))
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
-
-
-async def main(args: argparse.Namespace):
-    background_tasks = set()
+def main(args: argparse.Namespace):
     stats = {'success': 0, 'failure': 0, 'total': 0}
+    #let all peers get ready
+    time.sleep(15)
 
     senders = args.last_sender - args.first_sender + 1
     for i in range(args.messages):
         publisher = args.first_sender + (i % senders)
-        await inject_message(background_tasks, args, stats, i, publisher)
-        await asyncio.sleep(args.delay_seconds)
-
-    await asyncio.gather(*background_tasks)
+        send_libp2p_msg(args, stats, i, publisher)
+        time.sleep(args.delay_seconds)
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,4 +119,4 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     logging.info(f'{args}')
-    asyncio.run(main(args))
+    main(args)

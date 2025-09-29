@@ -45,18 +45,13 @@ async def get_publisher_details(args: argparse.Namespace, publisher: int,
 
     url = f'http://{node_address}:{args.port}/{action}'
     headers = {'Content-Type': 'application/json'}
-    if action == "relay":
-        #We create payload only for relay (Ideally, fetch it from some application)
-        payload = base64.b64encode(os.urandom(args.msg_size_bytes)).decode('ascii').rstrip("=")
-    else:
-        payload = ""
-    body = {'payload': payload, 'topic': args.pubsub_topic, 'msgSize': args.msg_size_bytes, 'version': 1}
+    body = {'topic': args.pubsub_topic, 'msgSize': args.msg_size_bytes, 'version': 1}
 
     return url, headers, body, node_hostname
 
 async def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
                           i: int, publisher: int):
-    # Use `publish` for message info only, `relay` for complete message, `health` for fetching mesh size 
+    # Create request message 
     url, headers, body, node_hostname = await get_publisher_details(args, publisher, "publish")
     logging.info(f"Message {i} sending at {time.strftime('%H:%M:%S')} to publisher {node_hostname} url: {url}")
     start_time = time.time()

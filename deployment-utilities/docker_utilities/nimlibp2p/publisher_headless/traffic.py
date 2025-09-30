@@ -1,13 +1,9 @@
-#import aiohttp
 import argparse
-#import asyncio
-#import base64
 import logging
 import os
 import random
 import socket
 import time
-#import urllib.parse
 import requests
 from typing import Tuple, Dict
 
@@ -36,24 +32,27 @@ def check_dns_time(service: str) -> tuple[str, str, str]:
 def get_publisher_details(args: argparse.Namespace, publisher: int, 
                                 action: str) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
 
-    if publisher == 0:             #make random publisher selection if publisher = 0
+    if args.peer_selection == 'service':             #make random publisher selection
         node_address, node_hostname, node_shard = check_dns_time('nimp2p-service')
     else:
-        node_shard = publisher
-        node_hostname = f"peer{node_shard}"
-        entire_hostname = node_hostname
+        node_shard = (publisher % args.network_size)
+        if 'SHADOWENV' in os.environ:
+            node_hostname = f"peer{node_shard}"
+            entire_hostname = node_hostname
+        else:
+            node_hostname = f"pod-{node_shard}"
+            entire_hostname = f"{node_hostname}.nimp2p-service"
         node_address = socket.gethostbyname(entire_hostname)
 
     url = f'http://{node_address}:{args.port}/{action}'
     headers = {'Content-Type': 'application/json'}
-    body = {'topic': args.pubsub_topic, 'msgSize': args.msg_size_bytes, 'version': 1}
+    body = {'topic': args.pubsub_topic, 'msgSize': args.msg_length_bytes, 'version': 1}
 
     return url, headers, body, node_hostname
 
-def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], 
-                          i: int, publisher: int):
+def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], i: int):
     # Create request message 
-    url, headers, body, node_hostname = get_publisher_details(args, publisher, "publish")
+    url, headers, body, node_hostname = get_publisher_details(args, i, "publish")
     logging.info(f"Message {i} sending at {time.strftime('%H:%M:%S')} to publisher {node_hostname} url: {url}")
     start_time = time.time()
     try:
@@ -90,28 +89,27 @@ def main(args: argparse.Namespace):
     #let all peers get ready
     time.sleep(15)
 
-    senders = args.last_sender - args.first_sender + 1
     for i in range(args.messages):
-        publisher = args.first_sender + (i % senders)
-        send_libp2p_msg(args, stats, i, publisher)
+        send_libp2p_msg(args, stats, i)
         time.sleep(args.delay_seconds)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="nim-libp2p message injector")
-    parser.add_argument('-pt', '--pubsub-topic', type=str, help='Pubsub topic',
+    parser.add_argument('-t', '--pubsub-topic', type=str, help='Pubsub topic',
                         default="test")
-    parser.add_argument('-s', '--msg-size-bytes', type=int, help='Message size in Bytes',
+    parser.add_argument('-l', '--msg-length-bytes', type=int, help='Message size in Bytes',
                         default=1000)
     parser.add_argument('-d', '--delay-seconds', type=float, help='Delay between messages',
                         default=1)
     parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
                         default=10)
-    parser.add_argument('-fs', '--first-sender', type=int, help='The first peer to start publishing',
-                        default=1)
-    parser.add_argument('-ls', '--last-sender', type=int, help='The last peer to publish a message',
-                        default=1)
-    parser.add_argument('-p', '--port', type=int, default=8645, help='libp2p testnode REST port')
+    parser.add_argument('-s', '--peer-selection', type=str, choices=['service', 'id'],
+                        help='Use DNS service or id-based peer selection', default='id')
+    parser.add_argument('-p', '--port', type=int, help='libp2p testnode REST port', 
+                        default=8645)
+    parser.add_argument('-n', '--network-size', type=int, help='Number of peers in the network', 
+                        default=100)
 
     return parser.parse_args()
 

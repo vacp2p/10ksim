@@ -1,8 +1,8 @@
-NAMESPACE="nomos-testnet"
+NAMESPACE="nomos-testnet" # Do not change, every .yaml uses the same NAMESPACE inside
 NOMOS_REPO_PATH="/path/to/nomos/repo"
 
 # Namespace
-kubectl apply -f namespace.yaml
+kubectl create namespace $NAMESPACE
 # Prometheus configuration
 kubectl -n nomos-testnet create configmap prom-config --from-file="$NOMOS_REPO_PATH/testnet/monitoring/prometheus.yml"
 # Grafana configuration

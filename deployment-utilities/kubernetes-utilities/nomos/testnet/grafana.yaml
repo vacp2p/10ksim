@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: nomos-testnet
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: grafana }
+  template:
+    metadata:
+      labels: { app: grafana }
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:latest
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            - name: GF_FEATURE_TOGGLES_ENABLE
+              value: "traceqlEditor traceQLStreaming metricsSummary"
+          envFrom:
+            - configMapRef:
+                name: grafana-env      # loads plugins.env as env vars
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          volumeMounts:
+            # grafana.ini
+            - name: grafana-ini
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+
+            # provisioning files
+            - name: grafana-provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+            - name: grafana-provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+
+            # dashboards (read-only files)
+            - name: grafana-dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+
+            # grafana data (SQLite, plugins cache, etc.)
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: grafana-ini
+          configMap:
+            name: grafana-ini
+        - name: grafana-provisioning
+          configMap:
+            name: grafana-provisioning
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: grafana-data
+          emptyDir: {}        # for ephemeral; replace with PVC below for persistence
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: nomos-testnet
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP

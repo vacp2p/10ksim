@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cfgsync
+  namespace: nomos-testnet
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: cfgsync }
+  template:
+    metadata:
+      labels: { app: cfgsync }
+    spec:
+      containers:
+        - name: cfgsync
+          image: soutullostatus/nomos:test
+          command: ["/etc/nomos/scripts/run_cfgsync.sh"]
+          imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cfgsync
+  namespace: nomos-testnet
+spec:
+  selector:
+    app: cfgsync
+  ports:
+    - name: http
+      port: 4400
+      targetPort: 4400
+      protocol: TCP

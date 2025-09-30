@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nomos-node
+  namespace: nomos-testnet
+spec:
+  serviceName: nomos-node
+  replicas: 2
+  selector:
+    matchLabels: { app: nomos-node }
+  template:
+    metadata:
+      labels: { app: nomos-node }
+    spec:
+      containers:
+        - name: nomos
+          image: soutullostatus/nomos:test
+          command: ["/etc/nomos/scripts/run_nomos_node.sh"]
+          imagePullPolicy: Always
+          ports:
+            - name: p2p-udp
+              containerPort: 3000
+              protocol: UDP
+            - name: rpc
+              containerPort: 18080
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nomos-node
+  namespace: nomos-testnet
+spec:
+  clusterIP: None
+  selector: { app: nomos-node }
+  ports:
+    - name: p2p-udp
+      port: 3000
+      protocol: UDP
+    - name: rpc
+      port: 18080
+      protocol: TCP

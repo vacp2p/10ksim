@@ -36,7 +36,7 @@ async def get_publisher_details(args: argparse.Namespace, publisher: int,
         node_address, node_hostname, node_shard = await check_dns_time('nimp2p-service')
     else:
         node_shard = (publisher % args.network_size)
-        node_hostname = f"peer{node_shard}"
+        node_hostname = f"pod-{node_shard}"
         node_address = socket.gethostbyname(node_hostname)
 
     url = f'http://{node_address}:{args.port}/{action}'

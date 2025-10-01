@@ -1,7 +1,5 @@
 import argparse
 import logging
-import os
-import random
 import socket
 import time
 import requests
@@ -36,17 +34,12 @@ def get_publisher_details(args: argparse.Namespace, publisher: int,
         node_address, node_hostname, node_shard = check_dns_time('nimp2p-service')
     else:
         node_shard = (publisher % args.network_size)
-        if 'SHADOWENV' in os.environ:
-            node_hostname = f"peer{node_shard}"
-            entire_hostname = node_hostname
-        else:
-            node_hostname = f"pod-{node_shard}"
-            entire_hostname = f"{node_hostname}.nimp2p-service"
-        node_address = socket.gethostbyname(entire_hostname)
+        node_hostname = f"peer{node_shard}"
+        node_address = socket.gethostbyname(node_hostname)
 
     url = f'http://{node_address}:{args.port}/{action}'
     headers = {'Content-Type': 'application/json'}
-    body = {'topic': args.pubsub_topic, 'msgSize': args.msg_length_bytes, 'version': 1}
+    body = {'topic': args.pubsub_topic, 'msgSize': args.msg_size_bytes, 'version': 1}
 
     return url, headers, body, node_hostname
 
@@ -86,8 +79,6 @@ def send_libp2p_msg(args: argparse.Namespace, stats: Dict[str, int], i: int):
 
 def main(args: argparse.Namespace):
     stats = {'success': 0, 'failure': 0, 'total': 0}
-    #let all peers get ready
-    time.sleep(15)
 
     for i in range(args.messages):
         send_libp2p_msg(args, stats, i)
@@ -98,13 +89,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="nim-libp2p message injector")
     parser.add_argument('-t', '--pubsub-topic', type=str, help='Pubsub topic',
                         default="test")
-    parser.add_argument('-l', '--msg-length-bytes', type=int, help='Message size in Bytes',
+    parser.add_argument('-s', '--msg-size-bytes', type=int, help='Message size in Bytes',
                         default=1000)
     parser.add_argument('-d', '--delay-seconds', type=float, help='Delay between messages',
                         default=1)
     parser.add_argument('-m', '--messages', type=int, help='Number of messages to inject',
                         default=10)
-    parser.add_argument('-s', '--peer-selection', type=str, choices=['service', 'id'],
+    parser.add_argument('--peer-selection', type=str, choices=['service', 'id'],
                         help='Use DNS service or id-based peer selection', default='id')
     parser.add_argument('-p', '--port', type=int, help='libp2p testnode REST port', 
                         default=8645)

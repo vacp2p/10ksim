@@ -7,9 +7,14 @@ from typing import List, Optional
 from ruamel.yaml import YAMLObject
 from ruamel.yaml.comments import CommentedMap
 
+from deployment.waku_nodes import waku_node
 from kube_utils import get_values_yamls, get_YAML, helm_build_dir
 
 logger = logging.getLogger(__name__)
+
+
+def build_deployment_2(config: dict):
+    return waku_node(config)
 
 
 def build_deployment(

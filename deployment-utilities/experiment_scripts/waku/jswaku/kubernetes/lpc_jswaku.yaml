@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lpclient-0
+  namespace: zerotesting
+spec:
+  replicas: 1
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-lightpush-client
+  selector:
+    matchLabels:
+      app: zerotenkay-lightpush-client
+  template:
+    metadata:
+      labels:
+        app: zerotenkay-lightpush-client
+    spec:
+      volumes:
+        - name: address-data
+          emptyDir: {}
+      initContainers:
+        - name: grabaddress
+          image: soutullostatus/getaddress:v0.1.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: address-data
+              mountPath: /etc/addrs
+          command:
+            - /app/getaddress.sh
+          args:
+            - "1"
+            - "zerotesting-lightpush-server.zerotesting"
+      containers:
+        - name: waku
+          image: pearsonwhite/jswaku:dbdca49646c04d17eb99e1f4da6d3bda135cd928
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8645
+            - containerPort: 8008
+          volumeMounts:
+            - name: address-data
+              mountPath: /etc/addrs
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  if curl -s http://127.0.0.1:8008/health | grep -q 'OK'; then
+                    exit 0;  # success, healthy state
+                  else
+                    exit 1;  # failure, unhealthy state
+                  fi
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command:
+            - sh
+            - -c
+            - |
+              . /etc/addrs/addrs.env
+              echo addrs are $addrs1
+              sleep infinity
+
+# auto sharding
+              # /usr/local/bin/docker-entrypoint.sh --cluster-id=2
+
+#staic sharding
+#               /usr/local/bin/docker-entrypoint.sh --cluster-id=2 --shard=0

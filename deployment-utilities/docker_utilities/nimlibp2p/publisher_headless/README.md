@@ -36,7 +36,7 @@ containers:
 
 ### How It Works
 1. **Getting Publisher Details**:
-Select a publisher and determine its IP address and message endpoint. Every message is published by a new publisher. For k8s publisher selection is service-based `--peer-selection service`. It uses the libp2p service `nimp2p-service` to determine IP addresses for random peers. 
+Select a publisher and determine it's IP address and message endpoint. For every message, a new randomly selected peer is used. For k8s publisher selection is service-based `--peer-selection service`. It uses the libp2p service `nimp2p-service` to determine IP addresses for random peers. 
 For the shadow simulator, publisher selection is id-based `--peer-selection id`. It sequentially selects peers to determine their IP addresses.
 
 2. **Message Preparation**:

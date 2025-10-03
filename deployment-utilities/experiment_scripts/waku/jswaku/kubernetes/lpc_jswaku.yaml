@@ -76,6 +76,10 @@ spec:
               echo addrs are $addrs1
               sleep infinity
 
+# Normally we would use the commands below.
+# However, because we need to set the `addrs1` env var before we run, we just wait here instead.
+# See README for how to perform the test.
+
 # auto sharding
               # /usr/local/bin/docker-entrypoint.sh --cluster-id=2
 

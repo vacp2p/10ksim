@@ -74,10 +74,10 @@ class Nimlibp2pTracer(MessageTracer):
         return self
 
     def with_wildcard_pattern(self) -> Self:
-        self._patterns.append(r'(.*)')
+        self._patterns.append([r'(.*)'])
         self._tracings.append(self._trace_all_logs)
 
-        return Self
+        return self
 
     def trace(self, parsed_logs: List[List]) -> List[List]:
         """Returns one Dataframe per pattern string. ie: received patterns (2) and sent patterns (2), will

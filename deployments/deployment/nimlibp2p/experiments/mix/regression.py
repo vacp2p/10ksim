@@ -1,23 +1,19 @@
-import itertools
 import logging
 import os
 import re
-import shutil
 import time
+import urllib
 from argparse import ArgumentParser, Namespace
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from pathlib import Path
-import traceback
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 
-import humanfriendly
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
-import urllib
 
 from deployment.base_experiment import (
     BaseExperiment,
@@ -30,7 +26,6 @@ from deployment.builders import build_deployment
 from kube_utils import (
     dict_get,
     dict_set,
-    get_YAML,
     get_cleanup,
     get_future_time,
     kubectl_apply,
@@ -102,7 +97,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         }
 
         def end_time_format(time_str: str) -> str:
-            return time_str.split('.')[0]
+            return time_str.split(".")[0]
 
         def range_input(start, end):
             fmt = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -120,10 +115,12 @@ class NimMixNodes(BaseExperiment, BaseModel):
                 for link_type, base in links_map.items():
                     value = base.format(
                         start=urllib.parse.quote(metadata[interval_type]["start"]),
-                        end=urllib.parse.quote(end_time_format(metadata[interval_type]["end"]))
+                        end=urllib.parse.quote(end_time_format(metadata[interval_type]["end"])),
                     )
                     if link_type == "victoria":
-                        value = value + range_input(metadata[interval_type]["start"], metadata[interval_type]["end"])
+                        value = value + range_input(
+                            metadata[interval_type]["start"], metadata[interval_type]["end"]
+                        )
                     metadata[interval_type][link_type] = value
             except KeyError:
                 pass
@@ -145,7 +142,6 @@ class NimMixNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-
     def _build_all(
         self, workdir: str, cli_values: yaml.YAMLObject, delay: Optional[str]
     ) -> Tuple[yaml.YAMLObject, PositiveInt]:
@@ -159,24 +155,68 @@ class NimMixNodes(BaseExperiment, BaseModel):
         mix_nodes_values = deepcopy(cli_values)
         gossip_nodes_values = deepcopy(cli_values)
         # isPublisher is determined in main.nim logic.
-        dict_set(mix_nodes_values, "nimlibp2p.nodes.env.vars.isMix", True, sep=".", replace_leaf=True)
-        dict_set(mix_nodes_values, "nimlibp2p.nodes.env.vars.SELFTRIGGER", True, sep=".", replace_leaf=True)
-        dict_set(mix_nodes_values, "nimlibp2p.nodes.env.vars.nodes", total_nodes, sep=".", replace_leaf=True)
-        dict_set(mix_nodes_values, "nimlibp2p.nodes.env.vars.numMix", num_mix_nodes,  sep=".", replace_leaf=True)
+        dict_set(
+            mix_nodes_values, "nimlibp2p.nodes.env.vars.isMix", True, sep=".", replace_leaf=True
+        )
+        dict_set(
+            mix_nodes_values,
+            "nimlibp2p.nodes.env.vars.SELFTRIGGER",
+            True,
+            sep=".",
+            replace_leaf=True,
+        )
+        dict_set(
+            mix_nodes_values,
+            "nimlibp2p.nodes.env.vars.nodes",
+            total_nodes,
+            sep=".",
+            replace_leaf=True,
+        )
+        dict_set(
+            mix_nodes_values,
+            "nimlibp2p.nodes.env.vars.numMix",
+            num_mix_nodes,
+            sep=".",
+            replace_leaf=True,
+        )
         dict_set(mix_nodes_values, "nimlibp2p.nodes.name", f"mix", sep=".", replace_leaf=True)
-        dict_set(mix_nodes_values, "nimlibp2p.nodes.numNodes", num_mix_nodes, sep=".", replace_leaf=True)
+        dict_set(
+            mix_nodes_values, "nimlibp2p.nodes.numNodes", num_mix_nodes, sep=".", replace_leaf=True
+        )
         workdir_path = Path(workdir)
         mix_workdir = workdir_path / f"mix"
         os.makedirs(mix_workdir, exist_ok=True)
         dep, delay = self._build_one(mix_workdir.as_posix(), mix_nodes_values, delay)
         builds.append(dep)
 
-        dict_set(gossip_nodes_values, "nimlibp2p.nodes.env.vars.isMix", False, sep=".", replace_leaf=True)
-        dict_set(gossip_nodes_values, "nimlibp2p.nodes.env.vars.SELFTRIGGER", False, sep=".", replace_leaf=True)
-        dict_set(gossip_nodes_values, "nimlibp2p.nodes.env.vars.nodes", total_nodes, sep=".", replace_leaf=True)
-        dict_set(gossip_nodes_values, "nimlibp2p.nodes.env.vars.numMix", num_mix_nodes,  sep=".", replace_leaf=True)
+        dict_set(
+            gossip_nodes_values, "nimlibp2p.nodes.env.vars.isMix", False, sep=".", replace_leaf=True
+        )
+        dict_set(
+            gossip_nodes_values,
+            "nimlibp2p.nodes.env.vars.SELFTRIGGER",
+            False,
+            sep=".",
+            replace_leaf=True,
+        )
+        dict_set(
+            gossip_nodes_values,
+            "nimlibp2p.nodes.env.vars.nodes",
+            total_nodes,
+            sep=".",
+            replace_leaf=True,
+        )
+        dict_set(
+            gossip_nodes_values,
+            "nimlibp2p.nodes.env.vars.numMix",
+            num_mix_nodes,
+            sep=".",
+            replace_leaf=True,
+        )
         dict_set(gossip_nodes_values, "nimlibp2p.nodes.name", f"pod", sep=".", replace_leaf=True)
-        dict_set(gossip_nodes_values, "nimlibp2p.nodes.numNodes", num_gossip, sep=".", replace_leaf=True)
+        dict_set(
+            gossip_nodes_values, "nimlibp2p.nodes.numNodes", num_gossip, sep=".", replace_leaf=True
+        )
         workdir_path = Path(workdir)
         pod_workdir = workdir_path / f"pod"
         os.makedirs(pod_workdir, exist_ok=True)
@@ -246,8 +286,9 @@ class NimMixNodes(BaseExperiment, BaseModel):
         def wipe_data():
             logger.info("wiping shared volume data...")
             wiper_path = self.this_dir / "wiper.yaml"
-            with open(wiper_path, 'r') as f:
+            with open(wiper_path, "r") as f:
                 from ruamel import yaml
+
                 wiper_deployment = yaml.safe_load(f.read())
             logger.info(f"wiper_deployment: {wiper_deployment}")
             wiper_cleanup = get_cleanup(
@@ -259,6 +300,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
             kubectl_apply(wiper_deployment)
             time.sleep(14)
             wiper_cleanup()
+
         stack.callback(wipe_data)
 
         # "tc qdisc add dev eth0 root netem delay {{ .Values.nimlibp2p.nodes.network.delay }}ms {{ .Values.nimlibp2p.nodes.network.jitter }}ms distribution normal"
@@ -304,8 +346,8 @@ class NimMixNodes(BaseExperiment, BaseModel):
                 "delay": network_params.get("delay") or 0,
                 "jitter": network_params.get("jitter") or 0,
                 "phase": "start",
-                "messages":msgs,
-                "message_rate":rate,
+                "messages": msgs,
+                "message_rate": rate,
             }
         )
 
@@ -316,9 +358,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         logger.info("Deployment applied.")
 
         now = datetime.now(dt_timezone.utc)
-        logger.info(
-            f"this_time: {datetime.now(dt_timezone.utc)}"
-        )
+        logger.info(f"this_time: {datetime.now(dt_timezone.utc)}")
         difference = future_time - now
         logger.info(
             f"Waiting for cron job begin time: {future_time.hour:02d}:{future_time.minute:02d} ({difference} from now)"
@@ -331,7 +371,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
 
         time.sleep(10)  # Wait for nodes to get connected.
 
-        time_to_resolve = (msgs+1) * (rate + (delay_arg + jitter_arg + 50)) + 30000
+        time_to_resolve = (msgs + 1) * (rate + (delay_arg + jitter_arg + 50)) + 30000
         time_to_resolve = timedelta(milliseconds=time_to_resolve)
         logger.info(f"Waiting for messages to resolve. Sleep: {time_to_resolve}")
         start_time = datetime.now()

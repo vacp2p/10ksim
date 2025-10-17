@@ -132,7 +132,7 @@ class Nimlibp2pAnalyzer:
     @disk_cache_dir("dump_path", "mix_dump", "mix_load")
     def mix_scrape(self, n_jobs, dump_path, *, force=False):
         logger.info("mix_scrape")
-        self._assert_num_nodes()
+        self._assert_num_nodes(dump_path)
 
         tracer = (
             Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"])
@@ -187,7 +187,7 @@ class Nimlibp2pAnalyzer:
     @disk_cache_dir("dump_path", "_dump_dfs", "_load_data")
     def scrape__analyze_reliability_cluster_data(self, n_jobs: int, dump_path: str):
         logger.info("scraping data")
-        self._assert_num_nodes()
+        self._assert_num_nodes(dump_path)
 
         tracer = (
             Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"])
@@ -214,7 +214,25 @@ class Nimlibp2pAnalyzer:
             logger.info("Dumping logs from nodes with issues")
             self._dump_logs(nodes_with_issues)
 
-    def _assert_num_nodes(self) -> None:
+    def _load_num_nodes(self, local_data_folder):
+        logger.info("loading local data: num_nodes")
+        num_nodes = pd.read_csv(local_data_folder / "summary" / "num_nodes.csv")
+        return num_nodes
+
+    def _dump_num_nodes(self, data, dump_path : Path):
+        logger.info("_dump_num_nodes")
+        logger.info("Dumping received information")
+        result = file_utils.dump_df_as_csv(
+            data, dump_path / "summary" / "num_nodes.csv", False
+        )
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        return Ok(None)
+
+    @disk_cache_dir("dump_path", "_dump_num_nodes", "_load_num_nodes")
+    def _scrape_num_nodes(self, dump_path) -> pd.DataFrame:
         tracer = Nimlibp2pTracer().with_wildcard_pattern()
         query = "*"
 
@@ -222,7 +240,11 @@ class Nimlibp2pAnalyzer:
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
         num_nodes_per_ss = stack_analysis.get_number_nodes()
-        for i, num_nodes in enumerate(num_nodes_per_ss):
+        return pd.DataFrame({"name":self._kwargs['stateful_sets'], "num_nodes":num_nodes_per_ss})
+
+    def _assert_num_nodes(self, dump_path) -> None:
+        num_nodes_per_ss = self._scrape_num_nodes(dump_path)
+        for i, num_nodes in num_nodes_per_ss["num_nodes"].items():
             print(f"{num_nodes} == {self._kwargs['nodes_per_statefulset'][i]}")
             assert (
                 num_nodes == self._kwargs["nodes_per_statefulset"][i]

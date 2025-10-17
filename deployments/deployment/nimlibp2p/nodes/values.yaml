@@ -1,6 +1,16 @@
 nimlibp2p:
   nodes:
+    name: pod
+    numNodes: 1000
     namespace: "zerotesting-nimlibp2p"
     image:
       repository: soutullostatus/dst-test-node
       tag: v1.8.0-mplex
+    network:
+      # Delay in ms
+      delay: 0
+      # Jitter in ms
+      jitter: 0
+    env:
+      type: basic
+      vars: {}

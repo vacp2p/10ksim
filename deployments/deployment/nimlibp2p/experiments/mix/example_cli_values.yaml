@@ -1,0 +1,35 @@
+nimlibp2p:
+  nodes:
+    name: pod
+    numGossip: 1
+    numMix: 500
+    image:
+      repository: pearsonwhite/test_node
+      # tag: 77b5047910c8285364bc303d48fb271b43e7f952
+
+      # .withMaxConnections(250)
+      # tag: b4c3e4170d6cd081227a7784ce1fee0be87cba12
+
+      # mix:: chore: add extra logs
+      # tag: 27c1e0b8546e12247f1c6ecd6fc1a09e0cb5ade7
+
+      # withMaxConnections from env var MAXCONNECTIONS
+      tag: c16faa8fb1d18570823e3a511e8a91618e13d937
+    network:
+      delay: 0
+      jitter: 0
+    env:
+      type: mix
+      vars:
+        nodes: "TBA"
+        # connectTo: 15
+        connectTo: 14
+        messages: 50
+        # ms delay between messages.
+        msgRate: 1000
+        msgSize: 100
+        publishers: 1
+        SELFTRIGGER: "TBA"
+        isMix: "TBA"
+        numMix: "TBA"
+        MAXCONNECTIONS: 250

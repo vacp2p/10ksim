@@ -83,7 +83,6 @@ class VictoriaReader(Reader):
                         match_as_list = list(match.groups())
                         match_as_list.extend(log_line[1:])
                         query_results[j].append(match_as_list)
-                        break
 
             results[i].extend(query_results)
 

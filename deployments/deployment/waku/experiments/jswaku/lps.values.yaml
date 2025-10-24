@@ -1,0 +1,29 @@
+namespace: zerotesting
+waku:
+  nodes:
+    name: lpserver-0
+    namespace: zerotesting
+    serviceName: zerotesting-lightpush-server
+    app: zerotenkay-lightpush-server
+    numNodes: 100
+    command:
+      type: "lightpushServer"
+      nice: 19
+      args:
+        maxConnections: 500
+    readinessProbe:
+      type: "metrics"
+    getEnr:
+      num: 3
+      serviceName: zerotesting-bootstrap.zerotesting
+    includes:
+      getEnr: True
+    image:
+      repository: "soutullostatus/nwaku-jq-curl"
+      # tag: "v0.34.0-rc1"
+      # tag: v0.36.0-rc.0 # works but missing my_peer_id
+      tag: v0.35.1
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting.svc.cluster.local
+

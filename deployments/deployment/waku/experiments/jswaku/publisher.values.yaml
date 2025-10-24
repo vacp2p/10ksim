@@ -1,0 +1,20 @@
+namespace: zerotesting
+waku:
+  publisher:
+    image:
+      repository: pearsonwhite/publisher
+      tag: v1.0.3
+    command:
+      protocols:
+        lightpush: true
+      args:
+        messages: 50
+        msgSizeKbytes: 10
+        delaySeconds: 1
+        # nwaku client
+        # port: 8645
+        # jswaku client
+        port: 8080
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting.svc.cluster.local

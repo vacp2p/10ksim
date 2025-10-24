@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: zerotesting
+  name: pod-service-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-service-reader-binding
+  namespace: zerotesting
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: zerotesting
+roleRef:
+  kind: Role
+  name: pod-service-reader
+  apiGroup: rbac.authorization.k8s.io

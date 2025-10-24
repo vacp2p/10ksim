@@ -4,3 +4,4 @@ waku:
       presets:
         health: "include:waku.nodes.readiness-probe.health"
         metrics: "include:waku.nodes.readiness-probe.metrics"
+        jswaku: "include:waku.nodes.readiness-probe.jswaku"

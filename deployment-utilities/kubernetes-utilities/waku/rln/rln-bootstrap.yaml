@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rln-bootstrap-secret
+  namespace: rln-test
+type: Opaque
+stringData:
+  MNEMONIC: "test test test test test test test test test test test junk"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rln-bootstrap
+  namespace: rln-test
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: rln-bootstrap
+        image: docker.io/soutullostatus/rln-bootstrap:latest
+        imagePullPolicy: Always
+        env:
+        - name: RPC_URL
+          value: "http://anvil-rpc.rln-test.svc.cluster.local:8545"
+        - name: MNEMONIC
+          valueFrom:
+            secretKeyRef:
+              name: rln-bootstrap-secret
+              key: MNEMONIC
+  backoffLimit: 0

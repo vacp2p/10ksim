@@ -4,7 +4,7 @@ metadata:
   name: lpserver-0
   namespace: zerotesting
 spec:
-  replicas: 100
+  replicas: 7
   podManagementPolicy: "Parallel"
   serviceName: zerotesting-lightpush-server
   selector:

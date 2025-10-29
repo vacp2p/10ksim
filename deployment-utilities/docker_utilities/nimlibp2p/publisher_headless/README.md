@@ -16,7 +16,7 @@ This script allows specifying the number of messages, their size, inter-message 
 - `-m` `--messages` — Number of messages to inject (default: `10`)
 - `--peer-selection` — Peer selection method. Choices: `service` (DNS service-based for k8s) or `id` (id-based for shadow simulation). (default: `id`)
 - `-p` `--port` — libp2p testnode REST port (default: `8645`)
-- `-n` `--network-size` — Number of peers in the network (default: `100`)
+- `-n` `--network-size` — Number of peers in the network (default: `100`, only needed for `id` peer selection).
 
 
 ### Example in Kubernetes yaml

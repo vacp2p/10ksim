@@ -4,7 +4,6 @@ import asyncio
 import logging
 import socket
 import time
-import urllib.parse
 from typing import Tuple, Dict
 
 logging.basicConfig(
@@ -14,7 +13,7 @@ logging.basicConfig(
 )
 
 
-async def check_dns_time(service: str) -> tuple[str, str, str]:
+async def check_dns_time(service: str) -> tuple[str, str]:
     start_time = time.time()
     try:
         ip_address = socket.gethostbyname(service)
@@ -22,9 +21,8 @@ async def check_dns_time(service: str) -> tuple[str, str, str]:
         entire_hostname = socket.gethostbyaddr(ip_address)
         try:
             hostname = entire_hostname[0].split('.')[0]
-            node_shard = int(hostname.split('-')[1])
-            logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname} with shard {node_shard}.')
-            return f'{ip_address}', hostname, f'{node_shard}'
+            logging.info(f'{service} DNS Response took {elapsed} ms. Resolved to {hostname}.')
+            return f'{ip_address}', hostname
         except Exception as e:
             logging.error(f"Failed. Service: `{service}`\nip_address: {ip_address}\nelapsed: {elapsed}\nentire_hostname: {entire_hostname}: `{e}`")
             raise RuntimeError("Failed to split") from e
@@ -37,10 +35,10 @@ async def get_publisher_details(args: argparse.Namespace, publisher: int,
                                 action: str) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
 
     if args.peer_selection == 'service':             #make random publisher selection
-        node_address, node_hostname, node_shard = await check_dns_time('nimp2p-service')
+        node_address, node_hostname = await check_dns_time('nimp2p-service')
     else:
-        node_shard = (publisher % args.network_size)
-        node_hostname = f"pod-{node_shard}"
+        node_index = (publisher % args.network_size)
+        node_hostname = f"pod-{node_index}"
         node_address = socket.gethostbyname(node_hostname)
 
     url = f'http://{node_address}:{args.port}/{action}'

@@ -7,7 +7,11 @@ import time
 import urllib.parse
 from typing import Tuple, Dict
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 async def check_dns_time(service: str) -> tuple[str, str, str]:

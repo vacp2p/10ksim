@@ -11,13 +11,12 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
-from deployment.base_experiment import (
+from experiments.base_experiment import (
     BaseExperiment,
     format_metadata_timestamps,
     get_valid_shifted_times,
     parse_events_log,
 )
-from deployment.builders import build_deployment
 from kube_utils import (
     get_flag_value,
     wait_for_rollout,

@@ -15,14 +15,13 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from deployment.base_experiment import (
+from deployment.builders import build_deployment
+from experiments.base_experiment import (
     BaseExperiment,
     format_metadata_timestamps,
     get_valid_shifted_times,
     parse_events_log,
 )
-from deployment.builders import build_deployment
-
 from kube_utils import (
     dict_get,
     dict_set,
@@ -321,9 +320,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         except KeyError:
             network_params = {"delay": 0, "jitter": 0}
 
-        container_image = mix_nodes_deploy["spec"]["template"]["spec"]["containers"][0][
-            "image"
-        ]
+        container_image = mix_nodes_deploy["spec"]["template"]["spec"]["containers"][0]["image"]
         image, tag = container_image.split(":")
 
         msgs = dict_get(values_yaml, "nimlibp2p.nodes.env.vars.messages", sep=".")

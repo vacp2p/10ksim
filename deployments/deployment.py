@@ -88,7 +88,7 @@ def main():
     )
 
     # Scan for experiments.
-    experiment_registry.scan(os.path.join(os.path.dirname(__file__), "deployment"), mode="skip")
+    experiment_registry.scan(os.path.dirname(__file__), mode="skip")
 
     # Add subparsers for all experiments.
     for info in experiment_registry.items():

@@ -73,7 +73,7 @@ def parse_events_log(
     return return_dict
 
 
-def format_metadata_timestamps(metadata : dict) -> dict:
+def format_metadata_timestamps(metadata: dict) -> dict:
     def format_item(node):
         try:
             return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -83,7 +83,7 @@ def format_metadata_timestamps(metadata : dict) -> dict:
     return dict_apply(metadata, format_item)
 
 
-def get_valid_shifted_times(deltatime_map : Dict[str, timedelta], metadata : dict) -> dict:
+def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
     shifted = deepcopy(metadata)
     for path, delta in deltatime_map.items():
         time_value = dict_get(shifted, path, default=None, sep=".")

@@ -62,6 +62,12 @@ class Registry:
         self._experiments.append(ExperimentInfo(name, cls, metadata))
 
     def _process_module(self, module_path: str, module_name: str) -> None:
+        base_path = Path(__file__).parent
+        module_name = (
+            Path(module_path).relative_to(base_path).parent.as_posix().replace("/", ".")
+            + "."
+            + Path(module_path).stem
+        )
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         if not spec:
             raise ValueError(f"Could not load spec for module: `{module_path}`")

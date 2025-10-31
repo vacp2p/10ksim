@@ -99,7 +99,7 @@ def parse_config_args() -> Config:
         help="Name of environment vars (example: ENR or addrs)",
         dest="variable_name",
     )
-    parser.add_argument("--websocket", type=bool, action="store_true", default=False)
+    parser.add_argument("--websocket", action="store_true")
 
     args = parser.parse_args()
     args_dict: dict[str, Any] = vars(args)
@@ -117,6 +117,7 @@ def main() -> None:
         format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
     )
 
+    config = parse_config_args()
     config = Config(
         num_items=1,
         service_name="zerotesting-lightpush-server",
@@ -131,21 +132,6 @@ def main() -> None:
         output_path=config.output_file,
         extractor=lambda obj: extract_address(obj, require_ws=config.websocket),
     )
-
-    # # enr_config = BaseConfig(
-    # #     num_items=3,
-    # #     service_name="zerotesting-bootstrap.zerotesting",
-    # #     output_file=Path("/etc/enr/ENR"),
-    # # )
-
-    # # Retrieve enrUri starting with "enr:-"
-    # retrieve_and_store(
-    #     enr_config,
-    #     json_field="enrUri",
-    #     valid_prefix="enr:-",
-    #     export_var_name=enr_config.output_file.name,
-    # )
-
 
 if __name__ == "__main__":
     main()

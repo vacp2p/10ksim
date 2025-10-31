@@ -2,7 +2,7 @@
 {{- $includes := .includes -}}
 {{- $command := .command -}}
 {{- if ($command.full).container -}}
-  {{ $command.full.container }}
+  {{ $command.full.container | toYaml }}
 {{- else -}}
 - sh
 - -c

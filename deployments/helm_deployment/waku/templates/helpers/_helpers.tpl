@@ -53,11 +53,19 @@ Examples:
     {{- $result = $presetValue }}
   {{- end }}
 {{- end }}
+
 {{- if $asYaml }}
-{{- toYaml $result }}
+  {{- if kindIs "string" $result }}
+    {{- /* $result may already be YAML string, so parse and reserialize for safety */ -}}
+    {{- $parsed := fromYaml $result | default $result }}
+    {{- toYaml $parsed | indent 2 }}
+  {{- else }}
+    {{- toYaml $result | indent 2 }}
+  {{- end }}
 {{- else }}
-{{- $result }}
+  {{- $result }}
 {{- end }}
+
 {{- end }}
 
 

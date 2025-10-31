@@ -9,11 +9,11 @@
 - |
 {{- if $includes.getAddress }}
   . /etc/addrs/addrs.env
-  echo addrs are{{- range $i, $ := until (int $includes.getAddr.numEnrs) }} $ENR{{ add1 $i }}{{- end }}
+  echo addrs are{{- range $i, $ := until (int $includes.getAddress.num) }} $addrs{{ add1 $i }}{{- end }}
 {{- end }}
 {{- if $includes.getEnr }}
   . /etc/enr/enr.env
-  echo ENRs are{{- range $i, $ := until (int $includes.getEnr.numEnrs) }} $ENR{{ add1 $i }}{{- end }}
+  echo ENRs are{{- range $i, $ := until (int $includes.getEnr.num) }} $ENR{{ add1 $i }}{{- end }}
 {{- end }}
 
 {{- if ($command.full).waku }}

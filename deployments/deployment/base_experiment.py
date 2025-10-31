@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, Field
@@ -73,7 +73,7 @@ def parse_events_log(
     return return_dict
 
 
-def format_metadata_timestamps(metadata : dict) -> dict:
+def format_metadata_timestamps(metadata: dict) -> dict:
     def format_item(node):
         try:
             return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -83,7 +83,7 @@ def format_metadata_timestamps(metadata : dict) -> dict:
     return dict_apply(metadata, format_item)
 
 
-def get_valid_shifted_times(deltatime_map : Dict[str, timedelta], metadata : dict) -> dict:
+def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
     shifted = deepcopy(metadata)
     for path, delta in deltatime_map.items():
         time_value = dict_get(shifted, path, default=None, sep=".")
@@ -189,7 +189,11 @@ class BaseExperiment(ABC, BaseModel):
                 "Invalid arguments. Pass `deployment_yaml` xor (`service` and `workdir`) as arguments."
             )
 
-        yaml_obj = self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        yaml_obj = (
+            deployment_yaml
+            if deployment_yaml is not None
+            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        )
 
         try:
             dry_run = args.dry_run

@@ -28,4 +28,6 @@ spec:
             secretKeyRef:
               name: rln-bootstrap-secret
               key: MNEMONIC
+        - name: NUM_PODS
+          value: "1"
   backoffLimit: 0

@@ -20,16 +20,20 @@ spec:
           emptyDir: {}
       initContainers:
         - name: grabaddress
-          image: soutullostatus/getaddress:v0.1.0
+          image: pearsonwhite/get_address_2:23805eace0049540dfc0124758e3bbf441f9a4c3
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: address-data
               mountPath: /etc/addrs
           command:
-            - /app/getaddress.sh
+            - python3
+            - /app/get_address.py
           args:
-            - "1"
-            - "zerotesting-lightpush-server.zerotesting"
+            - --num="1"
+            - --service-name="zerotesting-lightpush-server.zerotesting"
+            - --output-file="/etc/addrs/addrs.env"
+            - --var-name="addrs"
+            - --websocket
       containers:
         - name: waku
           image: pearsonwhite/jswaku:dbdca49646c04d17eb99e1f4da6d3bda135cd928
@@ -74,7 +78,10 @@ spec:
             - |
               . /etc/addrs/addrs.env
               echo addrs are $addrs1
-              sleep infinity
+
+
+
+# sleep infinity
 
 # auto sharding
               # /usr/local/bin/docker-entrypoint.sh --cluster-id=2

@@ -6,7 +6,7 @@ from argparse import Namespace
 from contextlib import ExitStack
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,8 +30,128 @@ from registry import experiment
 logger = logging.getLogger(__name__)
 
 
-@experiment(name="jswaku-disconnect")
-class WakuRegressionNodes(BaseExperiment, BaseModel):
+class JsWakuSettings:
+
+    @staticmethod
+    def server_args(sharding: Literal["auto", "static"]):
+        if sharding == "auto":
+            return {
+                "Discv5BootstrapNode": ["$ENR1", "$ENR2", "$ENR3"],
+                "Lightpush": "true",
+                "Relay": "true",
+                "MaxConnections": "500",
+                "Rest": "true",
+                "RestAdmin": "true",
+                "RestAddress": "0.0.0.0",
+                "Discv5Discovery": "true",
+                "Discv5EnrAutoUpdate": "True",
+                "LogLevel": "INFO",
+                "MetricsServer": "True",
+                "MetricsServerAddress": "0.0.0.0",
+                "ClusterId": "2",
+                "WebsocketSupport": "true",
+                "NumShardsInNetwork": 8,
+                "Nat": "extip:${IP}",
+            }
+        elif sharding == "static":
+            return {
+                "Discv5BootstrapNode": ["$ENR1", "$ENR2", "$ENR3"],
+                "Lightpush": "true",
+                "Relay": "true",
+                "MaxConnections": "500",
+                "Rest": "true",
+                "RestAdmin": "true",
+                "RestAddress": "0.0.0.0",
+                "Discv5Discovery": "true",
+                "Discv5EnrAutoUpdate": "True",
+                "LogLevel": "INFO",
+                "MetricsServer": "True",
+                "MetricsServerAddress": "0.0.0.0",
+                "ClusterId": "2",
+                "WebsocketSupport": "true",
+                "NumShardsInNetwork": 1,
+                "Shard": "0",
+                "Nat": "extip:${IP}",
+            }
+
+    @staticmethod
+    def server_args_1():
+        return {
+            "Lightpush": True,
+            "Relay": True,
+            "MaxConnections": 500,
+            "Rest": True,
+            "RestAdmin": True,
+            "RestAddress": "0.0.0.0",
+            "Discv5Discovery": True,
+            "Discv5EnrAutoUpdate": True,
+            "LogLevel": "INFO",
+            "MetricsServer": True,
+            "Discv5BootstrapNode": ["$ENR1", "$ENR2", "$ENR3"],
+            "MetricsServerAddress": "0.0.0.0",
+            "Nat": "extip:${IP}",
+            "ClusterId": 2,
+            "WebsocketSupport": True,
+            "NumShardsInNetwork": 1,
+            "Shard": "0",
+        }
+
+    @staticmethod
+    def set_client_values(values: dict, sharding: Literal["auto", "static"]):
+        dict_set(values, "waku.nodes.volumes", [{"name": "address-data", "emptyDir": {}}], sep=".")
+        dict_set(
+            values,
+            "waku.nodes.initContainers",
+            [JsWakuSettings.client_init_container()],
+            sep=".",
+        )
+        dict_set(
+            values,
+            "waku.nodes.command.full.container",
+            JsWakuSettings.client_command(sharding),
+            sep=".",
+        )
+
+    @staticmethod
+    def client_init_container():
+        return {
+            "name": "grabaddress",
+            "image": "pearsonwhite/get_address_2:23805eace0049540dfc0124758e3bbf441f9a4c3",
+            "imagePullPolicy": "IfNotPresent",
+            "volumeMounts": [{
+                "name": "address-data",
+                "mountPath": "/etc/addrs",
+            }],
+            "command": [
+                "python3",
+                "/app/get_address.py",
+            ],
+            "args": [
+                "--num=1",
+                '--service-name="zerotesting-lightpush-server.zerotesting"',
+                '--output-file="/etc/addrs/addrs.env"',
+                '--var-name="addrs"',
+                "--websocket",
+            ],
+        }
+
+    @staticmethod
+    def client_command(sharding: Literal["auto", "static"]):
+        prefix = ["sh", "-c"]
+        script = [". /etc/addrs/addrs.env", "echo addrs are $addrs1"]
+        if sharding == "auto":
+            script += ["/usr/local/bin/docker-entrypoint.sh --cluster-id=2"]
+        elif sharding == "static":
+            script += ["/usr/local/bin/docker-entrypoint.sh --cluster-id=2 --shard=0"]
+        else:
+            raise ValueError(f"Sharding param must be 'auto' or 'static'. Given `{sharding}`")
+        return prefix + ["\n".join(script) + "\n"]
+
+
+# TODO naming
+# @experiment(name="jswaku-disconnect")
+@experiment(name="js-waku")
+class JsWakuNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent.parent)
@@ -100,29 +220,6 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    def jswaku_lightpush_server_values(self):
-        return {
-            "Lightpush": True,
-            "Relay": True,
-            "MaxConnections": 500,
-            "Rest": True,
-            "RestAdmin": True,
-            "RestAddress": "0.0.0.0",
-            "Discv5Discovery": True,
-            "Discv5EnrAutoUpdate": True,
-            "LogLevel": "INFO",
-            "MetricsServer": True,
-            "MetricsServerAddress": "0.0.0.0",
-            "Discv5BootstrapNode": "$ENR1",
-            "Discv5BootstrapNode": "$ENR2",
-            "Discv5BootstrapNode": "$ENR3",
-            "Nat": "extip:${IP}",
-            "ClusterId": 2,
-            "WebsocketSupport": True,
-            "NumShardsInNetwork": 1,
-            "Shard": 0,
-        }
-
     def _run(
         self,
         api_client: ApiClient,
@@ -131,39 +228,82 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         values_yaml: Optional[yaml.YAMLObject],
         stack: ExitStack,
     ):
-        def deploy(service, values, *, wait_for_ready=False):
+        def deploy(
+            service,
+            values,
+            *,
+            wait_for_ready=False,
+            extra_values_paths: Optional[List[Path]] = None,
+        ):
             return self.deploy(
                 api_client,
                 stack,
                 args,
                 values,
-                workdir,
-                service,
+                workdir=workdir,
+                service=service,
                 wait_for_ready=wait_for_ready,
-                extra_values_paths=self.extra_paths,
+                extra_values_paths=extra_values_paths,
             )
 
         def build(
             values_yaml: Optional[yaml.YAMLObject],
             service: str,
-            extra_args : Optional[dict] = None,
+            *,
+            extra_args: Optional[dict] = None,
+            extra_values: Optional[dict] = None,
         ) -> yaml.YAMLObject:
             this_dir = Path(os.path.dirname(__file__))
             values = deepcopy(values_yaml)
+            extra_values = extra_values if extra_values is not None else {}
+            values.update(extra_values)
             if extra_args:
                 values_args = dict_get(values_yaml, "waku.nodes.command.args", sep=".", default={})
                 all_args = extra_args.update(values_args)
-                dict_set()
-
-                values_yaml["waku"][""]
+                dict_set(values, "waku.nodes.command.args", all_args, sep=".")
             return self.build(values_yaml, workdir, service)
 
         self.log_event("run_start")
+        sharding = values_yaml.get("sharding_type", "static")
+        if sharding != "static":
+            raise NotImplementedError(
+                "Auto sharding not implemented. It should work on the jswaku side, "
+                "but the Lightpush server nodes do not establish connectivity."
+            )
 
-        deploy("waku/bootstrap", values_yaml, wait_for_ready=True)
-        # lightpush_servers = deploy("waku/nodes", values_yaml, wait_for_ready=True)
-        lightpush_servers = self.build("waku/nodes", values_yaml, wait_for_ready=True)
-        jswaku_lightpush_server_values
+        deploy(
+            "waku/bootstrap",
+            values_yaml,
+            wait_for_ready=True,
+            extra_values_paths=[Path(__file__).parent / "bootstrap.values.yaml"],
+        )
+
+        lps_values = deepcopy(values_yaml)
+        dict_set(
+            lps_values, "waku.nodes.command.args", JsWakuSettings.server_args(sharding), sep="."
+        )
+        lps_deploy = self.build(
+            lps_values,
+            workdir,
+            "waku/nodes",
+            extra_values_paths=[Path(__file__).parent / "lps.values.yaml"],
+        )
+        self.deploy(api_client, stack, args, lps_values, deployment_yaml=lps_deploy)
+
+        import pdb; pdb.set_trace()
+
+        lpc_values = deepcopy(values_yaml)
+        JsWakuSettings.set_client_values(lpc_values, sharding)
+
+        lpc_deploy = self.build(
+            lpc_values,
+            workdir,
+            "waku/nodes",
+            extra_values_paths=[Path(__file__).parent / "lpc.values.yaml"],
+        )
+        self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
+
+        raise NotImplementedError()
 
         lightpush_clients = deploy("jswaku", values_yaml, wait_for_ready=True)
 

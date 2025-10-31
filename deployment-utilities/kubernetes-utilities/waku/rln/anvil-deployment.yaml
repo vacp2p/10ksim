@@ -25,12 +25,18 @@ spec:
           - "--chain-id"
           - "59141"
           - "--gas-limit"
-          - "100000000"
+          - "1000000000000000"
+          - "--gas-price"
+          - "1"
+          - "--balance"
+          - "1000000000000000"
+          - "--mnemonic"
+          - "test test test test test test test test test test test junk"
         ports:
         - containerPort: 8545
         readinessProbe:
           tcpSocket:
-            port: 8545           # <- probe just checks the port is listening
+            port: 8545
           initialDelaySeconds: 3
           periodSeconds: 3
           failureThreshold: 5
@@ -40,7 +46,7 @@ spec:
             cpu: "500m"
             memory: "512Mi"
           limits:
-            cpu: "2"
+            cpu: "4"
             memory: "2Gi"
 ---
 apiVersion: v1

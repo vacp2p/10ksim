@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, Field
@@ -189,7 +189,11 @@ class BaseExperiment(ABC, BaseModel):
                 "Invalid arguments. Pass `deployment_yaml` xor (`service` and `workdir`) as arguments."
             )
 
-        yaml_obj = self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        yaml_obj = (
+            deployment_yaml
+            if deployment_yaml is not None
+            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        )
 
         try:
             dry_run = args.dry_run

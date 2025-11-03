@@ -30,6 +30,53 @@ from registry import experiment
 logger = logging.getLogger(__name__)
 
 
+from kubernetes import client, config
+from kubernetes.stream import stream
+
+
+def add_network_delay_to_pod(namespace, pod_name, delay_ms):
+    api = client.CoreV1Api()
+
+    command = ["/bin/sh", "-c", f"tc qdisc add dev eth0 root netem delay {delay_ms}ms"]
+
+    try:
+        # Execute command inside the pod
+        resp = stream(
+            api.connect_get_namespaced_pod_exec,
+            pod_name,
+            namespace,
+            command=command,
+            stderr=True,
+            stdin=False,
+            stdout=True,
+            tty=False,
+        )
+        logger.info(f"Command executed in pod {pod_name}: {resp}")
+    except client.exceptions.ApiException as e:
+        logger.error(f"Exception when executing command: {e}")
+
+
+def remove_network_delay_from_pod(namespace, pod_name):
+    api = client.CoreV1Api()
+
+    command = ["/bin/sh", "-c", "tc qdisc del dev eth0 root"]
+
+    try:
+        resp = stream(
+            api.connect_get_namespaced_pod_exec,
+            pod_name,
+            namespace,
+            command=command,
+            stderr=True,
+            stdin=False,
+            stdout=True,
+            tty=False,
+        )
+        logger.info(f"Removed network delay from pod {pod_name}: {resp}")
+    except client.exceptions.ApiException as e:
+        logger.error(f"Exception when removing delay: {e}")
+
+
 class JsWakuSettings:
 
     @staticmethod
@@ -98,13 +145,37 @@ class JsWakuSettings:
 
     @staticmethod
     def set_client_values(values: dict, sharding: Literal["auto", "static"]):
+        # settings = {
+        # TODO loop through kvps
+        # }
         dict_set(values, "waku.nodes.volumes", [{"name": "address-data", "emptyDir": {}}], sep=".")
+        dict_set(
+            values,
+            "waku.nodes.volumesMounts",
+            [{"name": "address-data", "mountPath": "/etc/addrs"}],
+            sep=".",
+        )
         dict_set(
             values,
             "waku.nodes.initContainers",
             [JsWakuSettings.client_init_container()],
             sep=".",
         )
+        # dict_set(
+        #     values,
+        #     "waku.nodes.readinessProbe.command",
+        #     JsWakuSettings.client_readiness_probe_command(),
+        #     sep=".",
+        #     replace_leaf=True,
+        # )
+        dict_set(
+            values,
+            "waku.nodes.readinessProbe.type",
+            "jswaku",
+            sep=".",
+            replace_leaf=True,
+        )
+        print(f"values: ```{values}```")
         dict_set(
             values,
             "waku.nodes.command.full.container",
@@ -113,15 +184,39 @@ class JsWakuSettings:
         )
 
     @staticmethod
+    def client_readiness_probe_command():
+        script = """node=127.0.0.1
+jswaku_external_port=8080
+if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
+    -H "Content-Type: application/json" | jq -e '.peerId' > /dev/null
+        """
+        return ["/bin/sh", "-c", script]
+
+    @staticmethod
+    def client_readiness_probe():
+        return {
+            "readinessProbe": {
+                "exec": {"command": JsWakuSettings.client_readiness_probe_command()},
+                "successThreshold": 5,
+                "initialDelaySeconds": 5,
+                "periodSeconds": 1,
+                "failureThreshold": 2,
+                "timeoutSeconds": 5,
+            }
+        }
+
+    @staticmethod
     def client_init_container():
         return {
             "name": "grabaddress",
-            "image": "pearsonwhite/get_address_2:23805eace0049540dfc0124758e3bbf441f9a4c3",
+            "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2",
             "imagePullPolicy": "IfNotPresent",
-            "volumeMounts": [{
-                "name": "address-data",
-                "mountPath": "/etc/addrs",
-            }],
+            "volumeMounts": [
+                {
+                    "name": "address-data",
+                    "mountPath": "/etc/addrs",
+                }
+            ],
             "command": [
                 "python3",
                 "/app/get_address.py",
@@ -246,23 +341,6 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 extra_values_paths=extra_values_paths,
             )
 
-        def build(
-            values_yaml: Optional[yaml.YAMLObject],
-            service: str,
-            *,
-            extra_args: Optional[dict] = None,
-            extra_values: Optional[dict] = None,
-        ) -> yaml.YAMLObject:
-            this_dir = Path(os.path.dirname(__file__))
-            values = deepcopy(values_yaml)
-            extra_values = extra_values if extra_values is not None else {}
-            values.update(extra_values)
-            if extra_args:
-                values_args = dict_get(values_yaml, "waku.nodes.command.args", sep=".", default={})
-                all_args = extra_args.update(values_args)
-                dict_set(values, "waku.nodes.command.args", all_args, sep=".")
-            return self.build(values_yaml, workdir, service)
-
         self.log_event("run_start")
         sharding = values_yaml.get("sharding_type", "static")
         if sharding != "static":
@@ -290,8 +368,6 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         )
         self.deploy(api_client, stack, args, lps_values, deployment_yaml=lps_deploy)
 
-        import pdb; pdb.set_trace()
-
         lpc_values = deepcopy(values_yaml)
         JsWakuSettings.set_client_values(lpc_values, sharding)
 
@@ -302,6 +378,27 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             extra_values_paths=[Path(__file__).parent / "lpc.values.yaml"],
         )
         self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
+
+        self.deploy(
+            api_client,
+            stack,
+            args,
+            values_yaml,
+            service="waku/publisher",
+            workdir=workdir,
+            extra_values_paths=[Path(__file__).parent / "publisher.values.yaml"],
+        )
+
+        raise NotImplementedError()
+
+        time.sleep(5)
+
+        namespace = lpc_deploy["metadata"]["namespace"]
+        pod_name = "client-0-0"
+        delay_ms = 150
+
+        add_network_delay_to_pod(namespace, pod_name, delay_ms)
+        remove_network_delay_from_pod(namespace, pod_name)
 
         raise NotImplementedError()
 

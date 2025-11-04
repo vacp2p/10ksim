@@ -209,8 +209,7 @@ if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
     def client_init_container():
         return {
             "name": "grabaddress",
-            # "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2", # TODO fix multi-arch manifests
-            "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2-linux-arm64-v8",
+            "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2",
             "imagePullPolicy": "IfNotPresent",
             "volumeMounts": [
                 {
@@ -316,7 +315,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    def _run(
+    async def _run(
         self,
         api_client: ApiClient,
         workdir: str,

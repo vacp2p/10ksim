@@ -25,10 +25,7 @@ waku:
       # tag: 1d75508b5117955914eb2ac95388a7c1d177513e # doesn't work (based off of master)
       # tag: pearsonwhite/jswaku:7a4158722f1a7308c64f72fcc8b643017a41cccc # fix: debugging static sharding
       # tag: d803565b301c0eab378a0ee360db1947936ef129 # feat(browser-tests): simplify, refactor, update dockerized browser node (#2623)
-      # tag: 14fd63acdf613f41ab8fc7493f3baa20f386ae25 # above, but with deps
-      # tag: 14fd63acdf613f41ab8fc7493f3baa20f386ae25-linux-amd64
-      # TODO fix multi-arch manifests
-      tag: 14fd63acdf613f41ab8fc7493f3baa20f386ae25-linux-arm64-v8
+      tag: 14fd63acdf613f41ab8fc7493f3baa20f386ae25 # above, but with deps
     dnsConfig:
       searches:
         - zerotesting-service.zerotesting.svc.cluster.local

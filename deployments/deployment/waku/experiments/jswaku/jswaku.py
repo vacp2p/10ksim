@@ -390,17 +390,16 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             extra_values_paths=[Path(__file__).parent / "publisher.values.yaml"],
         )
 
-        raise NotImplementedError()
-
-        time.sleep(5)
 
         namespace = lpc_deploy["metadata"]["namespace"]
         pod_name = "client-0-0"
-        delay_ms = 150
+        delay_ms = 5000
 
         add_network_delay_to_pod(namespace, pod_name, delay_ms)
+        time.sleep(2)
         remove_network_delay_from_pod(namespace, pod_name)
 
+        time.sleep(10000)
         raise NotImplementedError()
 
         lightpush_clients = deploy("jswaku", values_yaml, wait_for_ready=True)

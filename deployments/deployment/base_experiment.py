@@ -167,6 +167,7 @@ class BaseExperiment(ABC, BaseModel):
 
         return yaml_obj
 
+    # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
     def deploy(
         self,
         api_client: ApiClient,
@@ -249,7 +250,7 @@ class BaseExperiment(ABC, BaseModel):
                 )
             self.events_log_path = Path(workdir) / self.events_log_path
 
-    def run(
+    async def run(
         self,
         api_client: ApiClient,
         args: Namespace,
@@ -269,7 +270,7 @@ class BaseExperiment(ABC, BaseModel):
             os.makedirs(workdir, exist_ok=True)
             self._set_events_log(workdir)
             shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
-            self._run(
+            await self._run(
                 api_client=api_client,
                 workdir=workdir,
                 args=args,
@@ -281,7 +282,7 @@ class BaseExperiment(ABC, BaseModel):
         self.log_event("run_finished")
 
     @abstractmethod
-    def _run(
+    async def _run(
         self,
         # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
         api_client: ApiClient,

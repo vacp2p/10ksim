@@ -380,7 +380,10 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         )
         self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
 
-        self.deploy(
+
+        num_nodes = lpc_deploy["spec"]["replicas"]
+
+        publisher = self.deploy(
             api_client,
             stack,
             args,
@@ -388,42 +391,20 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             service="waku/publisher",
             workdir=workdir,
             extra_values_paths=[Path(__file__).parent / "publisher.values.yaml"],
+            wait_for_ready=True,
         )
-
 
         namespace = lpc_deploy["metadata"]["namespace"]
         pod_name = "client-0-0"
         delay_ms = 5000
-
         add_network_delay_to_pod(namespace, pod_name, delay_ms)
         time.sleep(2)
         remove_network_delay_from_pod(namespace, pod_name)
 
-        time.sleep(10000)
-        raise NotImplementedError()
-
-        lightpush_clients = deploy("jswaku", values_yaml, wait_for_ready=True)
-
-        num_nodes = nodes["spec"]["replicas"]
-
-        publisher = deploy("waku/publisher", values_yaml, wait_for_ready=True)
         messages = get_flag_value("messages", publisher["spec"]["containers"][0]["command"])
         delay_seconds = get_flag_value(
             "delay-seconds", publisher["spec"]["containers"][0]["command"]
         )
-
-        if not args.dry_run:
-            wait_for_rollout(
-                publisher["kind"],
-                publisher["metadata"]["name"],
-                publisher["metadata"]["namespace"],
-                20,
-                api_client,
-                ("Ready", "True"),
-                # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
-            )
-        self.log_event("publisher_deploy_finished")
-
         timeout = (num_nodes + 5) * messages * delay_seconds * 120
         logger.info(f"Waiting for Ready=False. Timeout: {timeout}")
 
@@ -432,11 +413,12 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 publisher["kind"],
                 publisher["metadata"]["name"],
                 publisher["metadata"]["namespace"],
-                timeout,
+                20,
                 api_client,
                 ("Ready", "False"),
-                # TODO: consider state.reason == .completed
+                # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
             )
+
         self.log_event("publisher_messages_finished")
         time.sleep(20)
         self.log_event("publisher_wait_finished")

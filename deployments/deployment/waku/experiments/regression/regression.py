@@ -117,7 +117,7 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    def _run(
+    async def _run(
         self,
         api_client: ApiClient,
         workdir: str,

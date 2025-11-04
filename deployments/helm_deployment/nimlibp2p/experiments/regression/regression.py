@@ -1,9 +1,9 @@
 import itertools
+from asyncio import sleep
 import logging
 import os
 import re
 import shutil
-import time
 from argparse import ArgumentParser, Namespace
 from contextlib import ExitStack
 from copy import deepcopy
@@ -89,7 +89,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         cli_values = set_delay(cli_values, self.hours_key, self.minutes_key, delay)
         return build(cli_values), delay
 
-    def _run(
+    async def _run(
         self,
         api_client: ApiClient,
         workdir: str,
@@ -129,7 +129,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         kubectl_apply(deploy, namespace=namespace)
         logger.info("Deployment applied. Waiting for rollout.")
 
-        wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
+        await wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
         logger.info("Rollout successful.")
 
         logger.info(
@@ -140,7 +140,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         num_nodes = deploy["spec"]["replicas"]
         time_to_resolve = (60 * 3) + (num_nodes * 3)
         logger.info(f"Waiting for messages to resolve. Sleep: {timedelta(seconds=time_to_resolve)}")
-        time.sleep(
+        await sleep(
             time_to_resolve
         )  # TODO [regression nimlibp2p2 cleanup]: Test for nodes finished?
 

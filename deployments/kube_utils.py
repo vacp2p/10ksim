@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -57,7 +58,6 @@ def get_log_level(verbosity: Union[str, int]) -> int:
         raise TypeError(
             f"Param `verbosity` must be a string or an int. Instead, given: `{type(verbosity)}`"
         )
-
 
 def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Optional[str] = None):
     """
@@ -491,7 +491,8 @@ def poll_rollout_status(
         raise ValueError(f"Unsupported kind: `{kind}`")
 
 
-def wait_for_rollout(
+# TODO: Make kind, name, namespace optional and derive from deployment.yaml.
+async def wait_for_rollout(
     kind: str,
     name: str,
     namespace: str,
@@ -528,7 +529,7 @@ def wait_for_rollout(
             )
         except ApiException as e:
             logger.warning(f"Error fetching `{kind}`: `{e}`")
-            time.sleep(polling_interval)
+            await asyncio.sleep(polling_interval)
             continue
 
         logger.info(f"Waiting: {target_desc} ready=`{ready}`...")
@@ -541,7 +542,7 @@ def wait_for_rollout(
         if elapsed > timeout:
             raise TimeoutError(f"Timeout waiting for: `{target_desc}`.")
 
-        time.sleep(polling_interval)
+        await asyncio.sleep(polling_interval)
 
 
 def poll_namespace_has_objects(

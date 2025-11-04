@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -15,7 +16,7 @@ from registry import registry as experiment_registry
 logger = logging.getLogger(__name__)
 
 
-def run_experiment(
+async def run_experiment(
     name: str,
     args: argparse.Namespace,
     values_path: Optional[str],
@@ -37,7 +38,7 @@ def run_experiment(
 
     info = experiment_registry[name]
     experiment = info.cls()
-    experiment.run(api_client, args, values_yaml)
+    await experiment.run(api_client, args, values_yaml)
 
 
 def setup_output_folder(args: argparse.Namespace) -> Path:
@@ -53,7 +54,7 @@ def setup_output_folder(args: argparse.Namespace) -> Path:
     return out_dir
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(
         description="A tool to run experiments. Generates deployment yaml with helm and deploys using the given kubeconfig. Dependencies: helm must be installed and in $PATH."
     )
@@ -103,7 +104,7 @@ def main():
     verbosity = args.verbosity or 2
     init_logger(logging.getLogger(), verbosity, out_folder / "out.log")
     try:
-        run_experiment(
+        await run_experiment(
             name=args.experiment,
             args=args,
             values_path=args.values_path,
@@ -114,4 +115,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

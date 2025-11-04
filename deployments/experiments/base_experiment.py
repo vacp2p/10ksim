@@ -50,6 +50,7 @@ def find_events(
                 results.append(event)
     return results
 
+
 def parse_events_log(
     log_path: str,
     events_list: List[Tuple[Dict[str, str], str]],
@@ -184,7 +185,8 @@ class BaseExperiment(ABC, BaseModel):
 
         return yaml_obj
 
-    def deploy(
+    # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
+    async def deploy(
         self,
         api_client: ApiClient,
         stack,
@@ -250,7 +252,7 @@ class BaseExperiment(ABC, BaseModel):
 
         if not dry_run:
             if wait_for_ready:
-                wait_for_rollout(
+                await wait_for_rollout(
                     yaml_obj["kind"],
                     yaml_obj["metadata"]["name"],
                     namespace,
@@ -272,7 +274,7 @@ class BaseExperiment(ABC, BaseModel):
                 )
             self.events_log_path = Path(workdir) / self.events_log_path
 
-    def run(
+    async def run(
         self,
         api_client: ApiClient,
         args: Namespace,
@@ -299,7 +301,7 @@ class BaseExperiment(ABC, BaseModel):
                 }
             )
             shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
-            self._run(
+            await self._run(
                 api_client=api_client,
                 workdir=workdir,
                 args=args,
@@ -311,7 +313,7 @@ class BaseExperiment(ABC, BaseModel):
         self.log_event("run_finished")
 
     @abstractmethod
-    def _run(
+    async def _run(
         self,
         # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
         api_client: ApiClient,

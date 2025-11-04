@@ -1,6 +1,6 @@
 import logging
 import random
-import time
+from asyncio import sleep
 from argparse import Namespace
 from contextlib import ExitStack
 from copy import deepcopy
@@ -39,7 +39,7 @@ class NimMultipleRegression(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    def _run(
+    async def _run(
         self,
         api_client: ApiClient,
         workdir: str,
@@ -135,7 +135,7 @@ class NimMultipleRegression(BaseExperiment, BaseModel):
             experiment.run(api_client, exp_args, exp_values_yaml)
 
             logger.info("sleep 100")
-            time.sleep(100)
+            await sleep(100)
             logger.info("loop")
 
 

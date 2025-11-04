@@ -1,4 +1,5 @@
 import logging
+from asyncio import sleep
 import os
 import re
 import time
@@ -245,7 +246,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         cli_values = set_delay(cli_values, self.hours_key, self.minutes_key, delay)
         return build(cli_values), delay
 
-    def _run(
+    async def _run(
         self,
         api_client: ApiClient,
         workdir: str,
@@ -282,7 +283,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         )
         stack.callback(cleanup)
 
-        def wipe_data():
+        async def wipe_data():
             logger.info("wiping shared volume data...")
             wiper_path = self.this_dir / "wiper.yaml"
             with open(wiper_path, "r") as f:
@@ -295,9 +296,9 @@ class NimMixNodes(BaseExperiment, BaseModel):
                 namespace=namespace,
                 deployments=[wiper_deployment],
             )
-            time.sleep(2)
+            await sleep(2)
             kubectl_apply(wiper_deployment)
-            time.sleep(14)
+            await sleep(14)
             wiper_cleanup()
 
         stack.callback(wipe_data)
@@ -366,7 +367,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         delay_arg = int(network_params.get("delay") or 0)
         jitter_arg = int(network_params.get("jitter") or 0)
 
-        time.sleep(10)  # Wait for nodes to get connected.
+        await sleep(10)  # Wait for nodes to get connected.
 
         time_to_resolve = (msgs + 1) * (rate + (delay_arg + jitter_arg + 50)) + 30000
         time_to_resolve = timedelta(milliseconds=time_to_resolve)
@@ -374,7 +375,7 @@ class NimMixNodes(BaseExperiment, BaseModel):
         start_time = datetime.now()
         time_elapsed = datetime.now() - start_time
         while time_elapsed < time_to_resolve:
-            time.sleep(20)
+            await sleep(20)
             logger.info(f"waiting: {(time_elapsed.seconds/time_to_resolve.seconds)*100}%")
             time_elapsed = datetime.now() - start_time
         self.log_event("end_messages")

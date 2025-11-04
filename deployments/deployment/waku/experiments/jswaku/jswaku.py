@@ -209,7 +209,8 @@ if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
     def client_init_container():
         return {
             "name": "grabaddress",
-            "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2",
+            # "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2", # TODO fix multi-arch manifests
+            "image": "pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2-linux-arm64-v8",
             "imagePullPolicy": "IfNotPresent",
             "volumeMounts": [
                 {
@@ -362,7 +363,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         )
         lps_deploy = self.build(
             lps_values,
-            workdir,
+            Path(workdir) / "server",
             "waku/nodes",
             extra_values_paths=[Path(__file__).parent / "lps.values.yaml"],
         )
@@ -373,7 +374,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
 
         lpc_deploy = self.build(
             lpc_values,
-            workdir,
+            Path(workdir) / "client",
             "waku/nodes",
             extra_values_paths=[Path(__file__).parent / "lpc.values.yaml"],
         )

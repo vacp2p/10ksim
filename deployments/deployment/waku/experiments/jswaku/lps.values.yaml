@@ -4,7 +4,7 @@ waku:
     namespace: zerotesting
     serviceName: zerotesting-lightpush-server
     app: zerotenkay-lightpush-server
-    numNodes: 10
+    numNodes: 8
     command:
       type: "lightpushServer"
       nice: 19

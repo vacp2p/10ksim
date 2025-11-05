@@ -3,7 +3,7 @@ waku:
     command:
       type: "regression"
       args:
-        messages: 1000
+        messages: 200
         msgSizeKbytes: 10
         delaySeconds: 1
         port: 8080

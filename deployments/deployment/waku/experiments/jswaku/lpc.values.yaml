@@ -5,18 +5,11 @@ waku:
     serviceName: zerotesting-service
     app: zerotenkay
     numNodes: 5
-    # getAddr:
-    #   repo: "soutullostatus/getenr"
-    #   tag: "v0.5.0"
-    #   num: 1
-    #   serviceName: "zerotesting-bootstrap.zerotesting"
     command:
       type: "blank"
       nice: 19
     readinessProbe:
       type: "metrics"
-    # includes:
-    #   getEnr: False
     image:
       repository: "pearsonwhite/jswaku"
       # tag: "dbdca49646c04d17eb99e1f4da6d3bda135cd928" # works but doesn't have jq or tc

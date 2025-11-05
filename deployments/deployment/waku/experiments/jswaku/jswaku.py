@@ -1,7 +1,9 @@
+import asyncio
 from copy import deepcopy
 import logging
 import os
-import time
+import random
+from asyncio import sleep
 from argparse import Namespace
 from contextlib import ExitStack
 from datetime import timedelta
@@ -145,43 +147,15 @@ class JsWakuSettings:
 
     @staticmethod
     def set_client_values(values: dict, sharding: Literal["auto", "static"]):
-        # settings = {
-        # TODO loop through kvps
-        # }
-        dict_set(values, "waku.nodes.volumes", [{"name": "address-data", "emptyDir": {}}], sep=".")
-        dict_set(
-            values,
-            "waku.nodes.volumesMounts",
-            [{"name": "address-data", "mountPath": "/etc/addrs"}],
-            sep=".",
-        )
-        dict_set(
-            values,
-            "waku.nodes.initContainers",
-            [JsWakuSettings.client_init_container()],
-            sep=".",
-        )
-        # dict_set(
-        #     values,
-        #     "waku.nodes.readinessProbe.command",
-        #     JsWakuSettings.client_readiness_probe_command(),
-        #     sep=".",
-        #     replace_leaf=True,
-        # )
-        dict_set(
-            values,
-            "waku.nodes.readinessProbe.type",
-            "jswaku",
-            sep=".",
-            replace_leaf=True,
-        )
-        print(f"values: ```{values}```")
-        dict_set(
-            values,
-            "waku.nodes.command.full.container",
-            JsWakuSettings.client_command(sharding),
-            sep=".",
-        )
+        settings = {
+            "waku.nodes.volumes": [{"name": "address-data", "emptyDir": {}}],
+            "waku.nodes.volumesMounts": [{"name": "address-data", "mountPath": "/etc/addrs"}],
+            "waku.nodes.initContainers": [JsWakuSettings.client_init_container()],
+            "waku.nodes.readinessProbe.type": "jswaku",
+            "waku.nodes.command.full.container": JsWakuSettings.client_command(sharding),
+        }
+        for key, value in settings.items():
+            dict_set(values, key, value, sep=".", replace_leaf=True)
 
     @staticmethod
     def client_readiness_probe_command():
@@ -315,6 +289,23 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
+    async def random_disconnects(self, lpc_deploy: dict, rate: timedelta, duration: timedelta):
+        """
+        :param rate: Time between each disconnect. Accounts for the time a node is disconnected.
+        :param duration: The duration for which a node is disconnected.
+        """
+        num_nodes = lpc_deploy["spec"]["replicas"]
+        name = lpc_deploy["metadata"]["name"]
+        namespace = lpc_deploy["metadata"]["namespace"]
+
+        while True:
+            index = random.randint(0, num_nodes - 1)
+            random_name = f"{name}-{index}"
+            add_network_delay_to_pod(namespace, random_name, 5000)
+            await sleep(duration.total_seconds() * 1000)
+            remove_network_delay_from_pod(namespace, random_name)
+            await sleep((rate - duration).total_seconds() * 1000)
+
     async def _run(
         self,
         api_client: ApiClient,
@@ -323,24 +314,6 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         values_yaml: Optional[yaml.YAMLObject],
         stack: ExitStack,
     ):
-        def deploy(
-            service,
-            values,
-            *,
-            wait_for_ready=False,
-            extra_values_paths: Optional[List[Path]] = None,
-        ):
-            return self.deploy(
-                api_client,
-                stack,
-                args,
-                values,
-                workdir=workdir,
-                service=service,
-                wait_for_ready=wait_for_ready,
-                extra_values_paths=extra_values_paths,
-            )
-
         self.log_event("run_start")
         sharding = values_yaml.get("sharding_type", "static")
         if sharding != "static":
@@ -349,9 +322,13 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 "but the Lightpush server nodes do not establish connectivity."
             )
 
-        deploy(
-            "waku/bootstrap",
+        self.deploy(
+            api_client,
+            stack,
+            args,
             values_yaml,
+            workdir=workdir,
+            service="waku/bootstrap",
             wait_for_ready=True,
             extra_values_paths=[Path(__file__).parent / "bootstrap.values.yaml"],
         )
@@ -379,7 +356,6 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         )
         self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
 
-
         num_nodes = lpc_deploy["spec"]["replicas"]
 
         publisher = self.deploy(
@@ -393,12 +369,9 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             wait_for_ready=True,
         )
 
-        namespace = lpc_deploy["metadata"]["namespace"]
-        pod_name = "client-0-0"
-        delay_ms = 5000
-        add_network_delay_to_pod(namespace, pod_name, delay_ms)
-        time.sleep(2)
-        remove_network_delay_from_pod(namespace, pod_name)
+        dc_task = asyncio.create_task(
+            self.random_disconnects(lpc_deploy, timedelta(seconds=6), timedelta(seconds=2))
+        )
 
         messages = get_flag_value("messages", publisher["spec"]["containers"][0]["command"])
         delay_seconds = get_flag_value(
@@ -412,14 +385,16 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 publisher["kind"],
                 publisher["metadata"]["name"],
                 publisher["metadata"]["namespace"],
-                20,
+                timeout,
                 api_client,
                 ("Ready", "False"),
                 # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
             )
 
         self.log_event("publisher_messages_finished")
-        time.sleep(20)
+        dc_task.cancel()
+
+        await sleep(20)
         self.log_event("publisher_wait_finished")
 
         self.log_event("internal_run_finished")

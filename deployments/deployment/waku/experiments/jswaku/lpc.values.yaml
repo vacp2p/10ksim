@@ -2,8 +2,8 @@ waku:
   nodes:
     name: client-0
     namespace: zerotesting
-    serviceName: zerotesting-service
-    app: zerotenkay
+    serviceName: zerotesting-lightpush-client
+    app: zerotenkay-lightpush-client
     numNodes: 5
     command:
       type: "blank"

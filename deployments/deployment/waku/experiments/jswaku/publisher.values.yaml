@@ -1,7 +1,11 @@
 waku:
   publisher:
+    image:
+      repository: pearsonwhite/publisher
+      tag: v1.0.3
     command:
-      type: "regression"
+      protocols:
+        lightpush: true
       args:
         messages: 200
         msgSizeKbytes: 10

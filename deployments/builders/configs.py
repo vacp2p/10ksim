@@ -49,7 +49,7 @@ class Command(BaseModel):
         *,
         on_duplicate: Literal["error", "ignore", "replace"] = "error",
     ):
-        """Add args to command.
+        """Add arg to command.
 
         `on_duplicate` determines the behavior when an argument with the same key already exists.
         error: raises ValueError

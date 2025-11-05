@@ -58,6 +58,50 @@ class Command(BaseModel):
         """
         self.add_args([arg], on_duplicate=on_duplicate)
 
+    def _add_arg_error(self, arg, existing_args_map: dict):
+        """
+        Helper for add_args with on_duplicate == "error"
+        """
+        try:
+            flag, _value = arg
+        except ValueError:
+            flag = arg
+        if flag in existing_args_map:
+            existing_flags = [self.args[index] for index in existing_args_map[flag]]
+            raise ValueError(
+                f"Command already contains flag(s). flag: `{flag}` existing_flags: {existing_flags}"
+            )
+        self.args.append(arg)
+
+    def _add_arg_ignore(self, arg, existing_args_map: dict):
+        """
+        Helper for add_args with on_duplicate == "ignore"
+        """
+        try:
+            flag, _value = arg
+        except ValueError:
+            flag = arg
+        if flag not in existing_args_map:
+            self.args.append(arg)
+
+    def _add_arg_replace(self, arg, existing_args_map: dict):
+        """
+        Helper for add_args with on_duplicate == "replace"
+
+        Note: This may modify `existing_args_map` for the caller.
+        """
+        try:
+            flag, _value = arg
+        except ValueError:
+            flag = arg
+        if flag in existing_args_map:
+            self.args = [item for item in self.args if item != arg]
+            # Remove from map so it won't be replaced again.
+            del existing_args_map[flag]
+            self.args.insert(existing_args_map[flag], arg)
+        else:
+            self.args.append(arg)
+
     def add_args(
         self,
         args: List[str | Tuple[str, str]] | Dict[str, str],
@@ -89,37 +133,13 @@ class Command(BaseModel):
 
         for arg in args:
             if on_duplicate == "error":
-                try:
-                    flag, _value = arg
-                except ValueError:
-                    flag = arg
-                if flag in existing_args_map:
-                    existing_flags = [self.args[index] for index in existing_args_map[flag]]
-                    raise ValueError(
-                        f"Command already contains flag(s). flag: `{flag}` existing_flags: {existing_flags}"
-                    )
-                self.args.append(arg)
-
+                self._add_arg_error(arg, existing_args_map)
             elif on_duplicate == "ignore":
-                try:
-                    flag, _value = arg
-                except ValueError:
-                    flag = arg
-                if flag not in existing_args_map:
-                    self.args.append(arg)
-
+                self._add_arg_ignore(arg, existing_args_map)
             elif on_duplicate == "replace":
-                try:
-                    flag, _value = arg
-                except ValueError:
-                    flag = arg
-                if flag in existing_args_map:
-                    self.args = [item for item in self.args if item != arg]
-                    # Remove from map so it won't be replaced again.
-                    del existing_args_map[flag]
-                    self.args.insert(existing_args_map[flag], arg)
-                else:
-                    self.args.append(arg)
+                self._add_arg_replace(arg, existing_args_map)
+            else:
+                raise ValueError(f"Unknown value for argument. on_duplicate: `{on_duplicate}`")
 
     def __str__(self) -> str:
         args = []

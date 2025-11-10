@@ -491,6 +491,7 @@ def poll_rollout_status(
         raise ValueError(f"Unsupported kind: `{kind}`")
 
 
+# TODO: Make kind, name, namespace optional and derive from dpeloyment yaml.
 def wait_for_rollout(
     kind: str,
     name: str,

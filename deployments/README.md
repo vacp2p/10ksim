@@ -54,7 +54,7 @@ Each experiment should contain the following functions:
 - Called in `deployment` to add subparsers for CLI arguments.
 
 ### run
-- def run(
+- async def run(
         self,
         api_client: ApiClient,
         args: argparse.Namespace,

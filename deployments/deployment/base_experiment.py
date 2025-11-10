@@ -73,7 +73,7 @@ def parse_events_log(
     return return_dict
 
 
-def format_metadata_timestamps(metadata : dict) -> dict:
+def format_metadata_timestamps(metadata: dict) -> dict:
     def format_item(node):
         try:
             return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -83,7 +83,7 @@ def format_metadata_timestamps(metadata : dict) -> dict:
     return dict_apply(metadata, format_item)
 
 
-def get_valid_shifted_times(deltatime_map : Dict[str, timedelta], metadata : dict) -> dict:
+def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
     shifted = deepcopy(metadata)
     for path, delta in deltatime_map.items():
         time_value = dict_get(shifted, path, default=None, sep=".")
@@ -148,20 +148,7 @@ class BaseExperiment(ABC, BaseModel):
             help="If True, does not actually deploy kubernetes configs but run kubectl apply --dry-run.",
         )
 
-    def deploy(
-        self,
-        api_client: ApiClient,
-        stack,
-        args: Namespace,
-        values_yaml,
-        workdir,
-        service: str,
-        *,
-        wait_for_ready=True,
-        extra_values_paths=None,
-        timeout=3600,
-    ):
-
+    def build(self, values_yaml, workdir, service: str, *, extra_values_paths=None):
         yaml_obj = build_deployment(
             deployment_dir=Path(os.path.dirname(__file__)) / service,
             workdir=os.path.join(workdir, service),
@@ -177,6 +164,37 @@ class BaseExperiment(ABC, BaseModel):
                 raise ValueError(
                     f"Deployment yaml must have an explicit value for field. Field: `{field}`"
                 )
+
+        return yaml_obj
+
+    # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
+    def deploy(
+        self,
+        api_client: ApiClient,
+        stack,
+        args: Namespace,
+        values_yaml,
+        *,
+        service: Optional[str] = None,
+        workdir: Optional[str] = None,
+        deployment_yaml: Optional[yaml.YAMLObject] = None,
+        wait_for_ready: bool = True,
+        extra_values_paths: List[str] = None,
+        timeout=3600,
+    ):
+        def given(var):
+            return var is not None
+
+        if given(deployment_yaml) == (given(service) and given(workdir)):
+            raise ValueError(
+                "Invalid arguments. Pass `deployment_yaml` xor (`service` and `workdir`) as arguments."
+            )
+
+        yaml_obj = (
+            deployment_yaml
+            if deployment_yaml is not None
+            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        )
 
         try:
             dry_run = args.dry_run
@@ -232,7 +250,7 @@ class BaseExperiment(ABC, BaseModel):
                 )
             self.events_log_path = Path(workdir) / self.events_log_path
 
-    def run(
+    async def run(
         self,
         api_client: ApiClient,
         args: Namespace,
@@ -252,7 +270,7 @@ class BaseExperiment(ABC, BaseModel):
             os.makedirs(workdir, exist_ok=True)
             self._set_events_log(workdir)
             shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
-            self._run(
+            await self._run(
                 api_client=api_client,
                 workdir=workdir,
                 args=args,
@@ -264,7 +282,7 @@ class BaseExperiment(ABC, BaseModel):
         self.log_event("run_finished")
 
     @abstractmethod
-    def _run(
+    async def _run(
         self,
         # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
         api_client: ApiClient,

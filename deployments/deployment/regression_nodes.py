@@ -24,7 +24,7 @@ class RegressionNodes:
         BaseExperiment.add_args(regression_nodes)
         NimRegressionNodes.add_args(regression_nodes)
 
-    def run(self, api_client, args: Namespace, values_yaml: yaml.YAMLObject):
+    async def run(self, api_client, args: Namespace, values_yaml: yaml.YAMLObject):
         logger.debug(f"args: {args}")
         run_args = {
             "api_client": api_client,

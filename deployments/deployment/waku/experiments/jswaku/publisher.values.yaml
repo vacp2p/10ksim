@@ -1,0 +1,17 @@
+namespace: zerotesting-pwhite
+waku:
+  publisher:
+    image:
+      repository: pearsonwhite/publisher
+      tag: v1.0.3
+    command:
+      protocols:
+        lightpush: true
+      args:
+        messages: 200
+        msgSizeKbytes: 10
+        delaySeconds: 1
+        port: 8080
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting-pwhite.svc.cluster.local

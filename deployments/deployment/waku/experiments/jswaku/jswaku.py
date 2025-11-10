@@ -197,7 +197,7 @@ if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
             ],
             "args": [
                 "--num=1",
-                '--service-name="zerotesting-lightpush-server.zerotesting"',
+                '--service-name="zerotesting-lightpush-server.zerotesting-pwhite"',
                 '--output-file="/etc/addrs/addrs.env"',
                 '--var-name="addrs"',
                 "--websocket",

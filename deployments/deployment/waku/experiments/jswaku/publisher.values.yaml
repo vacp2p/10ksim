@@ -1,3 +1,4 @@
+namespace: zerotesting-pwhite
 waku:
   publisher:
     image:
@@ -11,3 +12,6 @@ waku:
         msgSizeKbytes: 10
         delaySeconds: 1
         port: 8080
+    dnsConfig:
+      searches:
+        - zerotesting-service.zerotesting-pwhite.svc.cluster.local

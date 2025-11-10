@@ -1,3 +1,4 @@
+namespace: zerotesting-pwhite
 waku:
   bootstrap:
     command:

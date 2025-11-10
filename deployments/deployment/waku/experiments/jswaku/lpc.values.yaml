@@ -1,7 +1,7 @@
 waku:
   nodes:
     name: client-0
-    namespace: zerotesting
+    namespace: zerotesting-pwhite
     serviceName: zerotesting-lightpush-client
     app: zerotenkay-lightpush-client
     numNodes: 5
@@ -21,5 +21,5 @@ waku:
       tag: 14fd63acdf613f41ab8fc7493f3baa20f386ae25 # above, but with deps
     dnsConfig:
       searches:
-        - zerotesting-service.zerotesting.svc.cluster.local
+        - zerotesting-service.zerotesting-pwhite.svc.cluster.local
 

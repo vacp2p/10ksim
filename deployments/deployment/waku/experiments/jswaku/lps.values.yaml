@@ -1,7 +1,9 @@
+namespace: zerotesting-pwhite
 waku:
   nodes:
     name: lpserver-0
-    namespace: zerotesting
+    # namespace: zerotesting
+    namespace: zerotesting-pwhite
     serviceName: zerotesting-lightpush-server
     app: zerotenkay-lightpush-server
     numNodes: 8
@@ -14,7 +16,7 @@ waku:
       type: "metrics"
     getEnr:
       num: 3
-      serviceName: zerotesting-bootstrap.zerotesting
+      serviceName: zerotesting-bootstrap.zerotesting-pwhite
     includes:
       getEnr: True
     image:
@@ -22,5 +24,5 @@ waku:
       tag: "v0.34.0-rc1"
     dnsConfig:
       searches:
-        - zerotesting-service.zerotesting.svc.cluster.local
+        - zerotesting-service.zerotesting-pwhite.svc.cluster.local
 

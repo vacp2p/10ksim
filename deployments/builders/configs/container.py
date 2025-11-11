@@ -1,6 +1,8 @@
+from copy import deepcopy
 from typing import List, Literal, Optional, TypeVar
 
 from kubernetes.client import (
+    V1Container,
     V1ContainerPort,
     V1EnvVar,
     V1Probe,
@@ -9,7 +11,7 @@ from kubernetes.client import (
 )
 from pydantic import BaseModel, ConfigDict
 
-from builders.configs.command import CommandConfig
+from builders.configs.command import CommandConfig, build_command
 
 T = TypeVar("T")
 
@@ -81,3 +83,19 @@ class ContainerConfig(BaseModel):
         if isinstance(readiness_probe, dict):
             readiness_probe = dict_to_v1probe(readiness_probe)
         self.readiness_probe = readiness_probe
+
+
+def build_container(config: ContainerConfig) -> V1Container:
+    command, args = build_command(config.command_config)
+    return V1Container(
+        name=config.name,
+        image=str(config.image),
+        image_pull_policy=config.image_pull_policy,
+        ports=deepcopy(config.ports),
+        env=deepcopy(config.env),
+        resources=deepcopy(config.resources),
+        readiness_probe=deepcopy(config.readiness_probe),
+        volume_mounts=deepcopy(config.volume_mounts),
+        command=command,
+        args=args,
+    )

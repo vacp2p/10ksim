@@ -201,3 +201,40 @@ class CommandConfig(BaseModel):
                 f"Failed to find command in config. name: `{command_name}` config: `{self}`"
             )
         return result
+
+
+def build_command(config: CommandConfig) -> Tuple[Optional[List[str]], Optional[List[str]]]:
+    """
+    If there are no commands, returns (None, None).
+
+    If config.single_k8s_command is True, then returns `(command : List[str], args : List[str])`
+
+    Otherwise returns a script command with all commands and arguments with None for args: `(command : List[str], None)`
+
+    :rtype: Tuple[Optional[List[str]], Optional[List[str]]]
+    :returns: (command, args)
+    """
+    if not config.commands:
+        return None, None
+    if config.single_k8s_command:
+        if len(config.commands) != 1:
+            raise ValueError(
+                f"Attempt to build single Kubernetes command with multiple commands. config: `{config}`"
+            )
+        return [config.commands[0].command], deepcopy(config.commands[0].args)
+
+    command_lines = []
+    for command in config.commands:
+        command_lines.append(str(command))
+    command = build_container_command(command_lines)
+    return command, None
+
+
+def build_container_command(
+    command_lines: List[str], prefix: Optional[List[str]] = None
+) -> List[str]:
+    if prefix is None:
+        prefix = ["sh", "-c"]
+    # The newline is added to the end of command to prevent chomp in dumped yaml.
+    # We want `|` not `|-` in the final output.
+    return prefix + ["\n".join(command_lines) + "\n"]

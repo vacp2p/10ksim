@@ -3,7 +3,9 @@ from copy import deepcopy
 from typing import Literal
 
 from kubernetes import client
-from kubernetes.client import V1Container
+from kubernetes.client import (
+    V1Container,
+)
 
 from builders.configs.command import CommandConfig
 from builders.configs.container import ContainerConfig, Image

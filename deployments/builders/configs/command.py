@@ -152,7 +152,7 @@ class CommandConfig(BaseModel):
     def use_single_command(self, single_k8s_command: bool = True):
         self.single_k8s_command = single_k8s_command
 
-    def with_commands(
+    def insert_commands(
         self,
         commands: List[str | Command],
         *,
@@ -172,9 +172,9 @@ class CommandConfig(BaseModel):
             if isinstance(command, Command):
                 self.commands.insert(insert_index, command)
             else:
-                self.with_command(command, None, multiline=False, index=insert_index)
+                self.insert_command(command, None, multiline=False, index=insert_index)
 
-    def with_command(
+    def insert_command(
         self,
         command: str,
         args: None | List[str | Tuple[str, Optional[str]]],

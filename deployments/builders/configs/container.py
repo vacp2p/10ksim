@@ -42,27 +42,41 @@ class ContainerConfig(BaseModel):
     ports: Optional[List[V1ContainerPort]] = None
     image_pull_policy: Literal["IfNotPresent", "Always", "Never"]
 
-    def with_resources(self, resources: V1ResourceRequirements, *, overwrite=False):
+    def with_resources(self, resources: V1ResourceRequirements, *, overwrite: bool = False):
         if self.resources is not None and not overwrite:
             raise ValueError("Resources already exist for container.")
         self.resources = resources
 
-    def with_volume_mount(self, mount: V1VolumeMount):
+    def with_volume_mount(self, mount: V1VolumeMount, *, overwrite: bool = False):
         if self.volume_mounts is None:
             self.volume_mounts = []
+
+        if not overwrite and mount.name in [item.name for item in self.volume_mounts]:
+            raise ValueError(
+                f"Volume mount already exists in {type(self)}. "
+                f"volume mount: `{mount}` config: `{self}`"
+            )
+
         self.volume_mounts.append(mount)
 
-    def with_env_var(self, var: V1EnvVar, allow_duplicates=False):
+    def with_env_var(self, var: V1EnvVar, *, overwrite: bool = False):
         if self.env is None:
             self.env = []
-        if any([item.name == var.name for item in self.env]):
-            raise ValueError(f"Attempt to add duplicate environment variable: `{var}`")
-        self.env.append(var)
+        index = next([index for index, item in enumerate(self.env) if item.name == var.name], None)
+        if index:
+            if not overwrite:
+                raise ValueError(
+                    f"Attempt to add duplicate environment variable to {type(self)}. "
+                    f"var: `{var}` config: {self}"
+                )
+            self.env[index] = var
+        else:
+            self.env.append(var)
 
     def with_readines_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
         from builders.helpers import dict_to_v1probe
 
-        if self.readiness_probe is not None and overwrite == False:
+        if self.readiness_probe is not None and not overwrite:
             raise ValueError("ContainerConfig already has readiness probe.")
         if isinstance(readiness_probe, dict):
             readiness_probe = dict_to_v1probe(readiness_probe)

@@ -18,18 +18,18 @@ class StatefulSetSpecConfig(BaseModel):
     pod_template_spec_config: PodTemplateSpecConfig = PodTemplateSpecConfig()
     volume_claim_templates: Optional[List[V1PersistentVolumeClaim]] = None
 
-    def with_service_name(self, service_name: str, overwrite: bool = False):
+    def with_service_name(self, service_name: str, *, overwrite: bool = False):
         if self.service_name is not None and not overwrite:
             raise ValueError(
-                f"Service name already set. Passed service_name `{service_name}` Config: `{self}`"
+                f"Service name already set in {type(self)}. Passed service_name `{service_name}` Config: `{self}`"
             )
         self.service_name = service_name
 
-    def with_app(self, app: str, overwrite: bool = False):
+    def with_app(self, app: str, *, overwrite: bool = False):
         if self.selector_labels is not None and not overwrite:
             if app in self.selector_labels:
                 raise ValueError(
-                    f"Config already has app in selector labels. Passed app`{app}` Config: `{self}`"
+                    f"{type(self)} already has app in selector labels. Passed app`{app}` Config: `{self}`"
                 )
         if self.selector_labels is None:
             self.selector_labels = {}

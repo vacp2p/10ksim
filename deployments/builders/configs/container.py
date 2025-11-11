@@ -73,7 +73,7 @@ class ContainerConfig(BaseModel):
         else:
             self.env.append(var)
 
-    def with_readines_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
+    def with_readiness_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
         from builders.helpers import dict_to_v1probe
 
         if self.readiness_probe is not None and not overwrite:

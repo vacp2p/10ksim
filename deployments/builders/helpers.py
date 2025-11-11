@@ -14,7 +14,7 @@ def v1container_to_container_config(v1container: V1Container) -> ContainerConfig
     if v1container.args:
         command_config.use_single_command(True)
     if v1container.command is not None:
-        command_config.with_command(
+        command_config.insert_command(
             command=" ".join(deepcopy(v1container.command)),
             args=deepcopy(v1container.args) if v1container.args else [],
             multiline=False,

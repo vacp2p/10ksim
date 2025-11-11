@@ -5,7 +5,8 @@ from typing import Literal
 from kubernetes import client
 from kubernetes.client import V1Container
 
-from builders.configs import CommandConfig, ContainerConfig, Image
+from builders.configs.command import CommandConfig
+from builders.configs.container import ContainerConfig, Image
 
 
 def v1container_to_container_config(v1container: V1Container) -> ContainerConfig:

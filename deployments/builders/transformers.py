@@ -11,13 +11,10 @@ from kubernetes.client import (
     V1StatefulSetSpec,
 )
 
-from builders.configs import (
-    CommandConfig,
-    ContainerConfig,
-    PodSpecConfig,
-    PodTemplateSpecConfig,
-    StatefulSetConfig,
-)
+from builders.configs.command import CommandConfig
+from builders.configs.container import ContainerConfig
+from builders.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from builders.configs.statefulset import StatefulSetConfig
 
 
 def build_command(config: CommandConfig) -> Tuple[Optional[List[str]], Optional[List[str]]]:

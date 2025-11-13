@@ -17,8 +17,8 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from deployment.base_experiment import BaseExperiment
 from deployment.builders import build_deployment
+from experiments.base_experiment import BaseExperiment
 
 # from deployment.nimlibp2p.builders import Nimlibp2pBuilder
 from kube_utils import (

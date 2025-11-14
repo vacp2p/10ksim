@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
 
-from deployment.builders import build_deployment
+from helm_deployment.builders import build_deployment
 from kube_utils import (
     dict_apply,
     dict_get,

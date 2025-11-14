@@ -1,14 +1,131 @@
 import json
 from copy import deepcopy
-from typing import Literal
+from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
 
 from kubernetes import client
 from kubernetes.client import (
     V1Container,
+    V1Probe,
 )
 
-from builders.configs.command import CommandConfig
-from builders.configs.container import ContainerConfig, Image
+from builders.configs.command import (
+    CommandConfig,
+)
+from builders.configs.container import (
+    ContainerConfig,
+    Image,
+)
+from builders.configs.pod import (
+    PodSpecConfig,
+    PodTemplateSpecConfig,
+)
+from builders.configs.statefulset import (
+    StatefulSetConfig,
+    StatefulSetSpecConfig,
+)
+
+T = TypeVar("T")
+_sentinel = object()
+
+
+class ContainerNotFoundError(ValueError):
+    pass
+
+
+HigherConfigTypes = (
+    StatefulSetConfig | StatefulSetSpecConfig | PodTemplateSpecConfig | PodSpecConfig
+)
+
+
+def get_config(config: HigherConfigTypes, target: Type[T]) -> T:
+    source_type = type(config)
+    if target not in get_args(HigherConfigTypes):
+        raise ValueError(
+            f"Unsupported target type. Config type: `{source_type}` Target type: `{target}`"
+        )
+    if not isinstance(config, HigherConfigTypes):
+        raise ValueError(
+            f"Unsupported config type. Config type: `{source_type}` Target type: `{target}`"
+        )
+
+    class ConversionDone(Exception):
+        pass
+
+    def check_done():
+        if isinstance(config, target):
+            raise ConversionDone()
+
+    try:
+        check_done()
+        if isinstance(config, StatefulSetConfig):
+            config = config.stateful_set_spec
+        check_done()
+        if isinstance(config, StatefulSetSpecConfig):
+            config = config.pod_template_spec_config
+        check_done()
+        if isinstance(config, PodTemplateSpecConfig):
+            config = config.pod_spec_config
+        check_done()
+        raise TypeError(
+            f"Unsupported config conversion. "
+            f"Config type: `{source_type}` "
+            f"Target type: `{target}`"
+        )
+    except ConversionDone:
+        return config
+
+
+def find_container_config(
+    config: HigherConfigTypes, name: str, *, default: T | object = _sentinel
+) -> ContainerConfig | T:
+    """Finds the ContainerConfig with a given name from a PodSpecConfig"""
+    config = get_config(config, PodSpecConfig)
+    result = next((item for item in config.container_configs if item.name == name), default)
+    if result is _sentinel:
+        raise ContainerNotFoundError(
+            f"Failed to find container in config. name: `{name}` config: `{config}`"
+        )
+    return result
+
+
+def get_container_command(
+    config: HigherConfigTypes,
+    container_name: str,
+    command_name: str,
+):
+    """Find command in command_config for container with given name."""
+
+    container_config = find_container_config(config, container_name)
+    return container_config.command_config.find_command(command_name)
+
+
+def with_container_command_args(
+    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig,
+    container_name: str,
+    command_name: str,
+    args: List[str | Tuple[str, str]] | Dict[str, str],
+    *,
+    on_duplicate: Literal["error", "ignore", "replace"] = "error",
+):
+    """
+    Modifies command args for a named container inside the config.
+    """
+    command = get_container_command(config, container_name, command_name)
+    command.add_args(args, on_duplicate=on_duplicate)
+
+
+def readiness_probe_health() -> dict:
+    return {
+        "failureThreshold": 1,
+        "httpGet": {
+            "path": "/health",
+            "port": 8008,
+        },
+        "initialDelaySeconds": 1,
+        "periodSeconds": 3,
+        "successThreshold": 3,
+        "timeoutSeconds": 5,
+    }
 
 
 def v1container_to_container_config(v1container: V1Container) -> ContainerConfig:
@@ -70,6 +187,10 @@ def dict_to_k8s_object(data: dict, model: K8sModelStr):
 def dict_to_container_config(container_dict: dict) -> ContainerConfig:
     v1container = dict_to_k8s_object(container_dict, "V1Container")
     return v1container_to_container_config(v1container)
+
+
+def dict_to_v1probe(probe_dict: dict) -> V1Probe:
+    return dict_to_k8s_object(probe_dict, "V1Probe")
 
 
 def convert_to_container_config(container: ContainerConfig | V1Container | dict) -> ContainerConfig:

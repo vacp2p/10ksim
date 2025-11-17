@@ -70,7 +70,7 @@ class ContainerBuilder:
         return self
 
     def with_readiness_probe(self, probe: V1Probe) -> Self:
-        self.config.with_readines_probe(probe)
+        self.config.with_readiness_probe(probe)
         return self
 
     def with_resources(self, resources: V1ResourceRequirements) -> Self:

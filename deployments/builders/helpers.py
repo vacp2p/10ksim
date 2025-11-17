@@ -114,7 +114,7 @@ def with_container_command_args(
     command.add_args(args, on_duplicate=on_duplicate)
 
 
-def readiness_probe_health() -> dict:
+def default_readiness_probe_health() -> dict:
     return {
         "failureThreshold": 1,
         "httpGet": {

@@ -64,9 +64,14 @@ class ContainerBuilder:
     def build(self) -> V1Container:
         return build_container(self.config)
 
-    def with_command(self, command: List[str]) -> Self:
-        for line in command:
-            self.config.command_config.with_command(command=line, args=[], multiline=False)
+    def with_command_script(self, script: List[str]) -> Self:
+        """
+        Copy-paste entire script as string into the `command` field of the container.
+
+        The script will be appended to any existing commands in the container.
+        """
+        for line in script:
+            self.config.command_config.insert_command(command=line, args=[], multiline=False)
         return self
 
     def with_readiness_probe(self, probe: V1Probe) -> Self:
@@ -74,7 +79,7 @@ class ContainerBuilder:
         return self
 
     def with_resources(self, resources: V1ResourceRequirements) -> Self:
-        self.config.resources = resources
+        self.config.with_resources(resources)
         return self
 
 
@@ -88,10 +93,6 @@ class PodSpecBuilder:
         return build_pod_spec(self.config)
 
     def add_container(self, container: ContainerConfig | V1Container | dict):
-        self.config.add_container(container)
-        return self
-
-    def with_container_config(self, container: ContainerConfig) -> Self:
         self.config.add_container(container)
         return self
 

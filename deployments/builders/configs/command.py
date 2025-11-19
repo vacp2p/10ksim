@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 from typing import Dict, List, Literal, Optional, SupportsIndex, Tuple, TypeVar
 
 from pydantic import BaseModel

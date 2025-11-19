@@ -67,10 +67,13 @@ class Registry:
             Path(module_path).relative_to(base_path).parent.as_posix().replace("/", ".")
             + "."
             + Path(module_path).stem
-        )
+        ).strip(".")
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         if not spec:
             raise ValueError(f"Could not load spec for module: `{module_path}`")
+        if module_name in sys.modules:
+            return
+
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)

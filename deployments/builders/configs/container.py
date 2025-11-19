@@ -64,7 +64,9 @@ class ContainerConfig(BaseModel):
     def with_env_var(self, var: V1EnvVar, *, overwrite: bool = False):
         if self.env is None:
             self.env = []
-        index = next([index for index, item in enumerate(self.env) if item.name == var.name], None)
+        index = next(
+            iter([index for index, item in enumerate(self.env) if item.name == var.name]), None
+        )
         if index:
             if not overwrite:
                 raise ValueError(

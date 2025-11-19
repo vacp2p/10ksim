@@ -3,9 +3,9 @@ from argparse import Namespace
 
 from ruamel import yaml
 
-from deployment.nimlibp2p.experiments.regression.regression import NimRegressionNodes
-from deployment.waku.experiments.regression.regression import WakuRegressionNodes
 from experiments.base_experiment import BaseExperiment
+from helm_deployment.nimlibp2p.experiments.regression.regression import NimRegressionNodes
+from helm_deployment.waku.experiments.regression.regression import WakuRegressionNodes
 from registry import experiment
 
 logger = logging.getLogger(__name__)

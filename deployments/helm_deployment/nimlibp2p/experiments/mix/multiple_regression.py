@@ -13,8 +13,8 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict
 from ruamel import yaml
 
-from deployment.nimlibp2p.experiments.mix.regression import NimMixNodes
 from experiments.base_experiment import BaseExperiment
+from helm_deployment.nimlibp2p.experiments.mix.regression import NimMixNodes
 
 # from deployment.nimlibp2p.builders import Nimlibp2pBuilder
 from kube_utils import (

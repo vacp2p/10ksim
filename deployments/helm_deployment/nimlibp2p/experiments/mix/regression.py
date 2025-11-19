@@ -15,13 +15,13 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from deployment.builders import build_deployment
 from experiments.base_experiment import (
     BaseExperiment,
     format_metadata_timestamps,
     get_valid_shifted_times,
     parse_events_log,
 )
+from helm_deployment.builders import build_deployment
 from kube_utils import (
     dict_get,
     dict_set,

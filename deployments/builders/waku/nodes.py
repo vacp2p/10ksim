@@ -41,25 +41,6 @@ class Nodes:
         command.with_pre_command(f"nice -n {increment}")
 
     @staticmethod
-    def create_standard_args() -> dict:
-        """Standard args for a generic Waku node"""
-        return {
-            "--cluster-id": 2,
-            "--discv5-discovery": True,
-            "--discv5-enr-auto-update": True,
-            "--log-level": "INFO",
-            "--max-connections": 150,
-            "--metrics-server-address": "0.0.0.0",
-            "--metrics-server": True,
-            "--nat": "extip:${IP}",
-            "--relay": True,
-            "--rest-address": "0.0.0.0",
-            "--rest-admin": True,
-            "--rest": True,
-            "--shard": 0,
-        }
-
-    @staticmethod
     def create_command_config() -> CommandConfig:
         return CommandConfig(commands=[Nodes.create_command()])
 

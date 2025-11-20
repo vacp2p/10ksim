@@ -13,7 +13,7 @@ from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaR
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-from src.utils import file_utils, log_utils, path_utils, list_utils
+from src.utils import file_utils, path_utils, list_utils
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -106,6 +106,10 @@ class WakuAnalyzer:
         return [received_df, sent_df]
 
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+        # We either had legacy lightpush requests xor lightpush requests.
+        # Thus, dfs[0] is our received
+        self.fill_unknown_in_received_df(dfs[0])
+
         received = dfs[0].reset_index()
         received = received.astype(str)
         logger.info("Dumping received information")
@@ -175,6 +179,12 @@ class WakuAnalyzer:
             logger.info('Dumping logs from nodes with issues')
             self._dump_logs(nodes_with_issues)
 
+    def fill_unknown_in_received_df(self, df : pd.DataFrame):
+        unknown_key = WakuTracer.unknown_sender_str
+        # Mapping from kubernetes.pod_name to receiver_peer_id
+        # for cases where my_peer_id was not included in sender (legacy lightpush requests)
+        pod_to_peer_map = df.loc[df['receiver_peer_id'] != unknown_key].drop_duplicates('kubernetes.pod_name').set_index('kubernetes.pod_name')['receiver_peer_id']
+        df.loc[df['receiver_peer_id'] == unknown_key, 'receiver_peer_id'] = df.loc[df['receiver_peer_id'] == unknown_key, 'kubernetes.pod_name'].map(pod_to_peer_map)
 
     def analyze_reliability(self, n_jobs: int):
         """

@@ -96,6 +96,10 @@ class PodSpecBuilder:
         self.config.add_container(container)
         return self
 
+    def add_init_container(self, init_container: ContainerConfig | V1Container | dict):
+        self.config.add_init_container(init_container)
+        return self
+
 
 class ContainerCommandBuilder(BaseModel):
     config: CommandConfig = CommandConfig()

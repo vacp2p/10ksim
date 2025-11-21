@@ -77,7 +77,6 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
         return super().build()
 
     def with_regression(self) -> Self:
-        self.with_nice_command(19)
         self.with_args(RegressionNodes.create_args())
         self.with_enr(3, ["zerotesting-bootstrap.zerotesting"])
         container = find_waku_container_config(self.config)
@@ -94,7 +93,14 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
         self.config.stateful_set_spec.replicas = num_nodes
         return self
 
-    def with_nice_command(self, increment: int = 19) -> Self:
+    def with_nice_command(self, increment: int) -> Self:
+        """Runs node with cpu priority.
+
+        :param increment:
+            Positive: Lower priority.
+            Zero: The default priority for processes.
+            Negative: Higher priority.
+        """
         Nodes.apply_nice_command(self.config, increment)
         return self
 

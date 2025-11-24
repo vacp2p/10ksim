@@ -16,6 +16,7 @@ from ruamel import yaml
 
 from deployment.base_experiment import (
     BaseExperiment,
+    find_events,
     format_metadata_timestamps,
     get_valid_shifted_times,
     parse_events_log,
@@ -24,6 +25,7 @@ from deployment.builders import build_deployment
 from kube_utils import (
     dict_get,
     dict_set,
+    get_YAML,
     get_flag_value,
     wait_for_rollout,
 )
@@ -42,6 +44,7 @@ def add_network_delay_to_pod(namespace, pod_name, delay_ms):
     command = ["/bin/sh", "-c", f"tc qdisc add dev eth0 root netem delay {delay_ms}ms"]
 
     try:
+        logger.info(f"Attempt to disconnect pod {pod_name}")
         # Execute command inside the pod
         resp = stream(
             api.connect_get_namespaced_pod_exec,
@@ -53,7 +56,7 @@ def add_network_delay_to_pod(namespace, pod_name, delay_ms):
             stdout=True,
             tty=False,
         )
-        logger.info(f"Command executed in pod {pod_name}: {resp}")
+        logger.info(f"Command executed in pod {pod_name}. Response: `{resp}`")
     except client.exceptions.ApiException as e:
         logger.error(f"Exception when executing command: {e}")
 
@@ -64,6 +67,7 @@ def remove_network_delay_from_pod(namespace, pod_name):
     command = ["/bin/sh", "-c", "tc qdisc del dev eth0 root"]
 
     try:
+        logger.info(f"Attempt to remove network delay from pod: `{pod_name}`")
         resp = stream(
             api.connect_get_namespaced_pod_exec,
             pod_name,
@@ -74,7 +78,7 @@ def remove_network_delay_from_pod(namespace, pod_name):
             stdout=True,
             tty=False,
         )
-        logger.info(f"Removed network delay from pod {pod_name}: {resp}")
+        logger.info(f"Removed network delay from pod: `{pod_name}` response: `{resp}`")
     except client.exceptions.ApiException as e:
         logger.error(f"Exception when removing delay: {e}")
 
@@ -223,14 +227,9 @@ if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
 class JsWakuNodes(BaseExperiment, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    deployment_dir: str = Field(default=Path(os.path.dirname(__file__)).parent.parent)
-    # extra_paths: List[Path] = [
-    #     Path(os.path.dirname(__file__)) / f"bootstrap.values.yaml",
-    # ]
-
     @classmethod
     def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run a regression_nodes test using waku.")
+        subparser = subparsers.add_parser(cls.name, help="TODO")
         BaseExperiment.add_args(subparser)
 
     def _preprocess_event(self, event: Any) -> Any:
@@ -239,7 +238,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         return super()._preprocess_event(event)
 
     @classmethod
-    def _get_metadata_event(_cls, events_log_path: str):
+    def get_metadata_event(cls, events_log_path: str) -> dict:
         events_list = [
             ({"event": "wait_for_clear_finished"}, ("complete.start", timedelta(seconds=0))),
             ({"event": "internal_run_finished"}, ("complete.end", timedelta(seconds=30))),
@@ -248,7 +247,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 {"event": "deployment", "service": "waku/publisher", "phase": "start"},
                 ("stable.start", timedelta(minutes=3)),
             ),
-            ({"event": "publisher_messages_finished"}, ("stable.end", timedelta(seconds=-30))),
+            ({"event": "publisher_wait_finished"}, ("stable.end", timedelta(seconds=-30))),
         ]
 
         # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].
@@ -276,10 +275,13 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                     )
             except KeyError:
                 pass
-        return metadata
 
-    def _metadata_event(self, events_log_path: str):
-        self.log_event(self.__class__._get_metadata_event(self.events_log_path))
+        base_metadata = super(JsWakuNodes, cls).get_metadata_event(events_log_path)
+        base_metadata.update(metadata)
+        return base_metadata
+
+    def _metadata_event(self):
+        self.log_event(self.__class__.get_metadata_event(self.events_log_path))
 
     def log_event(self, event):
         logger.info(event)
@@ -289,22 +291,24 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    async def random_disconnects(self, lpc_deploy: dict, rate: timedelta, duration: timedelta):
+    async def random_disconnects(self, deployment: dict, rate: timedelta, duration: timedelta):
         """
         :param rate: Time between each disconnect. Accounts for the time a node is disconnected.
         :param duration: The duration for which a node is disconnected.
         """
-        num_nodes = lpc_deploy["spec"]["replicas"]
-        name = lpc_deploy["metadata"]["name"]
-        namespace = lpc_deploy["metadata"]["namespace"]
+        num_nodes = deployment["spec"]["replicas"]
+        name = deployment["metadata"]["name"]
+        namespace = deployment["metadata"]["namespace"]
 
+        logger.info(f"Starting random disconnects on `{name}`")
         while True:
+            logger.info("disconnect loop") # TODO rm
             index = random.randint(0, num_nodes - 1)
             random_name = f"{name}-{index}"
             add_network_delay_to_pod(namespace, random_name, 5000)
-            await sleep(duration.total_seconds() * 1000)
+            await sleep(duration.total_seconds())
             remove_network_delay_from_pod(namespace, random_name)
-            await sleep((rate - duration).total_seconds() * 1000)
+            await sleep((rate - duration).total_seconds())
 
     async def _run(
         self,
@@ -322,7 +326,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 "but the Lightpush server nodes do not establish connectivity."
             )
 
-        self.deploy(
+        await self.deploy(
             api_client,
             stack,
             args,
@@ -343,8 +347,17 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             "waku/nodes",
             extra_values_paths=[Path(__file__).parent / "lps.values.yaml"],
         )
-        self.deploy(api_client, stack, args, lps_values, deployment_yaml=lps_deploy)
+        await self.deploy(api_client, stack, args, lps_values, deployment_yaml=lps_deploy)
 
+
+        # nwaku
+        # lpc_values = deepcopy(values_yaml)
+        # with open(Path(__file__).parent / "./nwaku_lpc.yaml", 'r') as lpc_yaml:
+        #     import yaml
+        #     lpc_dep = yaml.safe_load(lpc_yaml.read())
+        # lpc_deploy = self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_dep)
+
+        # jswaku
         lpc_values = deepcopy(values_yaml)
         JsWakuSettings.set_client_values(lpc_values, sharding)
 
@@ -354,11 +367,11 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             "waku/nodes",
             extra_values_paths=[Path(__file__).parent / "lpc.values.yaml"],
         )
-        self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
+        await self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
 
         num_nodes = lpc_deploy["spec"]["replicas"]
 
-        publisher = self.deploy(
+        publisher = await self.deploy(
             api_client,
             stack,
             args,
@@ -370,7 +383,8 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         )
 
         dc_task = asyncio.create_task(
-            self.random_disconnects(lpc_deploy, timedelta(seconds=6), timedelta(seconds=2))
+            # self.random_disconnects(deployment=lpc_deploy, rate=timedelta(seconds=6), duration=timedelta(seconds=2))
+            self.random_disconnects(deployment=lpc_deploy, rate=timedelta(seconds=6), duration=timedelta(seconds=1))
         )
 
         messages = get_flag_value("messages", publisher["spec"]["containers"][0]["command"])
@@ -381,7 +395,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         logger.info(f"Waiting for Ready=False. Timeout: {timeout}")
 
         if not args.dry_run:
-            wait_for_rollout(
+            await wait_for_rollout(
                 publisher["kind"],
                 publisher["metadata"]["name"],
                 publisher["metadata"]["namespace"],
@@ -398,4 +412,4 @@ class JsWakuNodes(BaseExperiment, BaseModel):
         self.log_event("publisher_wait_finished")
 
         self.log_event("internal_run_finished")
-        self._metadata_event(self.events_log_path)
+        self._metadata_event()

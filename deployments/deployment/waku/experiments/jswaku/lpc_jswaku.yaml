@@ -36,7 +36,8 @@ spec:
             - --websocket
       containers:
         - name: waku
-          image: pearsonwhite/jswaku:dbdca49646c04d17eb99e1f4da6d3bda135cd928
+          # image: pearsonwhite/jswaku:dbdca49646c04d17eb99e1f4da6d3bda135cd928 # works
+          image: pearsonwhite/jswaku:e5f51d7df101020a1a6d0787ce68fab4f28922f5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8645

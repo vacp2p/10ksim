@@ -8,9 +8,12 @@ waku:
       protocols:
         lightpush: true
       args:
-        messages: 200
+        messages: 50
         msgSizeKbytes: 10
         delaySeconds: 1
+        # nwaku client
+        # port: 8645
+        # jswaku client
         port: 8080
     dnsConfig:
       searches:

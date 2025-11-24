@@ -52,6 +52,12 @@ spec:
         - name: waku
           image: {{ default "soutullostatus/nwaku-jq-curl" .Values.waku.nodes.image.repository }}:{{ default "v0.34.0-rc1" .Values.waku.nodes.image.tag }}
           imagePullPolicy: IfNotPresent
+          {{- if .Values.waku.nodes.netAdmin }}
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          {{- end}}
           ports:
             - containerPort: 8645
             - containerPort: 8008

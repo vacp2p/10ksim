@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, Field
@@ -31,6 +31,25 @@ from kube_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def find_events(
+    log_path: str,
+    key: Dict[str, str],
+) -> Iterator[dict]:
+    """
+    Return a list of all events where all keys match `key`.
+    Each line in `log_path` is converted to an event (dict).
+    If the event contains all of the (key, value) items from key,
+    then the event is converted to a new value using `extract(event)`
+    """
+    results = []
+    with open(log_path, "r") as events_log:
+        for line in events_log:
+            event = json.loads(line)
+            if dict_partial_compare(event, key):
+                results.append(event)
+    return results
 
 
 def parse_events_log(
@@ -69,6 +88,10 @@ def parse_events_log(
                             sep=".",
                         )
                 except KeyError:
+                    import pdb
+
+                    pdb.set_trace()
+                    print(f"asdf key: {key} event: {event}")
                     pass
     return return_dict
 
@@ -168,7 +191,7 @@ class BaseExperiment(ABC, BaseModel):
         return yaml_obj
 
     # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
-    def deploy(
+    async def deploy(
         self,
         api_client: ApiClient,
         stack,
@@ -218,15 +241,23 @@ class BaseExperiment(ABC, BaseModel):
             )
             stack.callback(cleanup)
 
-        self.log_event(
-            {"event": "deployment", "phase": "start", "service": service, "namespace": namespace}
-        )
+        deployment_metadata = {
+            "event": "deployment",
+            "service": service,
+            "namespace": namespace,
+            "kind": yaml_obj["kind"],
+            "name": yaml_obj["metadata"]["name"],
+        }
+        if yaml_obj["kind"] == "StatefulSet":
+            deployment_metadata["replicas"] = yaml_obj["spec"]["replicas"]
+
+        self.log_event({"phase": "start", **deployment_metadata})
         self.deployed[namespace].append(yaml_obj)
         kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run)
 
         if not dry_run:
             if wait_for_ready:
-                wait_for_rollout(
+                await wait_for_rollout(
                     yaml_obj["kind"],
                     yaml_obj["metadata"]["name"],
                     namespace,
@@ -234,9 +265,7 @@ class BaseExperiment(ABC, BaseModel):
                     api_client,
                     ("Ready", "True"),
                 )
-        self.log_event(
-            {"event": "deployment", "phase": "finished", "service": service, "namespace": namespace}
-        )
+        self.log_event({"phase": "finished", **deployment_metadata})
 
         return yaml_obj
 
@@ -321,3 +350,21 @@ class BaseExperiment(ABC, BaseModel):
         with open(out_path, "a") as out_file:
             out_file.write(self._preprocess_event(event))
             out_file.write("\n")
+
+    @classmethod
+    def get_metadata_event(_cls, events_log_path: str) -> dict:
+        """Get metadata common to all experiments."""
+        metadata = {}
+
+        # Create list of all deployed StatefulSets to plug into analysis script.
+        ss_key = "stateful_sets"
+        metadata[ss_key] = []
+        nodes_key = "nodes_per_stateful_set"
+        metadata[nodes_key] = []
+        for event in find_events(
+            events_log_path, {"event": "deployment", "phase": "start", "kind": "StatefulSet"}
+        ):
+            metadata[ss_key].append(event["name"])
+            metadata[nodes_key].append(event["replicas"])
+
+        return metadata

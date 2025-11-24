@@ -125,12 +125,12 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         values_yaml: Optional[yaml.YAMLObject],
         stack: ExitStack,
     ):
-        def deploy(service, values, *, wait_for_ready=False):
+        async def deploy(service, values, *, wait_for_ready=False):
             try:
                 values = values._data
             except AttributeError:
                 pass
-            return self.deploy(
+            return await self.deploy(
                 api_client,
                 stack,
                 args,
@@ -143,19 +143,19 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
 
         self.log_event("run_start")
 
-        deploy("waku/bootstrap", values_yaml, wait_for_ready=True)
+        await deploy("waku/bootstrap", values_yaml, wait_for_ready=True)
 
-        nodes = deploy("waku/nodes", values_yaml, wait_for_ready=True)
+        nodes = await deploy("waku/nodes", values_yaml, wait_for_ready=True)
         num_nodes = nodes["spec"]["replicas"]
 
-        publisher = deploy("waku/publisher", values_yaml, wait_for_ready=True)
+        publisher = await deploy("waku/publisher", values_yaml, wait_for_ready=True)
         messages = get_flag_value("messages", publisher["spec"]["containers"][0]["command"])
         delay_seconds = get_flag_value(
             "delay-seconds", publisher["spec"]["containers"][0]["command"]
         )
 
         if not args.dry_run:
-            wait_for_rollout(
+            await wait_for_rollout(
                 publisher["kind"],
                 publisher["metadata"]["name"],
                 publisher["metadata"]["namespace"],
@@ -170,7 +170,7 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         logger.info(f"Waiting for Ready=False. Timeout: {timeout}")
 
         if not args.dry_run:
-            wait_for_rollout(
+            await wait_for_rollout(
                 publisher["kind"],
                 publisher["metadata"]["name"],
                 publisher["metadata"]["namespace"],

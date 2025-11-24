@@ -129,7 +129,7 @@ class NimRegressionNodes(BaseExperiment, BaseModel):
         kubectl_apply(deploy, namespace=namespace)
         logger.info("Deployment applied. Waiting for rollout.")
 
-        wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
+        await wait_for_rollout(deploy["kind"], deploy["metadata"]["name"], namespace, 3000)
         logger.info("Rollout successful.")
 
         logger.info(

@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rln-node
+  namespace: rln-test
+spec:
+  replicas: 20
+  serviceName: rln-nodes
+  selector:
+    matchLabels:
+      app: rln-nodes
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: rln-nodes
+    spec:
+      volumes:
+        - name: rln-cred
+          emptyDir: {}
+      # ---- initContainer: derive private key per pod ----
+      initContainers:
+        - name: derive-key
+          image: ghcr.io/foundry-rs/foundry:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              INDEX=$(hostname | awk -F'-' '{print $NF}')
+              echo "[init] Deriving key for pod index $INDEX"
+              KEY=$(cast wallet derive-private-key --mnemonic "$MNEMONIC" --mnemonic-index "$INDEX" | awk '{print $NF}')
+              echo -n "$KEY" > /rln/private.key
+              echo "[init] Wrote key to /rln/private.key"
+          envFrom:
+            - secretRef:
+                name: rln-bootstrap-secret
+          volumeMounts:
+            - name: rln-cred
+              mountPath: /rln
+      # ---- main container: generate RLN keystore + start Waku ----
+      imagePullSecrets:
+        - name: harbor-creds
+      containers:
+        - name: balance-watcher
+          image: ghcr.io/foundry-rs/foundry:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "[balance-watcher] Starting..."
+              KEY_FILE="/rln/private.key"
+              while [ ! -s "$KEY_FILE" ]; do
+                echo "[balance-watcher] Waiting for private key..."
+                sleep 2
+              done
+              ETH_KEY=$(cat "$KEY_FILE")
+              ADDR=$(cast wallet address --private-key "$ETH_KEY")
+              echo "[balance-watcher] Monitoring address: $ADDR"
+              while true; do
+                BAL=$(cast balance "$ADDR" --rpc-url "$RLN_RELAY_ETH_CLIENT_ADDRESS" | tr -d '\r')
+                if echo "$BAL" | grep -q '^0x'; then
+                  # Convert hex to decimal if needed
+                  BAL_DEC=$((16#${BAL:2}))
+                else
+                  BAL_DEC=$BAL
+                fi
+                echo "[balance-watcher] $(date '+%H:%M:%S') → Balance: $BAL_DEC wei"
+                sleep "${BALANCE_POLL_INTERVAL:-30}"
+              done
+          envFrom:
+            - configMapRef:
+                name: rln-env
+          volumeMounts:
+            - name: rln-cred
+              mountPath: /rln
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: waku
+          image: quay.io/wakuorg/nwaku-pr:3636
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8008
+            - containerPort: 8645
+          envFrom:
+            - configMapRef:
+                name: rln-env
+            - secretRef:
+                name: rln-keys
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GENERATE_TIMES
+              value: "1000"
+          volumeMounts:
+            - name: rln-cred
+              mountPath: /rln
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              ETH_KEY=$(cat /rln/private.key)
+              echo "[1] Using derived private key: $ETH_KEY"
+
+              GENERATE_TIMES="${GENERATE_TIMES:-1}"
+              echo "[2] Generating RLN keystore $GENERATE_TIMES time(s)..."
+              
+              for i in $(seq 1 "$GENERATE_TIMES" 2>/dev/null || echo 1); do
+                echo "[2] Generating RLN keystore iteration $i..."
+                /usr/bin/wakunode --log-level=DEBUG generateRlnKeystore \
+                  --rln-relay-eth-client-address="${RLN_RELAY_ETH_CLIENT_ADDRESS}" \
+                  --rln-relay-eth-private-key="$ETH_KEY" \
+                  --rln-relay-eth-contract-address="${RLN_CONTRACT_ADDRESS}" \
+                  --rln-relay-cred-path="/rln/rln_keystore.json" \
+                  --rln-relay-cred-password="${RLN_RELAY_CRED_PASSWORD}" \
+                  --rln-relay-user-message-limit=100 \
+                  --rln-relay-chain-id=59141\
+                  --rln-relay-epoch-sec=600 \
+                  --execute
+              done
+
+
+              echo "[3] Starting Waku node..."
+              exec /usr/bin/wakunode \
+                --relay=true \
+                --max-connections=250\
+                --rest=true \
+                --rest-address=0.0.0.0 \
+                --rest-port=8645\
+                --rln-relay=true\
+                --rln-relay-dynamic=true\
+                --rln-relay-eth-client-address="${RLN_RELAY_ETH_CLIENT_ADDRESS}"\
+                --rln-relay-eth-contract-address=$RLN_CONTRACT_ADDRESS\
+                --rln-relay-cred-path="/rln/rln_keystore.json"\
+                --rln-relay-cred-password=changeme\
+                --rln-relay-epoch-sec=600\
+                --rln-relay-user-message-limit=100\
+                --rln-relay-chain-id=59141\
+                --metrics-server=true \
+                --metrics-server-address=0.0.0.0\
+                --nat=extip:${IP}\
+                --cluster-id=66\
+                --log-level=INFO
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 600Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rln-nodes
+  namespace: rln-test
+spec:
+  selector:
+    app: rln-nodes
+  clusterIP: None
+  ports:
+    - name: rest
+      port: 8008
+      targetPort: 8008
+    - name: libp2p
+      port: 8645
+      targetPort: 8645

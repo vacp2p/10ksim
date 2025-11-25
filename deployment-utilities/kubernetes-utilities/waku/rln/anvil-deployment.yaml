@@ -24,14 +24,14 @@ spec:
           - "8545"
           - "--chain-id"
           - "59141"
-          - "--gas-limit"
-          - "1000000000000000"
-          - "--gas-price"
-          - "1"
+          - "--gas-limit=300000000000000"
+          # - "--gas-price=7"
+          # - "--base-fee=7"
+          - "--disable-min-priority-fee"
           - "--balance"
-          - "1000000000000000"
-          - "--mnemonic"
-          - "test test test test test test test test test test test junk"
+          - "1000000000"
+          # - "--mnemonic"
+          # - "test test test test test test test test test test test junk"
         ports:
         - containerPort: 8545
         readinessProbe:

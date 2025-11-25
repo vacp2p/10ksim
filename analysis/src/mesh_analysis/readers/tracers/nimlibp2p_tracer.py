@@ -30,6 +30,20 @@ class Nimlibp2pTracer(MessageTracer):
     def get_patterns(self) -> List[List[str]]:
         return self._patterns
 
+    def with_latency_pattern(self):
+        patterns = [
+            r'(\d+)$'
+        ]
+
+        tracers = [
+            self._trace_latencies_in_logs,
+        ]
+
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
+
+        return self
+
     def with_received_pattern_group(self) -> Self:
         patterns = [
             r'Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)'
@@ -98,6 +112,16 @@ class Nimlibp2pTracer(MessageTracer):
         df['sentAt'] = pd.to_datetime(df['sentAt'], unit='ns')
         df['current'] = df['current'].astype(np.uint64)
         df['current'] = pd.to_datetime(df['current'], unit='ns')
+
+        return df
+
+    def _trace_latencies_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ['latency']
+        if self._extra_fields is not None:
+            columns.extend(self._extra_fields)
+
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df['latency'] = pd.to_numeric(df['latency'], errors='coerce').fillna(-1).astype(int)
 
         return df
 

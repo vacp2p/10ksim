@@ -137,6 +137,57 @@ def plot_message_distribution_libp2pmix(received_summary_path: Path, sent_summar
 
     return Ok(None)
 
+def plot_message_latency_distributions(
+    received_summary_paths: list[Path],
+    plot_title: str,
+    dump_path: Path
+) -> Result[None, str]:
+
+    # Validate input files
+    for p in received_summary_paths:
+        if not p.exists():
+            error = f"Received summary file {p} does not exist"
+            logger.error(error)
+            return Err(error)
+
+    sns.set_theme()
+
+    all_ranges = []
+
+    # Process each file separately
+    for path in received_summary_paths:
+        df = pd.read_csv(path)
+        #df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
+
+        df["source"] = path.stem     # label dataset
+
+        all_ranges.append(df)
+
+    # Merge all datasets into one
+    merged = pd.concat(all_ranges, ignore_index=True)
+
+    plt.figure(figsize=(14, 6))
+    ax = sns.boxplot(
+        x='source',
+        y='latency',
+        data=merged,
+        showfliers=False
+    )
+
+    add_boxplot_stat_labels(ax, value_type="min")
+    add_boxplot_stat_labels(ax, value_type="max")
+    add_boxplot_stat_labels(ax, value_type="median")
+
+    plt.ylabel("Latency distribution (ms)")
+    plt.xlabel("Dataset")
+    plt.title(plot_title)
+
+    plt.savefig(dump_path)
+    plt.show()
+
+    return Ok(None)
+
+
 def plot_message_distribution(received_summary_path: Path, plot_title: str, dump_path: Path) -> Result[
     None, str]:
     """

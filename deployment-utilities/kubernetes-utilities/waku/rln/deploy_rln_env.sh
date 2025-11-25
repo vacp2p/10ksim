@@ -146,6 +146,7 @@ DEPLOYER_PRIVATE_KEY=${ETH_TESTNET_KEY}  # fallback – same key in your current
 # Log what we parsed for easier debugging
 echo "  RLN_CONTRACT_ADDRESS=${RLN_CONTRACT_ADDRESS}"
 echo "  TOKEN_CONTRACT_ADDRESS=${TOKEN_CONTRACT_ADDRESS}"
+echo "  RLN_RELAY_CRED_PASSWORD=${RLN_RELAY_CRED_PASSWORD}"
 echo "  RLN_RELAY_ETH_CLIENT_ADDRESS=${RLN_RELAY_ETH_CLIENT_ADDRESS}"
 echo "  ETH_TESTNET_KEY=${ETH_TESTNET_KEY}"
 
@@ -186,7 +187,9 @@ else
 fi
 
 echo "[7.1] Waiting for all Waku pods to be Ready..."
-k rollout status statefulset/rln-node -n "$NAMESPACE" --timeout=180s || true
+k rollout status statefulset/rln-node -n "$NAMESPACE"
+
+k apply -f publisher.yaml
 
 ########################################
 # DONE
@@ -195,6 +198,7 @@ trap - ERR INT
 echo
 echo "   RLN environment deployed successfully."
 echo "   RLN contract:          $RLN_CONTRACT_ADDRESS"
+echo "   RLN cred passw:        $RLN_RELAY_CRED_PASSWORD"
 echo "   Token contract:        $TOKEN_CONTRACT_ADDRESS"
 echo "   RPC URL:               $RLN_RELAY_ETH_CLIENT_ADDRESS"
 echo "   Deployer private key:  $DEPLOYER_PRIVATE_KEY"

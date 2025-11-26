@@ -330,7 +330,7 @@ class WakuAnalyzer:
         data = stack.get_pod_logs('get-filter-messages', 'container')
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        all_ok = ast.literal_eval(log_list[0][0]) # Last line in get-filter-messages
+        all_ok = ast.literal_eval(log_list[-1][0]) # Last line in get-filter-messages
         # Todo: check multiple std's
 
         if all_ok:

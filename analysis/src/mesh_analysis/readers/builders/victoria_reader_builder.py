@@ -21,7 +21,8 @@ class VictoriaReaderBuilder:
         query = {"query": f"kubernetes.container_name:{container_name} "
                                 f"AND kubernetes.pod_name:{pod_name} "
                                 f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
-                                f"{uniq_by if uniq_by is not None else ''}"}
+                                f"{uniq_by if uniq_by is not None else ''}"
+                          f" | order by (_time)"}
 
         victoria_config_query = {"url": self._kwargs['url'],
                                  "headers": {"Content-Type": "application/json"},

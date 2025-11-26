@@ -14,7 +14,7 @@ from builders.configs.container import (
 from builders.configs.pod import PodSpecConfig
 from builders.configs.statefulset import StatefulSetConfig
 from builders.helpers import with_container_command_args
-from builders.waku.bootstrap import WakuBootstrapNode
+from builders.waku import bootstrap as WakuBootstrapNode
 from builders.waku.enr_or_addr import Addrs, Enr
 from builders.waku.helpers import WAKU_COMMAND_STR, find_waku_container_config
 from builders.waku.nodes import Nodes

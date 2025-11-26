@@ -7,9 +7,8 @@ from src.plotting.metrics_plotter import MetricsPlotter
 from src.utils import file_utils
 
 
-
 def main():
-    url = "https://metrics.riff.cc/select/0/prometheus/api/v1/"
+    url = "https://metrics.vaclab.org/select/0/prometheus/api/v1/"
     scrape_config = "scrape.yaml"
 
     scrapper = Scrapper("rubi.yaml", url, scrape_config)

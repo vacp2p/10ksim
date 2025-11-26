@@ -79,6 +79,10 @@ plotting:
       - "folder_name_2"
     "data": # Specific data from folder that will be used for the plot, needs to match `folder_name` from `metrics_to_scrape`
        - "data_from_folder"
+    "plot_order": # Order of the plot figures, useful if we work with hashes instead of versions.
+      - "73c29085"
+      - "e95a94a5"
+    "hue": "variable" # Values: "class" or "variable". Coloring of the figures. "variable" if we are working with only one folder. Default: "class"
     "xlabel_name": "xlabel"
     "ylabel_name": "ylabel"
     "scale-x": scale_number # If division is needed. Ie: y axis is bytes, we want KBytes, so we divide by 1000
@@ -97,6 +101,10 @@ plotting:
     "data":
       - "libp2p-in"
       - "libp2p-out"
+    "plot_order":
+      - "73c29085"
+      - "e95a94a5"
+    "hue": "variable"
     "xlabel_name": "NºNodes-MsgRate"
     "ylabel_name": "KBytes/s"
     "scale-x": 1000

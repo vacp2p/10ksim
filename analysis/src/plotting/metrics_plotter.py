@@ -54,8 +54,22 @@ class MetricsPlotter:
                                plot_specs: Dict):
         subplot_title = plot_specs['data'][index]
         axs = axs if type(axs) is not np.ndarray else axs[index]
-        box_plot = sns.boxplot(data=df, x="variable", y="value", hue="class", ax=axs,
-                               showfliers=plot_specs.get('outliers', True))
+
+        hue_col = plot_specs.get("hue", "class")
+        custom_order = plot_specs.get("plot_order")
+
+        if custom_order:
+            df["variable"] = pd.Categorical(df["variable"], categories=custom_order, ordered=True)
+
+        if hue_col == "variable":
+            # Hue is the same as x-axis → use custom_order
+            hue_order = custom_order
+        elif hue_col == "class":
+            # Hue is class → order by unique classes unless user specifies otherwise later
+            hue_order = sorted(df["class"].unique())
+
+        box_plot = sns.boxplot(data=df, x="variable", y="value", hue=hue_col, order=custom_order, hue_order=hue_order,
+            ax=axs, showfliers=plot_specs.get('outliers', True))
 
         # Apply the custom formatter to the x-axis ticks
         formatter = ticker.FuncFormatter(lambda x, pos: '{:.0f}'.format(x / plot_specs['scale-x']))
@@ -86,5 +100,3 @@ class MetricsPlotter:
                         plot_specs["data"]]
 
         return subplot_path
-
-

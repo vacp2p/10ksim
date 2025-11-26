@@ -96,8 +96,8 @@ class VaclabStackAnalysis(StackAnalysis):
                 except Exception as e:
                     logger.error(f'Error retrieving logs for node {identifier}: {e}')
 
-    def get_pod_logs(self, identifier: str) -> List[str]:
-        reader = self._reader_builder.build_with_pod_identifier(identifier)
+    def get_pod_logs(self, identifier: str, container_name: str) -> List[str]:
+        reader = self._reader_builder.build_with_pod_identifier(identifier, container_name)
         data = reader.make_queries()
 
         return data

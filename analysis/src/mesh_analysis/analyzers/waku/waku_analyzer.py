@@ -294,10 +294,12 @@ class WakuAnalyzer:
         waku_tracer = WakuTracer().with_wildcard_pattern()
         reader = VictoriaReaderBuilder(waku_tracer, '*', **self._kwargs)
         stack = VaclabStackAnalysis(reader, **self._kwargs)
-        data = stack.get_pod_logs('get-store-messages')
+        data = stack.get_pod_logs('get-store-messages', 'container')
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
         messages_list = ast.literal_eval(log_list[-1]) # Last line in get-store-messages
+        # TODO: Probably issue here
+
         messages_list = ['0x' + base64.b64decode(msg).hex() for msg in messages_list]
         logger.debug(f'Messages from store: {messages_list}')
 
@@ -325,12 +327,12 @@ class WakuAnalyzer:
         waku_tracer = WakuTracer().with_wildcard_pattern()
         reader = VictoriaReaderBuilder(waku_tracer, '*', **self._kwargs)
         stack = VaclabStackAnalysis(reader, **self._kwargs)
-        data = stack.get_pod_logs('get-filter-messages')
+        data = stack.get_pod_logs('get-filter-messages', 'container')
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        all_ok_boolean = ast.literal_eval(log_list[-1]) # Last line in get-filter-messages
+        all_ok = ast.literal_eval(log_list[0][0]) # Last line in get-filter-messages
+        # Todo: check multiple std's
 
-        all_ok = ast.literal_eval(all_ok_boolean)
         if all_ok:
             logger.info("Messages from filter match in length.")
         else:

@@ -16,10 +16,13 @@ class DataRequestHandler(DataHandler):
         self._raw_data = data
         self._dataframe = pd.DataFrame()
 
-    def create_dataframe_from_request(self, extract_placeholder: str, container_name: Optional[str]):
+    def create_dataframe_from_request(self, extract_placeholder: str, container_name: Optional[str], metrics_path: Optional[str]):
         data_result = self._raw_data['data']['result']
         if container_name is not None:
             data_result = [item for item in data_result if item['metric'].get('container', None) == container_name]
+        if metrics_path is not None:
+            data_result = [item for item in data_result if item['metric'].get('metrics_path', None) == metrics_path]
+
         duplicated = 0
 
         logger.info(f'Dumping {len(data_result)} instances')

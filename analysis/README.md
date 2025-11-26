@@ -46,6 +46,8 @@ metrics_to_scrape:
     query: "query" # Query to extract data from
     extract_field: "instance" # Instance values, same as in Grafana panels
     folder_name: "folder" # This will be set inside `dump_location`
+    container: "container-name" # If the metric can be extracted from multiple containers, ie: container_memory_usage_bytes
+    metrics_path: "/metrics_path" # If the metric can be queried from different endpoints, ie: /metrics/cadvisor vs /metrics/resource
 ```
 Example of what metrics to select:
 ```
@@ -58,6 +60,12 @@ metrics_to_scrape:
     query: "rate(libp2p_network_bytes_total{direction='out'}[$__rate_interval])"
     extract_field: "instance"
     folder_name: "libp2p-out/"
+  container_memory_bytes:
+    query: "container_memory_usage_bytes"
+    extract_field: "pod-container"
+    folder_name: "container-memory/"
+    endpoint: "/metrics/cadvisor"
+    container: "container-0"
 ```
 
 Important parameters for plotting:

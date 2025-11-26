@@ -11,12 +11,8 @@ from builders.configs.container import (
     ContainerConfig,
     Image,
 )
-from builders.configs.pod import (
-    PodSpecConfig,
-)
-from builders.configs.statefulset import (
-    StatefulSetConfig,
-)
+from builders.configs.pod import PodSpecConfig
+from builders.configs.statefulset import StatefulSetConfig
 from builders.helpers import with_container_command_args
 from builders.waku.bootstrap import WakuBootstrapNode
 from builders.waku.enr_or_addr import Addrs, Enr
@@ -29,7 +25,15 @@ class WakuContainerBuilder(ContainerBuilder):
     def __init__(self, config: ContainerConfig):
         super.__init__(config)
 
+    def with_bootstrap_nodes(self) -> Self:
+        WakuBootstrapNode.apply_container_config(self.config, overwrite=True)
+        self.with_args(WakuBootstrapNode.create_args())
+        return self
+
     def with_node_resources(self):
+        return self.with_resources(Nodes.create_resources())
+
+    def with_bootstrap_resources(self):
         return self.with_resources(WakuBootstrapNode.create_resources())
 
 
@@ -91,6 +95,11 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
         self.config.pod_management_policy = "Parallel"
         self.config.stateful_set_spec = Nodes.create_stateful_set_spec_config()
         self.config.stateful_set_spec.replicas = num_nodes
+        return self
+
+    def with_bootstrap(self) -> Self:
+        WakuBootstrapNode.apply_stateful_set_config(self.config, overwrite=True)
+        self.with_args(WakuBootstrapNode.create_args())
         return self
 
     def with_nice_command(self, increment: int) -> Self:

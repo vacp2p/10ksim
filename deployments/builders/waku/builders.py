@@ -15,6 +15,7 @@ from builders.configs.pod import PodSpecConfig
 from builders.configs.statefulset import StatefulSetConfig
 from builders.helpers import with_container_command_args
 from builders.waku import bootstrap as WakuBootstrapNode
+from builders.waku import store as Store
 from builders.waku.enr_or_addr import Addrs, Enr
 from builders.waku.helpers import WAKU_COMMAND_STR, find_waku_container_config
 from builders.waku.nodes import Nodes
@@ -28,6 +29,10 @@ class WakuContainerBuilder(ContainerBuilder):
     def with_bootstrap_nodes(self) -> Self:
         WakuBootstrapNode.apply_container_config(self.config, overwrite=True)
         self.with_args(WakuBootstrapNode.create_args())
+        return self
+
+    def with_store(self) -> Self:
+        Store.apply_container_config(self.config)
         return self
 
     def with_node_resources(self):
@@ -49,6 +54,10 @@ class WakuPodSpecBuilder(PodSpecBuilder):
     def with_readiness_probe(self, readiness_probe: V1Probe) -> Self:
         waku_container_config = find_waku_container_config(self.config.container_configs)
         waku_container_config.with_readiness_probe(readiness_probe)
+        return self
+
+    def with_store(self) -> Self:
+        Store.apply_pod_spec_config(self.config)
         return self
 
     def with_enr(
@@ -100,6 +109,10 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
     def with_bootstrap(self) -> Self:
         WakuBootstrapNode.apply_stateful_set_config(self.config, overwrite=True)
         self.with_args(WakuBootstrapNode.create_args())
+        return self
+
+    def with_store(self) -> Self:
+        Store.apply_stateful_set_config(self.config)
         return self
 
     def with_nice_command(self, increment: int) -> Self:

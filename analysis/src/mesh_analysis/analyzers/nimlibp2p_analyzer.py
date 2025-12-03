@@ -1,7 +1,6 @@
 # Python Imports
 import logging
 from pathlib import Path
-
 import pandas as pd
 from typing import List, Optional, Tuple
 from result import Result, Err, Ok
@@ -10,7 +9,7 @@ from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaR
 from src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 # Project Imports
-from src.utils import path_utils, file_utils
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +40,21 @@ class Nimlibp2pAnalyzer:
         if result.is_err():
             logger.error(result.err_value)
             exit(1)
+
+    def grab_latencies(self):
+        tracer = Nimlibp2pTracer(extra_fields=self._kwargs['extra_fields']) \
+            .with_latency_pattern()
+
+        queries = ['milliseconds']
+        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        dfs = stack_analysis.get_all_node_dataframes(4)
+        df = self._merge_latency_dfs(dfs)
+        result = self._dump_latency_df(df)
+        if result.is_err():
+            logger.error(f'Issue dumping message summary. {result.err_value}')
+
 
     def analyze_reliability(self, n_jobs: int):
         """
@@ -151,6 +165,15 @@ class Nimlibp2pAnalyzer:
 
         return [received_df, sent_df, mix_df]
 
+    def _merge_latency_dfs(self, dfs: List[List[pd.DataFrame]]) -> pd.DataFrame:
+        logger.info("Merging and sorting information")
+
+        received_df = pd.concat([pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True)
+        received_df.set_index(['latency'], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        return received_df
+
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
         received = dfs[0].reset_index()
         received = received.astype(str)
@@ -191,6 +214,17 @@ class Nimlibp2pAnalyzer:
         mix = mix.astype(str)
         logger.info("Dumping sent information")
         result = file_utils.dump_df_as_csv(mix, self._dump_analysis_path / 'summary' / 'mix.csv', False)
+        if result.is_err():
+            logger.warning(result.err_value)
+            return Err(result.err_value)
+
+        return Ok(None)
+
+    def _dump_latency_df(self, df: pd.DataFrame) -> Result:
+        received = df.reset_index()
+        received = received.astype(str)
+        logger.info("Dumping received information")
+        result = file_utils.dump_df_as_csv(received, self._dump_analysis_path / 'summary' / 'latencies.csv', False)
         if result.is_err():
             logger.warning(result.err_value)
             return Err(result.err_value)

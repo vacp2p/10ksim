@@ -230,7 +230,7 @@ for i in $(seq 1 "$NUM_PODS"); do
 
   # 8.3 Approve RLN contract to spend tokens
   cast send "$TOKEN_PROXY_ADDRESS" \
-    "approve(address,uint256)" "$RLN_CONTRACT_ADDRESS" 1000000000000000000000 \
+    "approve(address,uint256)" "$RLN_CONTRACT_ADDRESS" 1000000000000000000000000000000 \
     --rpc-url "$RPC_URL" \
     --private-key "$DERIVED_PK"
 

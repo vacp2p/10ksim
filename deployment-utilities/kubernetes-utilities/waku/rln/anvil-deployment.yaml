@@ -29,7 +29,7 @@ spec:
           # - "--base-fee=7"
           - "--disable-min-priority-fee"
           - "--balance"
-          - "1000000000"
+          - "1000000000000"
           # - "--mnemonic"
           # - "test test test test test test test test test test test junk"
         ports:

@@ -18,7 +18,10 @@ RUN apt-get update -y \
 WORKDIR /rln
 
 # Clone the repo WITH submodules so forge-std and other deps are present
-RUN git clone --recursive https://github.com/waku-org/waku-rlnv2-contract.git /rln
+RUN git clone --recursive \
+    --branch temp-with-imt-dep \
+    https://github.com/logos-messaging/waku-rlnv2-contract.git /rln
+
 
 # Install JS deps once at build-time, so the runtime job doesn't need network/npm
 RUN pnpm install

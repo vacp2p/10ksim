@@ -5,20 +5,19 @@ metadata:
   namespace: rln-test
 spec:
   restartPolicy: Never
-  dnsConfig:
-    searches:
-      - zerotesting-service.rln-test.svc.cluster.local
   containers:
     - name: publisher-container
-      image: soutullostatus/publisher:testing
+      image: soutullostatus/publisher:v1.0.4
       imagePullPolicy: Always
       command:
         - sh
         - -c
         - |
           python /app/traffic.py \
-          --messages=1 \
+          --messages=5 \
           --msg-size-kbytes=1 \
           --delay-seconds=1 \
           --pubsub-topic="/waku/2/rs/66/" \
-          --protocols relay
+          --protocols relay \
+          --service-names rln-nodes \
+          --log-level debug

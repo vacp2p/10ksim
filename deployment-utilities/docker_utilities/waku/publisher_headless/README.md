@@ -37,7 +37,9 @@ containers:
         --msg-size-kbytes=1 \
         --delay-seconds=1 \
         --pubsub-topic="/waku/2/rs/2/" \
-        --protocols relay
+        --protocols relay \
+        --service-names zerotesting-service \
+        --log-level=info
 ```
 
 ### How It Works
@@ -60,7 +62,8 @@ Logs the response status, elapsed time, and success/failure rates.
 Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
 
 ### Changelog
-
+- `v1.0.4`:
+  - Add service selection to arguments
 - `v1.0.3`:
   - Added extra debugging to `check_dns_time`
   - Changed `send_to_lightpush` to use v3 api endpoint.

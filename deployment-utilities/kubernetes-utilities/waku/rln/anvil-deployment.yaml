@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anvil
+  namespace: rln-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anvil
+  template:
+    metadata:
+      labels:
+        app: anvil
+    spec:
+      containers:
+      - name: anvil
+        image: ghcr.io/foundry-rs/foundry:latest
+        command: ["anvil"]
+        args:
+          - "--host"
+          - "0.0.0.0"
+          - "--port"
+          - "8545"
+          - "--chain-id"
+          - "59141"
+          - "--gas-limit=300000000000000"
+          # - "--gas-price=7"
+          # - "--base-fee=7"
+          - "--disable-min-priority-fee"
+          - "--balance"
+          - "1000000000000"
+          # - "--mnemonic"
+          # - "test test test test test test test test test test test junk"
+        ports:
+        - containerPort: 8545
+        readinessProbe:
+          tcpSocket:
+            port: 8545
+          initialDelaySeconds: 3
+          periodSeconds: 3
+          failureThreshold: 5
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "4"
+            memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anvil-rpc
+  namespace: rln-test
+spec:
+  selector:
+    app: anvil
+  ports:
+    - name: rpc
+      port: 8545
+      targetPort: 8545
+  type: ClusterIP

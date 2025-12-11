@@ -8,6 +8,7 @@ NAMESPACE="rln-test"
 ANVIL_DEPLOY_FILE="anvil-deployment.yaml"
 BOOTSTRAP_JOB_FILE="rln-bootstrap.yaml"
 WAKU_STATEFULSET_FILE="waku-rln-statefulset.yaml"
+WAKU_BOOTSTRAP_FILE="nwaku-bootstrap.yaml"
 KUBECONFIG_PATH="/Users/alberto/Downloads/local.yaml"
 TMP_LOG="/tmp/rln-bootstrap.log"
 CLEANUP_ON_FAIL=true
@@ -35,7 +36,8 @@ cleanup() {
     k delete job rln-bootstrap -n "$NAMESPACE" --ignore-not-found=true || true
     k delete deploy anvil -n "$NAMESPACE" --ignore-not-found=true || true
     k delete svc anvil-rpc -n "$NAMESPACE" --ignore-not-found=true || true
-    k delete statefulset rln-node -n "$NAMESPACE" --ignore-not-found=true || true
+    k delete statefulset rln-0 -n "$NAMESPACE" --ignore-not-found=true || true
+    k delete statefulset rln-bootstrap -n "$NAMESPACE" --ignore-not-found=true || true
     k delete configmap rln-env -n "$NAMESPACE" --ignore-not-found=true || true
     k delete secret rln-keys -n "$NAMESPACE" --ignore-not-found=true || true
     echo "[CLEANUP] Done."
@@ -178,16 +180,19 @@ k create secret generic rln-keys -n "$NAMESPACE" \
 # 7. Apply or refresh Waku StatefulSet
 ########################################
 echo "[7] Applying or refreshing Waku StatefulSet..."
-if k get statefulset rln-node -n "$NAMESPACE" >/dev/null 2>&1; then
+if k get statefulset rln-0 -n "$NAMESPACE" >/dev/null 2>&1; then
   echo "StatefulSet already exists; forcing restart to reload config."
-  k rollout restart statefulset rln-node -n "$NAMESPACE"
+  k rollout restart statefulset rln-0 -n "$NAMESPACE"
 else
   echo "Creating new StatefulSet from $WAKU_STATEFULSET_FILE..."
+  k apply -f "$WAKU_BOOTSTRAP_FILE"
+  sleep 5
+  k rollout status statefulset/rln-bootstrap -n "$NAMESPACE"
   k apply -f "$WAKU_STATEFULSET_FILE"
 fi
 
 echo "[7.1] Waiting for all Waku pods to be Ready..."
-k rollout status statefulset/rln-node -n "$NAMESPACE"
+k rollout status statefulset/rln-0 -n "$NAMESPACE"
 
 k apply -f publisher.yaml
 

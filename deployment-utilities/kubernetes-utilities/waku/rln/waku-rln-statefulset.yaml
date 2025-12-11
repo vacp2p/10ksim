@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: rln-node
+  name: rln-0
   namespace: rln-test
 spec:
   replicas: 20
@@ -18,6 +18,8 @@ spec:
       volumes:
         - name: rln-cred
           emptyDir: {}
+        - name: enr-data
+          emptyDir: { }
       # ---- initContainer: derive private key per pod ----
       initContainers:
         - name: derive-key
@@ -39,6 +41,18 @@ spec:
           volumeMounts:
             - name: rln-cred
               mountPath: /rln
+        - name: grabenr
+          image: soutullostatus/getenr:v0.5.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: enr-data
+              mountPath: /etc/enr
+          command:
+            - /app/getenr.sh
+          args:
+            - "1"
+            - "rln-bootstrap-service.rln-test"
+            - "/etc/enr/enr.env"
       # ---- main container: generate RLN keystore + start Waku ----
       imagePullSecrets:
         - name: harbor-creds
@@ -46,34 +60,48 @@ spec:
         - name: balance-watcher
           image: ghcr.io/foundry-rs/foundry:latest
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: rln-env
+            - secretRef:
+                name: rln-keys
           command:
             - sh
             - -c
             - |
               set -e
+        
               echo "[balance-watcher] Starting..."
               KEY_FILE="/rln/private.key"
+        
               while [ ! -s "$KEY_FILE" ]; do
                 echo "[balance-watcher] Waiting for private key..."
                 sleep 2
               done
+        
               ETH_KEY=$(cat "$KEY_FILE")
               ADDR=$(cast wallet address --private-key "$ETH_KEY")
               echo "[balance-watcher] Monitoring address: $ADDR"
+        
               while true; do
-                BAL=$(cast balance "$ADDR" --rpc-url "$RLN_RELAY_ETH_CLIENT_ADDRESS" | tr -d '\r')
-                if echo "$BAL" | grep -q '^0x'; then
-                  # Convert hex to decimal if needed
-                  BAL_DEC=$((16#${BAL:2}))
+                # Fetch balance (hex)
+                BAL_HEX=$(cast balance "$ADDR" --rpc-url "$RLN_RELAY_ETH_CLIENT_ADDRESS" | tr -d '\r')
+        
+                # Convert balance to decimal
+                if echo "$BAL_HEX" | grep -q '^0x'; then
+                  BAL_DEC=$(cast to-dec "$BAL_HEX")
                 else
-                  BAL_DEC=$BAL
+                  BAL_DEC="$BAL_HEX"
                 fi
-                echo "[balance-watcher] $(date '+%H:%M:%S') → Balance: $BAL_DEC wei"
+        
+                # Fetch allowance (hex)
+                ALLOW_HEX=$(cast call "$TOKEN_CONTRACT_ADDRESS" "allowance(address,address)" "$ADDR" "$RLN_CONTRACT_ADDRESS" --rpc-url "$RLN_RELAY_ETH_CLIENT_ADDRESS")
+                ALLOW_DEC=$(cast to-dec "$ALLOW_HEX")
+        
+                echo "[balance-watcher] $(date '+%H:%M:%S') → Balance: $BAL_DEC wei | Allowance: $ALLOW_DEC"
+        
                 sleep "${BALANCE_POLL_INTERVAL:-30}"
               done
-          envFrom:
-            - configMapRef:
-                name: rln-env
           volumeMounts:
             - name: rln-cred
               mountPath: /rln
@@ -105,10 +133,14 @@ spec:
           volumeMounts:
             - name: rln-cred
               mountPath: /rln
+            - name: enr-data
+              mountPath: /etc/enr
           command:
             - sh
             - -c
             - |
+              . /etc/enr/enr.env
+              echo Bootstrap ENR is $ENR1
               set -e
               ETH_KEY=$(cat /rln/private.key)
               echo "[1] Using derived private key: $ETH_KEY"
@@ -118,18 +150,17 @@ spec:
               
               for i in $(seq 1 "$GENERATE_TIMES" 2>/dev/null || echo 1); do
                 echo "[2] Generating RLN keystore iteration $i..."
-                /usr/bin/wakunode --log-level=DEBUG generateRlnKeystore \
+                /usr/bin/wakunode --log-level=INFO generateRlnKeystore \
                   --rln-relay-eth-client-address="${RLN_RELAY_ETH_CLIENT_ADDRESS}" \
                   --rln-relay-eth-private-key="$ETH_KEY" \
                   --rln-relay-eth-contract-address="${RLN_CONTRACT_ADDRESS}" \
-                  --rln-relay-cred-path="/rln/rln_keystore.json" \
+                  --rln-relay-cred-path="/rln/rln_keystore_${i}.json" \
                   --rln-relay-cred-password="${RLN_RELAY_CRED_PASSWORD}" \
-                  --rln-relay-user-message-limit=100 \
+                  --rln-relay-user-message-limit=20 \
                   --rln-relay-chain-id=59141\
                   --rln-relay-epoch-sec=600 \
                   --execute
               done
-
 
               echo "[3] Starting Waku node..."
               exec /usr/bin/wakunode \
@@ -142,16 +173,21 @@ spec:
                 --rln-relay-dynamic=true\
                 --rln-relay-eth-client-address="${RLN_RELAY_ETH_CLIENT_ADDRESS}"\
                 --rln-relay-eth-contract-address=$RLN_CONTRACT_ADDRESS\
-                --rln-relay-cred-path="/rln/rln_keystore.json"\
+                --rln-relay-cred-path="/rln/rln_keystore_1.json"\
                 --rln-relay-cred-password=changeme\
                 --rln-relay-epoch-sec=600\
-                --rln-relay-user-message-limit=100\
+                --rln-relay-user-message-limit=20\
                 --rln-relay-chain-id=59141\
                 --metrics-server=true \
                 --metrics-server-address=0.0.0.0\
                 --nat=extip:${IP}\
                 --cluster-id=66\
-                --log-level=INFO
+                --shard=0\
+                --log-level=INFO\
+                --rendezvous=false\
+                --discv5-discovery=true\
+                --discv5-enr-auto-update=True\
+                --discv5-bootstrap-node=$ENR1
           readinessProbe:
             httpGet:
               path: /health

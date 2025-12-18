@@ -13,7 +13,7 @@ from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaR
 from src.mesh_analysis.readers.file_reader import FileReader
 from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-from src.utils import file_utils, log_utils, path_utils, list_utils
+from src.utils import file_utils, path_utils, list_utils
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -204,6 +204,7 @@ class WakuAnalyzer:
         logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
         logger.info(f'Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}')
 
+        self._message_hashes = received_df.index.get_level_values(msg_identifier).unique().tolist()
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(shard_identifier, msg_identifier,
                                                                                  peer_identifier, received_df)
 
@@ -297,22 +298,44 @@ class WakuAnalyzer:
         data = stack.get_pod_logs('get-store-messages')
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        messages_list = ast.literal_eval(log_list[-1]) # Last line in get-store-messages
-        messages_list = ['0x' + base64.b64decode(msg).hex() for msg in messages_list]
-        logger.debug(f'Messages from store: {messages_list}')
 
-        if len(self._message_hashes) != len(messages_list):
-            logger.error('Number of messages does not match')
-        elif set(self._message_hashes) == set(messages_list):
-            logger.info('Messages from store match with received messages')
+        messages_list = None
+        for line in [log_list[0], log_list[-1]]:
+            line_content = line[0] if isinstance(line, list) else line
+            if line_content.strip().startswith("['0x"):
+                messages_list = ast.literal_eval(line_content)
+                break
+
+        if messages_list is None:
+            logger.error("Could not find message hashes in pod `get-store-messages`")
+            return
+
+        store_set = set(messages_list)
+        relay_set = set(self._message_hashes)
+        matching_messages = store_set & relay_set
+        only_in_relay = relay_set - store_set
+        only_in_store = store_set - relay_set
+
+        logger.info(f"get-store messages: {len(store_set)}, Messages from relay: {len(relay_set)}")
+
+        if len(matching_messages) == len(store_set) == len(relay_set):
+            logger.info('✓ Messages from get-store match with messages received from relay')
         else:
-            logger.error('Messages from store does not match with received messages')
-            logger.error(f'Received messages: {self._message_hashes}')
-            logger.error(f'Store messages: {messages_list}')
+            logger.error('✗ Messages from get-store do not match with messages received from relay')
+            if only_in_store:
+                logger.error(f'Messages in get-store only (Not received from relay): {len(only_in_store)}')
+                logger.debug(f'List of get-store only messages : {only_in_store}')
+            if only_in_relay:
+                logger.error(f'Messages received from relay only (Not found from get-store): {len(only_in_relay)}')
+                logger.debug(f'List of messages received from relay only : {only_in_relay}')
 
-        result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_path / 'store_messages.txt')
+        result = list_utils.dump_list_to_file(messages_list, self._dump_analysis_path / 'get-store_messages.txt')
         if result.is_ok():
-            logger.info(f'Messages from store saved in {result.ok_value}')
+            logger.info(f'Messages from get-store saved in {result.ok_value}')
+
+        result = list_utils.dump_list_to_file(relay_set, self._dump_analysis_path / 'relay_messages.txt')
+        if result.is_ok():
+            logger.info(f'Messages from relay saved in {result.ok_value}')
 
     def check_filter_messages(self):
         """
@@ -328,10 +351,21 @@ class WakuAnalyzer:
         data = stack.get_pod_logs('get-filter-messages')
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        all_ok_boolean = ast.literal_eval(log_list[-1]) # Last line in get-filter-messages
 
-        all_ok = ast.literal_eval(all_ok_boolean)
-        if all_ok:
-            logger.info("Messages from filter match in length.")
+        all_ok = None
+        for line in [log_list[0], log_list[-1]]:
+            line_content = line[0] if isinstance(line, list) else line
+
+            if line_content.strip().lower() == 'true':
+                all_ok = True
+                break
+            elif line_content.strip().lower() == 'false':
+                all_ok = False
+                break
+
+        if all_ok is None:
+            logger.error("Could not find result in pod `get-filter-messages`")
+        elif all_ok:
+            logger.info("✓ Messages from filter match in length.")
         else:
-            logger.error("Messages from filter do not match.")
+            logger.error("✗ Messages from filter do not match.")

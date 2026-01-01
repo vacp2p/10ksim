@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import contextlib
 import glob
 import itertools
@@ -10,7 +11,6 @@ import shutil
 import subprocess
 import tempfile
 import time
-import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -21,6 +21,7 @@ import dateparser
 import ruamel.yaml
 from kubernetes import client, utils
 from kubernetes.client import ApiClient
+from kubernetes.client.models import V1Node
 from kubernetes.client.rest import ApiException
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
@@ -58,6 +59,7 @@ def get_log_level(verbosity: Union[str, int]) -> int:
         raise TypeError(
             f"Param `verbosity` must be a string or an int. Instead, given: `{type(verbosity)}`"
         )
+
 
 def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Optional[str] = None):
     """
@@ -103,6 +105,39 @@ _kube_config = None
 def set_config_file(config: str):
     global _kube_config
     _kube_config = config
+
+
+def is_local() -> bool:
+    """
+    Detects if Kubernetes cluster is local.
+    """
+    configuration = client.Configuration.get_default_copy()
+    server_url = configuration.host
+    local_hosts = ["localhost", "127.0.0.1", "host.docker.internal", "host.minikube.internal"]
+    return any(host in server_url.lower() for host in local_hosts)
+
+
+def get_node_ip(node: V1Node) -> str:
+    """
+    Returns the IP used for making API requests to a node.
+    """
+    if is_local():
+        return "localhost"
+
+    # If we have an external IP, use that.
+    # Otherwise use the InternalIP.
+    try:
+        return next(
+            (address.address for address in node.status.addresses if address.type == "ExternalIP")
+        )
+    except StopIteration:
+        pass
+    try:
+        return next(
+            address.address for address in node.status.addresses if address.type == "InternalIP"
+        )
+    except StopIteration as e:
+        raise ValueError(f"Failed to find IP for node. Node: `{node.metadata.name}`") from e
 
 
 def kubectl_apply(

@@ -38,6 +38,7 @@ async def run_experiment(
 
     info = experiment_registry[name]
     experiment = info.cls()
+    logger.info(f"Running experiment. name `{info.name}` file: `{info.metadata['module_path']}`")
     await experiment.run(api_client, args, values_yaml)
 
 

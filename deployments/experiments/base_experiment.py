@@ -16,8 +16,7 @@ from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
 
-from helm_deployment.builders import build_deployment
-from kube_utils import (
+from core.kube_utils import (
     dict_apply,
     dict_get,
     dict_partial_compare,
@@ -29,8 +28,10 @@ from kube_utils import (
     wait_for_no_objs_in_namespace,
     wait_for_rollout,
 )
+from helm_deployment.builders import build_deployment
 
 logger = logging.getLogger(__name__)
+
 
 def find_events(
     log_path: str,

@@ -9,9 +9,9 @@ from kubernetes.client import (
     V1PodTemplateSpec,
     V1Volume,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from builders.configs.container import ContainerConfig, build_container
+from core.configs.container import ContainerConfig, build_container
 
 T = TypeVar("T")
 
@@ -49,7 +49,7 @@ class PodSpecConfig(BaseModel):
     def add_init_container(
         self, init_container: ContainerConfig | V1Container | dict, *, overwrite: bool = False
     ):
-        from builders.helpers import convert_to_container_config
+        from core.configs.helpers import convert_to_container_config
 
         container_config = convert_to_container_config(init_container)
         if self.init_containers is None:
@@ -70,7 +70,7 @@ class PodSpecConfig(BaseModel):
         order: Literal["prepend", "append"] = "append",
         overwrite: bool = False,
     ):
-        from builders.helpers import convert_to_container_config
+        from core.configs.helpers import convert_to_container_config
 
         container_config = convert_to_container_config(container)
 
@@ -95,7 +95,7 @@ class PodTemplateSpecConfig(BaseModel):
     name: Optional[str] = None
     namespace: Optional[str] = None
     labels: Dict[str, str] = None
-    pod_spec_config: PodSpecConfig = PodSpecConfig()
+    pod_spec_config: PodSpecConfig = Field(default_factory=PodSpecConfig)
 
     def with_app(self, app: str, *, overwrite: bool = False):
         if self.labels is None:

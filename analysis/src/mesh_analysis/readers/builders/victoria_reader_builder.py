@@ -20,6 +20,7 @@ class VictoriaReaderBuilder:
 
         query = {"query": f"kubernetes.container_name:{self._kwargs['container_name']} "
                                 f"AND kubernetes.pod_name:{pod_name} "
+                                f"AND kubernetes.pod_namespace:{self._kwargs['namespace']} "
                                 f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
                                 f"{uniq_by if uniq_by is not None else ''}"}
 
@@ -37,6 +38,7 @@ class VictoriaReaderBuilder:
         for query in self._queries:
             params.append({"query": f"kubernetes.container_name:{self._kwargs['container_name']} "
                                     f"AND kubernetes.pod_name:{stateful_set_name}-{node_index if node_index is not None else ''} "
+                                    f"AND kubernetes.pod_namespace:{self._kwargs['namespace']} "
                                     f"AND {query} "
                                     f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
                                     f"{uniq_by if uniq_by is not None else ''}"})
@@ -54,6 +56,7 @@ class VictoriaReaderBuilder:
 
         param = {"query": f"kubernetes.container_name:{self._kwargs['container_name']} "
                                 f"AND kubernetes.pod_name:{pod_name} "
+                                f"AND kubernetes.pod_namespace:{self._kwargs['namespace']} "
                                 f"AND {self._queries} "
                                 f"AND _time:[{self._kwargs['start_time']}, {self._kwargs['end_time']}]"
                                 f"{uniq_by if uniq_by is not None else ''}"}

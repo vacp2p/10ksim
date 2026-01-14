@@ -79,25 +79,29 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
         return super().build()
 
-    def with_regression(self) -> Self:
-        self.with_args(RegressionNodes.create_args())
-        self.with_enr(3, ["zerotesting-bootstrap.zerotesting"])
-        container = find_waku_container_config(self.config)
-        container.with_resources(Nodes.create_resources())
-        return self
-
     def with_waku_config(self, name: str, namespace: str, num_nodes: PositiveInt) -> Self:
         self.config.name = name
         self.config.namespace = namespace
         self.config.apiVersion = "apps/v1"
         self.config.kind = "StatefulSet"
         self.config.pod_management_policy = "Parallel"
-        self.config.stateful_set_spec = Nodes.create_stateful_set_spec_config()
+        self.config.stateful_set_spec = Nodes.create_stateful_set_spec_config(namespace)
         self.config.stateful_set_spec.replicas = num_nodes
         return self
 
+    def with_regression(self) -> Self:
+        if not self.config.name:
+            raise ValueError(f"Must configure node first. Config: `{self.config}`")
+        self.with_args(RegressionNodes.create_args())
+        self.with_enr(3, [f"zerotesting-bootstrap.{self.config.namespace}"])
+        container = find_waku_container_config(self.config)
+        container.with_resources(Nodes.create_resources())
+        return self
+
     def with_bootstrap(self) -> Self:
-        WakuBootstrapNode.apply_stateful_set_config(self.config, overwrite=True)
+        if not self.config.name:
+            raise ValueError(f"Must configure node first. Config: `{self.config}`")
+        WakuBootstrapNode.apply_stateful_set_config(self.config, self.config.namespace, overwrite=True)
         self.with_args(WakuBootstrapNode.create_args())
         return self
 

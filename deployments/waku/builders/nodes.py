@@ -56,11 +56,11 @@ class Nodes:
         return config
 
     @staticmethod
-    def create_pod_spec_config() -> PodSpecConfig:
+    def create_pod_spec_config(namespace : str) -> PodSpecConfig:
         return PodSpecConfig(
             container_configs=[Nodes.create_container_config()],
             dns_config=V1PodDNSConfig(
-                searches=["zerotesting-service.zerotesting.svc.cluster.local"]
+                searches=[f"zerotesting-service.{namespace}.svc.cluster.local"]
             ),
         )
 
@@ -78,28 +78,28 @@ class Nodes:
         )
 
     @staticmethod
-    def create_pod_template_spec_config() -> PodTemplateSpecConfig:
-        config = PodTemplateSpecConfig(pod_spec_config=Nodes.create_pod_spec_config())
+    def create_pod_template_spec_config(namespace:str) -> PodTemplateSpecConfig:
+        config = PodTemplateSpecConfig(pod_spec_config=Nodes.create_pod_spec_config(namespace))
         config.with_app("zerotenkay")
         return config
 
     @staticmethod
-    def create_stateful_set_spec_config() -> StatefulSetSpecConfig:
+    def create_stateful_set_spec_config(namespace:str) -> StatefulSetSpecConfig:
         config = StatefulSetSpecConfig(
             replicas=0,
             service_name="zerotesting-service",
-            pod_template_spec_config=Nodes.create_pod_template_spec_config(),
+            pod_template_spec_config=Nodes.create_pod_template_spec_config(namespace),
         )
         config.with_app("zerotenkay")
         return config
 
     @staticmethod
-    def create_statefulset_config() -> StatefulSetConfig:
+    def create_statefulset_config(namespace : str) -> StatefulSetConfig:
         return StatefulSetConfig(
             name="nodes",
-            namespace="zerotesting",
+            namespace=namespace,
             apiVersion="apps/v1",
             kind="StatefulSet",
             pod_management_policy="Parallel",
-            stateful_set_spec=Nodes.create_stateful_set_spec_config(),
+            stateful_set_spec=Nodes.create_stateful_set_spec_config(namespace),
         )

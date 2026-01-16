@@ -7,7 +7,7 @@ from typing import List, Optional
 from ruamel.yaml import YAMLObject
 from ruamel.yaml.comments import CommentedMap
 
-from kube_utils import get_values_yamls, get_YAML, helm_build_dir
+from core.kube_utils import get_values_yamls, get_YAML, helm_build_dir
 
 logger = logging.getLogger(__name__)
 

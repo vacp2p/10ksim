@@ -7,9 +7,9 @@ from kubernetes.client import (
     V1StatefulSet,
     V1StatefulSetSpec,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from builders.configs.pod import PodTemplateSpecConfig, build_pod_template_spec
+from core.configs.pod import PodTemplateSpecConfig, build_pod_template_spec
 
 T = TypeVar("T")
 
@@ -45,7 +45,7 @@ class StatefulSetConfig(BaseModel):
     name: Optional[str] = None
     namespace: Optional[str] = None
     apiVersion: Optional[str] = None
-    kind: Optional[str] = None
+    kind: Optional[str] = Field(default="StatefulSet")
     labels: Optional[Dict[str, str]] = None
     stateful_set_spec: StatefulSetSpecConfig = StatefulSetSpecConfig()
     pod_management_policy: Optional[Literal["Parallel", "OrderedReady"]] = None

@@ -3,26 +3,12 @@ from copy import deepcopy
 from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
 
 from kubernetes import client
-from kubernetes.client import (
-    V1Container,
-    V1Probe,
-)
+from kubernetes.client import V1Container, V1Probe
 
-from builders.configs.command import (
-    CommandConfig,
-)
-from builders.configs.container import (
-    ContainerConfig,
-    Image,
-)
-from builders.configs.pod import (
-    PodSpecConfig,
-    PodTemplateSpecConfig,
-)
-from builders.configs.statefulset import (
-    StatefulSetConfig,
-    StatefulSetSpecConfig,
-)
+from core.configs.command import CommandConfig
+from core.configs.container import ContainerConfig, Image
+from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
 
 T = TypeVar("T")
 _sentinel = object()
@@ -112,20 +98,6 @@ def with_container_command_args(
     """
     command = get_container_command(config, container_name, command_name)
     command.add_args(args, on_duplicate=on_duplicate)
-
-
-def default_readiness_probe_health() -> dict:
-    return {
-        "failureThreshold": 1,
-        "httpGet": {
-            "path": "/health",
-            "port": 8008,
-        },
-        "initialDelaySeconds": 1,
-        "periodSeconds": 3,
-        "successThreshold": 3,
-        "timeoutSeconds": 5,
-    }
 
 
 def v1container_to_container_config(v1container: V1Container) -> ContainerConfig:

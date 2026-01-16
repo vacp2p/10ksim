@@ -1,25 +1,18 @@
 from typing import List, Literal, Optional, Self
 
-from kubernetes.client import (
-    V1PodSpec,
-    V1Probe,
-)
+from kubernetes.client import V1PodSpec, V1Probe
 from pydantic import PositiveInt
 
-from builders.builders import ContainerBuilder, PodSpecBuilder, StatefulSetBuilder
-from builders.configs.container import (
-    ContainerConfig,
-    Image,
-)
-from builders.configs.pod import PodSpecConfig
-from builders.configs.statefulset import StatefulSetConfig
-from builders.helpers import with_container_command_args
-from builders.waku import bootstrap as WakuBootstrapNode
-from builders.waku import store as Store
-from builders.waku.enr_or_addr import Addrs, Enr
-from builders.waku.helpers import WAKU_COMMAND_STR, find_waku_container_config
-from builders.waku.nodes import Nodes
-from builders.waku.regression import RegressionNodes
+from core.builders import ContainerBuilder, PodSpecBuilder, StatefulSetBuilder
+from core.configs.container import ContainerConfig, Image
+from core.configs.helpers import with_container_command_args
+from core.configs.pod import PodSpecConfig
+from waku.builders import bootstrap as WakuBootstrapNode
+from waku.builders import store as Store
+from waku.builders.enr_or_addr import Addrs, Enr
+from waku.builders.helpers import WAKU_COMMAND_STR, find_waku_container_config
+from waku.builders.nodes import Nodes
+from waku.builders.regression import RegressionNodes
 
 
 class WakuContainerBuilder(ContainerBuilder):
@@ -80,9 +73,6 @@ class WakuPodSpecBuilder(PodSpecBuilder):
 
 
 class WakuStatefulSetBuilder(StatefulSetBuilder):
-
-    def __init__(self, config: StatefulSetConfig):
-        super().__init__(config)
 
     def build(self):
         if not self.config.name:

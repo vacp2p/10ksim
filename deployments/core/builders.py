@@ -8,32 +8,19 @@ from kubernetes.client import (
     V1ResourceRequirements,
     V1StatefulSet,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from builders.configs.command import (
-    Command,
-    CommandConfig,
-    build_command,
-)
-from builders.configs.container import (
-    ContainerConfig,
-    build_container,
-)
-from builders.configs.pod import (
+from core.configs.command import Command, CommandConfig, build_command
+from core.configs.container import ContainerConfig, build_container
+from core.configs.pod import (
     PodSpecConfig,
     build_pod_spec,
 )
-from builders.configs.statefulset import (
-    StatefulSetConfig,
-    build_stateful_set,
-)
+from core.configs.statefulset import StatefulSetConfig, build_stateful_set
 
 
-class StatefulSetBuilder:
-    config: StatefulSetConfig
-
-    def __init__(self, config: StatefulSetConfig):
-        self.config = config
+class StatefulSetBuilder(BaseModel):
+    config: StatefulSetConfig = Field(default_factory=StatefulSetConfig)
 
     def with_replicas(self, replicas: int) -> Self:
         self.config.replicas = replicas
@@ -58,7 +45,9 @@ class StatefulSetBuilder:
 class ContainerBuilder:
     config: ContainerConfig
 
-    def __init__(self, config: ContainerConfig):
+    def __init__(self, config: Optional[ContainerConfig] = None):
+        if config is None:
+            config = ContainerConfig()
         self.config = config
 
     def build(self) -> V1Container:
@@ -86,7 +75,9 @@ class ContainerBuilder:
 class PodSpecBuilder:
     config: PodSpecConfig
 
-    def __init__(self, config: PodSpecConfig):
+    def __init__(self, config: Optional[PodSpecConfig] = None):
+        if config is None:
+            config = PodSpecConfig()
         self.config = config
 
     def build(self) -> V1PodSpec:
@@ -102,7 +93,12 @@ class PodSpecBuilder:
 
 
 class ContainerCommandBuilder(BaseModel):
-    config: CommandConfig = CommandConfig()
+    config: CommandConfig
+
+    def __init__(self, config: Optional[CommandConfig] = None):
+        if config is None:
+            config = CommandConfig()
+        self.config = config
 
     def build(self) -> List[str]:
         return build_command(self.config)
@@ -118,3 +114,17 @@ class ContainerCommandBuilder(BaseModel):
             args = []
         self.config.commands.append(Command(command=command, args=args, multiline=multiline))
         return self
+
+
+def default_readiness_probe_health() -> dict:
+    return {
+        "failureThreshold": 1,
+        "httpGet": {
+            "path": "/health",
+            "port": 8008,
+        },
+        "initialDelaySeconds": 1,
+        "periodSeconds": 3,
+        "successThreshold": 3,
+        "timeoutSeconds": 5,
+    }

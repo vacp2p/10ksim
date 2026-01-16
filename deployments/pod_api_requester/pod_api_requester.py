@@ -8,7 +8,7 @@ import requests
 from kubernetes import client, config
 from pydantic import NonNegativeInt
 
-import kube_utils
+from core import kube_utils
 
 logger = logging.getLogger(__name__)
 
@@ -98,10 +98,10 @@ async def pod_api_request(
             pod = pods.items[publisher_pod]
     except IndexError as e:
         logger.error(f"No pod found. app: `{app}` pod_index: `{publisher_pod}`")
-        raise ValueError() from e
+        raise ValueError("No publisher pod found") from e
     except StopIteration as e:
         logger.error(f"No pod found. app: `{app}` pod_name: `{publisher_pod}`")
-        raise ValueError() from e
+        raise ValueError("No publisher pod found") from e
 
     # Get publisher IP.
     node = v1.read_node(name=pod.spec.node_name)

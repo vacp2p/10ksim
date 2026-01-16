@@ -1,14 +1,7 @@
-from builders.configs.command import (
-    Command,
-    CommandConfig,
-)
-from builders.configs.container import (
-    ContainerConfig,
-)
-from builders.configs.pod import (
-    PodSpecConfig,
-)
-from builders.helpers import HigherConfigTypes, find_container_config, get_config
+from core.configs.command import Command, CommandConfig
+from core.configs.container import ContainerConfig
+from core.configs.helpers import HigherConfigTypes, find_container_config, get_config
+from core.configs.pod import PodSpecConfig
 
 WAKU_COMMAND_STR = "/usr/bin/wakunode"
 WAKU_CONTAINER_NAME = "waku"

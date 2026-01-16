@@ -15,16 +15,16 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict
 from ruamel import yaml
 
-from deployment.base_experiment import (
+from core.kube_utils import dict_set
+from core.pod_interaction import exec_command_in_pod
+from experiments.base_experiment import (
     BaseExperiment,
     format_metadata_timestamps,
     get_valid_shifted_times,
     parse_events_log,
 )
-from deployment.waku.experiments.jswaku.pod_interaction import exec_command_in_pod
-from kube_utils import dict_set
+from pod_api_requester.pod_api_requester import publish_message
 from registry import experiment
-from utils.pod_api_requester import publish_message
 
 logger = logging.getLogger(__name__)
 

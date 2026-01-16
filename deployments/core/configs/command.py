@@ -2,7 +2,7 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import Dict, List, Literal, Optional, SupportsIndex, Tuple, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -141,7 +141,7 @@ class CommandNotFoundError(ValueError):
 
 
 class CommandConfig(BaseModel):
-    commands: List[Command] = []
+    commands: List[Command] = Field(default_factory=list)
 
     single_k8s_command: bool = False
     """When True, then uses the Kubernetes fields "command" and "args"

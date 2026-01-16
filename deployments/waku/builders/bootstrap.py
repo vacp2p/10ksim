@@ -2,25 +2,12 @@ from kubernetes.client import (
     V1ResourceRequirements,
 )
 
-from builders.configs.command import (
-    CommandConfig,
-)
-from builders.configs.container import (
-    ContainerConfig,
-)
-from builders.configs.pod import (
-    PodSpecConfig,
-    PodTemplateSpecConfig,
-)
-from builders.configs.statefulset import (
-    StatefulSetConfig,
-    StatefulSetSpecConfig,
-)
-from builders.helpers import default_readiness_probe_health
-from builders.waku.helpers import (
-    WAKU_COMMAND_STR,
-    find_waku_container_config,
-)
+from core.builders import default_readiness_probe_health
+from core.configs.command import CommandConfig
+from core.configs.container import ContainerConfig
+from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from waku.builders.helpers import WAKU_COMMAND_STR, find_waku_container_config
 
 
 def apply_command_config(config: CommandConfig):

@@ -7,25 +7,13 @@ from kubernetes.client import (
     V1ResourceRequirements,
 )
 
-from builders.configs.command import (
-    Command,
-    CommandConfig,
-)
-from builders.configs.container import (
-    ContainerConfig,
-    Image,
-)
-from builders.configs.pod import (
-    PodSpecConfig,
-    PodTemplateSpecConfig,
-)
-from builders.configs.statefulset import (
-    StatefulSetConfig,
-    StatefulSetSpecConfig,
-)
-from builders.helpers import get_container_command
-from builders.libp2p.helpers import readiness_probe_metrics
-from builders.waku.helpers import WAKU_COMMAND_STR, WAKU_CONTAINER_NAME
+from core.configs.command import Command, CommandConfig
+from core.configs.container import ContainerConfig, Image
+from core.configs.helpers import get_container_command
+from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from libp2p.builders.helpers import readiness_probe_metrics
+from waku.builders.helpers import WAKU_COMMAND_STR, WAKU_CONTAINER_NAME
 
 
 class Nodes:

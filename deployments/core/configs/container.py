@@ -9,9 +9,9 @@ from kubernetes.client import (
     V1ResourceRequirements,
     V1VolumeMount,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from builders.configs.command import CommandConfig, build_command
+from core.configs.command import CommandConfig, build_command
 
 T = TypeVar("T")
 
@@ -31,7 +31,7 @@ class Image(BaseModel):
 
 class ContainerConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    command_config: CommandConfig = CommandConfig()
+    command_config: CommandConfig = Field(default_factory=CommandConfig)
     readiness_probe: Optional[V1Probe] = None
     # Optional fields default to None to avoid inclusion in the deployment yaml
     # when we pass them to the constructor of Kubernetes objects.
@@ -78,7 +78,7 @@ class ContainerConfig(BaseModel):
             self.env.append(var)
 
     def with_readiness_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
-        from builders.helpers import dict_to_v1probe
+        from core.configs.helpers import dict_to_v1probe
 
         if self.readiness_probe is not None and not overwrite:
             raise ValueError("ContainerConfig already has readiness probe.")

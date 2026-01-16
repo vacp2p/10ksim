@@ -1,10 +1,9 @@
 import logging
-from asyncio import sleep
 import os
 import re
-import time
 import urllib
 from argparse import ArgumentParser, Namespace
+from asyncio import sleep
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -16,14 +15,7 @@ from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml
 
-from experiments.base_experiment import (
-    BaseExperiment,
-    format_metadata_timestamps,
-    get_valid_shifted_times,
-    parse_events_log,
-)
-from helm_deployment.builders import build_deployment
-from kube_utils import (
+from core.kube_utils import (
     dict_get,
     dict_set,
     get_cleanup,
@@ -31,6 +23,13 @@ from kube_utils import (
     kubectl_apply,
     wait_for_time,
 )
+from experiments.base_experiment import (
+    BaseExperiment,
+    format_metadata_timestamps,
+    get_valid_shifted_times,
+    parse_events_log,
+)
+from helm_deployment.builders import build_deployment
 from registry import experiment
 
 logger = logging.getLogger(__name__)

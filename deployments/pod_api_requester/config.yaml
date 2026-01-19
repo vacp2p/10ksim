@@ -51,8 +51,11 @@ data:
         paged: False
 
       - name: libp2p-dst-node-publish
-        url: "http://{node}:8645/publish
-        params: {"topic" : "%2Fwaku%2F2%2Frs%2F2%2F0", msgSize : "1024" }
+        url: "http://{node}:{port}/publish"
+        headers: {"Content-Type": "application/json"}
+        params: {"topic": "test", "msgSize": 1000, "version": 1}
+        type: "POST"
+        paged: False
 
     requests:
       - name: publish-request
@@ -68,4 +71,3 @@ data:
         pod_count: 91
         order: ascending
         loop_order: foreach_request_target_each_pod
-

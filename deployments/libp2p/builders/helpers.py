@@ -3,6 +3,16 @@ from typing import List
 from kubernetes.client import V1ExecAction, V1Probe
 from pydantic import PositiveInt
 
+from core.configs.helpers import find_container_config, get_config
+from core.configs.pod import PodSpecConfig
+
+LIBP2P_CONTAINER_NAME = "pod-0"
+
+
+def find_libp2p_container_config(config):
+    pod_spec_config = get_config(config, PodSpecConfig)
+    return find_container_config(pod_spec_config, LIBP2P_CONTAINER_NAME)
+
 
 def readiness_probe_command_metrics(num_topics: PositiveInt = 1) -> List[str]:
     prefix = ["/bin/sh", "-c"]

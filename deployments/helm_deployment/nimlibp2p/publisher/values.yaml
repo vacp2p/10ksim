@@ -1,0 +1,13 @@
+nimlibp2p:
+  publisher:
+    name: publisher
+    namespace: "zerotesting-nimlibp2p"
+    serviceName: nimp2p-service
+    image:
+      repository: ufarooqstatus/libp2p-publisher
+      tag: v1.0
+    args:
+      pubsubTopic: "test"
+      msgSizeBytes: 1000
+      messages: 10
+      peerSelection: "service"

@@ -1,6 +1,4 @@
-from kubernetes.client import (
-    V1ResourceRequirements,
-)
+from kubernetes.client import V1ResourceRequirements
 
 from core.builders import default_readiness_probe_health
 from core.configs.command import CommandConfig
@@ -36,28 +34,34 @@ def apply_container_config(config: ContainerConfig, *, overwrite: bool = False):
     config.with_resources(create_resources())
 
 
-def apply_pod_spec_config(config: PodSpecConfig):
+def apply_pod_spec_config(config: PodSpecConfig, namespace: str, *, overwrite: bool = False):
     config.dns_config.searches.append(
-        "zerotesting-bootstrap.zerotesting.svc.cluster.local",
+        f"zerotesting-bootstrap.{namespace}.svc.cluster.local",
     )
     container_config = find_waku_container_config(config)
-    apply_container_config(container_config)
+    apply_container_config(container_config, overwrite=overwrite)
 
 
-def apply_pod_template_spec_config(config: PodTemplateSpecConfig):
+def apply_pod_template_spec_config(
+    config: PodTemplateSpecConfig, namespace: str, *, overwrite: bool = False
+):
     config.with_app("zerotenkay-bootstrap")
-    apply_pod_spec_config(config.pod_spec_config)
+    apply_pod_spec_config(config.pod_spec_config, namespace, overwrite=overwrite)
 
 
-def apply_stateful_set_spec_config(config: StatefulSetSpecConfig, *, overwrite: bool = False):
+def apply_stateful_set_spec_config(
+    config: StatefulSetSpecConfig, namespace: str, *, overwrite: bool = False
+):
     config.with_app("zerotenkay-bootstrap")
     config.with_service_name("zerotesting-bootstrap", overwrite=overwrite)
-    apply_pod_template_spec_config(config.pod_template_spec_config)
+    apply_pod_template_spec_config(config.pod_template_spec_config, namespace, overwrite=overwrite)
 
 
-def apply_stateful_set_config(config: StatefulSetConfig, *, overwrite: bool = False):
+def apply_stateful_set_config(
+    config: StatefulSetConfig, namespace: str, *, overwrite: bool = False
+):
     config.name = "bootstrap"
-    apply_stateful_set_spec_config(config.stateful_set_spec, overwrite=overwrite)
+    apply_stateful_set_spec_config(config.stateful_set_spec, namespace, overwrite=overwrite)
 
 
 def create_resources() -> V1ResourceRequirements:

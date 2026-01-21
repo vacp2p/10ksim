@@ -3,20 +3,36 @@ from typing import List, Optional, Self, Tuple
 from kubernetes.client import (
     V1Container,
     V1PersistentVolumeClaim,
+    V1Pod,
     V1PodSpec,
+    V1PodTemplateSpec,
     V1Probe,
     V1ResourceRequirements,
     V1StatefulSet,
 )
 from pydantic import BaseModel, Field
 
-from core.configs.command import Command, CommandConfig, build_command
-from core.configs.container import ContainerConfig, build_container
-from core.configs.pod import (
-    PodSpecConfig,
-    build_pod_spec,
+from core.configs.command import (
+    Command,
+    CommandConfig,
+    build_command,
 )
-from core.configs.statefulset import StatefulSetConfig, build_stateful_set
+from core.configs.container import (
+    ContainerConfig,
+    build_container,
+)
+from core.configs.pod import (
+    PodConfig,
+    PodSpecConfig,
+    PodTemplateSpecConfig,
+    build_pod,
+    build_pod_spec,
+    build_pod_template_spec,
+)
+from core.configs.statefulset import (
+    StatefulSetConfig,
+    build_stateful_set,
+)
 
 
 class StatefulSetBuilder(BaseModel):
@@ -40,6 +56,17 @@ class StatefulSetBuilder(BaseModel):
 
     def build(self) -> V1StatefulSet:
         return build_stateful_set(self.config)
+
+
+class PodBuilder(BaseModel):
+    config: PodConfig = Field(default_factory=PodConfig)
+
+    def with_app(self, app: str, *, overwrite: bool = False) -> Self:
+        self.config.with_app(app, overwrite=overwrite)
+        return self
+
+    def build(self) -> V1Pod:
+        return build_pod(self.config)
 
 
 class ContainerBuilder:
@@ -72,13 +99,15 @@ class ContainerBuilder:
         return self
 
 
-class PodSpecBuilder:
-    config: PodSpecConfig
+class PodTemplateSpecBuilder(BaseModel):
+    config: PodTemplateSpecConfig = Field(default_factory=PodTemplateSpecConfig)
 
-    def __init__(self, config: Optional[PodSpecConfig] = None):
-        if config is None:
-            config = PodSpecConfig()
-        self.config = config
+    def build(self) -> V1PodTemplateSpec:
+        return build_pod_template_spec(self.config)
+
+
+class PodSpecBuilder:
+    config: PodSpecConfig = Field(default_factory=PodSpecConfig)
 
     def build(self) -> V1PodSpec:
         return build_pod_spec(self.config)
@@ -93,12 +122,7 @@ class PodSpecBuilder:
 
 
 class ContainerCommandBuilder(BaseModel):
-    config: CommandConfig
-
-    def __init__(self, config: Optional[CommandConfig] = None):
-        if config is None:
-            config = CommandConfig()
-        self.config = config
+    config: CommandConfig = Field(default_factory=CommandConfig)
 
     def build(self) -> List[str]:
         return build_command(self.config)

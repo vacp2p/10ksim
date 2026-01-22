@@ -15,6 +15,7 @@ import time
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
@@ -152,147 +153,75 @@ def _extract_kind_and_name(kube_yaml: dict) -> Tuple[str, str]:
     return kind, name
 
 
+@lru_cache(maxsize=16)
+def _kind_api_map(operation: str) -> Dict[str, Tuple[str, str]]:
+    kind_map = {
+        "Deployment": ("apps", "deployment"),
+        "StatefulSet": ("apps", "statefulset"),
+        "DaemonSet": ("apps", "daemonset"),
+        "ReplicaSet": ("apps", "replicaset"),
+        "Job": ("batch", "job"),
+        "CronJob": ("batch", "cronjob"),
+        "ReplicationController": ("core", "replicationcontroller"),
+        "Pod": ("core", "pod"),
+        "Service": ("core", "service"),
+    }
+
+    template = {}
+    api_prefix = f"{operation}_namespaced"
+
+    for kind, (group, suffix) in kind_map.items():
+        template[kind] = (group, f"{api_prefix}_{suffix}")
+
+    return template
+
+
 def _kubectl_operation(
-    *,
     kube_yaml: dict,
-    map: Dict[str, Callable[[], Any]],
+    namespace: str,
+    name: str,
+    operation: str,
 ):
+    """Execute kubectl operation for specific kind of Kubernetes resource."""
+    logger.debug(f"{operation} the following config:\n{yaml.dump(kube_yaml)}")
     kind, _ = _extract_kind_and_name(kube_yaml)
 
-    fn = map.get(kind)
-    if not fn:
+    try:
+        group, method_name = _kind_api_map(operation)[kind]
+    except KeyError:
         raise ValueError(
             f"The attempted operation is not supported for this resource. kind: `{kind}`"
         )
 
-    return fn()
+    api_client = client.ApiClient()
+    api_group_map = {
+        "apps": client.AppsV1Api(api_client),
+        "batch": client.BatchV1Api(api_client),
+        "core": client.CoreV1Api(api_client),
+    }
+    api = api_group_map[group]
+    method = getattr(api, method_name)
+
+    needs_name = operation != "create"
+    if needs_name:
+        method = partial(method, name=name)
+    method = partial(method, namespace=namespace, body=kube_yaml)
+
+    return method()
 
 
 def _kubectl_create(kube_yaml: dict, namespace: str):
-    api_client = client.ApiClient()
-    apps_api = client.AppsV1Api(api_client)
-    batch_api = client.BatchV1Api(api_client)
-    core_api = client.CoreV1Api(api_client)
-
-    create_map = {
-        "Deployment": lambda: apps_api.create_namespaced_deployment(
-            namespace=namespace, body=kube_yaml
-        ),
-        "StatefulSet": lambda: apps_api.create_namespaced_stateful_set(
-            namespace=namespace, body=kube_yaml
-        ),
-        "DaemonSet": lambda: apps_api.create_namespaced_daemon_set(
-            namespace=namespace, body=kube_yaml
-        ),
-        "ReplicaSet": lambda: apps_api.create_namespaced_replica_set(
-            namespace=namespace, body=kube_yaml
-        ),
-        "Job": lambda: batch_api.create_namespaced_job(namespace=namespace, body=kube_yaml),
-        "CronJob": lambda: batch_api.create_namespaced_cron_job(
-            namespace=namespace, body=kube_yaml
-        ),
-        "ReplicationController": lambda: core_api.create_namespaced_replication_controller(
-            namespace=namespace, body=kube_yaml
-        ),
-        "Pod": lambda: core_api.create_namespaced_pod(namespace=namespace, body=kube_yaml),
-        "Service": lambda: core_api.create_namespaced_service(namespace=namespace, body=kube_yaml),
-    }
-
-    logger.debug(f"Create the following config:\n{yaml.dump(kube_yaml)}")
-    return _kubectl_operation(
-        kube_yaml=kube_yaml,
-        namespace=namespace,
-        map=create_map,
-    )
+    return _kubectl_operation(kube_yaml, namespace, "", "create")
 
 
 def _kubectl_patch(kube_yaml: dict, namespace: str):
-    api_client = client.ApiClient()
-    apps_api = client.AppsV1Api(api_client)
-    batch_api = client.BatchV1Api(api_client)
-    core_api = client.CoreV1Api(api_client)
-
     _, name = _extract_kind_and_name(kube_yaml)
-
-    patch_map = {
-        "Deployment": lambda: apps_api.patch_namespaced_deployment(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "StatefulSet": lambda: apps_api.patch_namespaced_stateful_set(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "DaemonSet": lambda: apps_api.patch_namespaced_daemon_set(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "ReplicaSet": lambda: apps_api.patch_namespaced_replica_set(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "Job": lambda: batch_api.patch_namespaced_job(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "CronJob": lambda: batch_api.patch_namespaced_cron_job(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "ReplicationController": lambda: core_api.patch_namespaced_replication_controller(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "Pod": lambda: core_api.patch_namespaced_pod(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-        "Service": lambda: core_api.patch_namespaced_service(
-            name=name, namespace=namespace, body=kube_yaml
-        ),
-    }
-
-    logger.debug(f"Patch the following config:\n{yaml.dump(kube_yaml)}")
-    return _kubectl_operation(
-        kube_yaml=kube_yaml,
-        namespace=namespace,
-        map=patch_map,
-    )
+    return _kubectl_operation(kube_yaml, namespace, name, "patch")
 
 
 def _kubectl_replace(kube_yaml: dict, namespace: str):
-    api_client = client.ApiClient()
-
     _, name = _extract_kind_and_name(kube_yaml)
-
-    replace_map = {
-        "Deployment": lambda: client.AppsV1Api(api_client).replace_namespaced_deployment(
-            name, namespace, kube_yaml
-        ),
-        "StatefulSet": lambda: client.AppsV1Api(api_client).replace_namespaced_stateful_set(
-            name, namespace, kube_yaml
-        ),
-        "DaemonSet": lambda: client.AppsV1Api(api_client).replace_namespaced_daemon_set(
-            name, namespace, kube_yaml
-        ),
-        "ReplicaSet": lambda: client.AppsV1Api(api_client).replace_namespaced_replica_set(
-            name, namespace, kube_yaml
-        ),
-        "Job": lambda: client.BatchV1Api(api_client).replace_namespaced_job(
-            name, namespace, kube_yaml
-        ),
-        "CronJob": lambda: client.BatchV1Api(api_client).replace_namespaced_cron_job(
-            name, namespace, kube_yaml
-        ),
-        "ReplicationController": lambda: client.CoreV1Api(
-            api_client
-        ).replace_namespaced_replication_controller(name, namespace, kube_yaml),
-        "Pod": lambda: client.CoreV1Api(api_client).replace_namespaced_pod(
-            name, namespace, kube_yaml
-        ),
-        "Service": lambda: client.CoreV1Api(api_client).replace_namespaced_service(
-            name, namespace, kube_yaml
-        ),
-    }
-
-    logger.debug(f"kubectl_replace the following config:\n{yaml.dump(kube_yaml)}")
-    return _kubectl_operation(
-        kube_yaml=kube_yaml,
-        namespace=namespace,
-        map=replace_map,
-    )
+    return _kubectl_operation(kube_yaml, namespace, name, "replace")
 
 
 def kubectl_apply(

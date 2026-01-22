@@ -11,7 +11,6 @@ from kubernetes.client import (
     V1PodTemplateSpec,
     V1StatefulSet,
 )
-from kubernetes.utils.create_from_yaml import FailToCreateError
 
 V1Deployable = Union[
     V1PodTemplateSpec,
@@ -46,7 +45,6 @@ from core.kube_utils import (
     dict_set,
     dict_visit,
     get_cleanup,
-    is_already_exists_error,
     kubectl_apply,
     poll_namespace_has_objects,
     wait_for_no_objs_in_namespace,

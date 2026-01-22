@@ -106,7 +106,7 @@ class PodTemplateSpecBuilder(BaseModel):
         return build_pod_template_spec(self.config)
 
 
-class PodSpecBuilder:
+class PodSpecBuilder(BaseModel):
     config: PodSpecConfig = Field(default_factory=PodSpecConfig)
 
     def build(self) -> V1PodSpec:

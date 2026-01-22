@@ -319,12 +319,7 @@ class BaseExperiment(ABC, BaseModel):
 
         self.log_event({"phase": "start", **deployment_metadata})
         self.deployed[namespace].append(yaml_obj)
-        try:
-            kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
-        except FailToCreateError as e:
-            if is_already_exists_error(e) and exist_ok:
-                pass
-            raise
+        kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
 
         if not dry_run:
             if wait_for_ready:

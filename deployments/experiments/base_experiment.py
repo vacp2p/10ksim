@@ -46,6 +46,7 @@ from core.kube_utils import (
     dict_set,
     dict_visit,
     get_cleanup,
+    is_already_exists_error,
     kubectl_apply,
     poll_namespace_has_objects,
     wait_for_no_objs_in_namespace,
@@ -229,6 +230,7 @@ class BaseExperiment(ABC, BaseModel):
         deployment: Optional[yaml.YAMLObject | V1Deployable] = None,
         wait_for_ready: bool = True,
         extra_values_paths: List[str] = None,
+        exist_ok: bool = False,
         timeout=3600,
     ):
         def given(var):
@@ -236,9 +238,9 @@ class BaseExperiment(ABC, BaseModel):
                 return all(given(val) for val in var)
             return var is not None
 
-        if sum(1 if given(x) else 0 for x in [deployment, [service, workdir]]) != 1:
-            raise ValueError(  # TODO: fix error message
-                "Invalid arguments. Pass one of the following: `deployment_yaml`, xor (`service` and `workdir`)."
+        if given(deployment) == (given(service) and given(workdir)):
+            raise ValueError(
+                "Invalid arguments. Pass one of the following: `deployment`, xor (`service` and `workdir`)."
             )
 
         if isinstance(deployment, V1Deployable):
@@ -258,6 +260,7 @@ class BaseExperiment(ABC, BaseModel):
             deployment_yaml=yaml_obj,
             wait_for_ready=wait_for_ready,
             extra_values_paths=extra_values_paths,
+            exist_ok=exist_ok,
             timeout=timeout,
         )
 
@@ -273,6 +276,7 @@ class BaseExperiment(ABC, BaseModel):
         deployment_yaml: Optional[yaml.YAMLObject] = None,
         wait_for_ready: bool = True,
         extra_values_paths: List[str] = None,
+        exist_ok: bool = False,
         timeout=3600,
     ):
         yaml_obj = (
@@ -316,17 +320,11 @@ class BaseExperiment(ABC, BaseModel):
         self.log_event({"phase": "start", **deployment_metadata})
         self.deployed[namespace].append(yaml_obj)
         try:
-            kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run)
+            kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
         except FailToCreateError as e:
-            for api_exc in e.api_exceptions:
-                try:
-                    body = json.loads(api_exc.body or "{}")
-                except ValueError:
-                    continue
-                reason = (body.get("reason") or "").lower()
-                if reason == "alreadyexists":
-                    return True
-            return False
+            if is_already_exists_error(e) and exist_ok:
+                pass
+            raise
 
         if not dry_run:
             if wait_for_ready:

@@ -142,146 +142,120 @@ def get_node_ip(node: V1Node) -> str:
         raise ValueError(f"Failed to find IP for node. Node: `{node.metadata.name}`") from e
 
 
-def _kubectl_create(kube_yaml: dict, namespace: str):
-    """Attempt to create a Kubernetes deployment."""
-    logger.debug(f"kubectl_create the following config:\n{yaml.dump(kube_yaml)}")
-
+def _extract_kind_and_name(kube_yaml: dict) -> Tuple[str, str]:
     kind = kube_yaml.get("kind")
     name = kube_yaml.get("metadata", {}).get("name")
     if not kind or not name:
         raise ValueError(
-            "YAML missing nessesary attributes 'kind' and 'metadata.name'. " f"yaml: `{kube_yaml}`"
+            f"YAML missing nessesary attributes 'kind' and 'metadata.name'. yaml: `{kube_yaml}`"
+        )
+    return kind, name
+
+
+def _kubectl_operation(
+    *,
+    kube_yaml: dict,
+    map: Dict[str, Callable[[], Any]],
+):
+    kind, _ = _extract_kind_and_name(kube_yaml)
+
+    fn = map.get(kind)
+    if not fn:
+        raise ValueError(
+            f"The attempted operation is not supported for this resource. kind: `{kind}`"
         )
 
+    return fn()
+
+
+def _kubectl_create(kube_yaml: dict, namespace: str):
     api_client = client.ApiClient()
+    apps_api = client.AppsV1Api(api_client)
+    batch_api = client.BatchV1Api(api_client)
+    core_api = client.CoreV1Api(api_client)
 
     create_map = {
-        "Deployment": lambda: client.AppsV1Api(api_client).create_namespaced_deployment(
-            namespace=namespace,
-            body=kube_yaml,
+        "Deployment": lambda: apps_api.create_namespaced_deployment(
+            namespace=namespace, body=kube_yaml
         ),
-        "StatefulSet": lambda: client.AppsV1Api(api_client).create_namespaced_stateful_set(
-            namespace=namespace,
-            body=kube_yaml,
+        "StatefulSet": lambda: apps_api.create_namespaced_stateful_set(
+            namespace=namespace, body=kube_yaml
         ),
-        "DaemonSet": lambda: client.AppsV1Api(api_client).create_namespaced_daemon_set(
-            namespace=namespace,
-            body=kube_yaml,
+        "DaemonSet": lambda: apps_api.create_namespaced_daemon_set(
+            namespace=namespace, body=kube_yaml
         ),
-        "ReplicaSet": lambda: client.AppsV1Api(api_client).create_namespaced_replica_set(
-            namespace=namespace,
-            body=kube_yaml,
+        "ReplicaSet": lambda: apps_api.create_namespaced_replica_set(
+            namespace=namespace, body=kube_yaml
         ),
-        "Job": lambda: client.BatchV1Api(api_client).create_namespaced_job(
-            namespace=namespace,
-            body=kube_yaml,
+        "Job": lambda: batch_api.create_namespaced_job(namespace=namespace, body=kube_yaml),
+        "CronJob": lambda: batch_api.create_namespaced_cron_job(
+            namespace=namespace, body=kube_yaml
         ),
-        "CronJob": lambda: client.BatchV1Api(api_client).create_namespaced_cron_job(
-            namespace=namespace,
-            body=kube_yaml,
+        "ReplicationController": lambda: core_api.create_namespaced_replication_controller(
+            namespace=namespace, body=kube_yaml
         ),
-        "ReplicationController": lambda: client.CoreV1Api(
-            api_client
-        ).create_namespaced_replication_controller(
-            namespace=namespace,
-            body=kube_yaml,
-        ),
-        "Pod": lambda: client.CoreV1Api(api_client).create_namespaced_pod(
-            namespace=namespace,
-            body=kube_yaml,
-        ),
-        "Service": lambda: client.CoreV1Api(api_client).create_namespaced_service(
-            namespace=namespace,
-            body=kube_yaml,
-        ),
+        "Pod": lambda: core_api.create_namespaced_pod(namespace=namespace, body=kube_yaml),
+        "Service": lambda: core_api.create_namespaced_service(namespace=namespace, body=kube_yaml),
     }
 
-    create_fn = create_map.get(kind)
-    if not create_fn:
-        raise ValueError(f"Create operation not supported for resource. kind: `{kind}`")
-    return create_fn()
+    logger.debug(f"Create the following config:\n{yaml.dump(kube_yaml)}")
+    return _kubectl_operation(
+        kube_yaml=kube_yaml,
+        namespace=namespace,
+        map=create_map,
+    )
 
 
 def _kubectl_patch(kube_yaml: dict, namespace: str):
-    """Apply patch to existing Kubernetes deployment."""
-    logger.debug(f"apply_patch the following config:\n{yaml.dump(kube_yaml)}")
-
-    kind = kube_yaml.get("kind")
-    name = kube_yaml.get("metadata", {}).get("name")
-    if not kind or not name:
-        raise ValueError(
-            "YAML missing nessesary attributes 'kind' and 'metadata.name'. " f"yaml: `{kube_yaml}`"
-        )
-
     api_client = client.ApiClient()
+    apps_api = client.AppsV1Api(api_client)
+    batch_api = client.BatchV1Api(api_client)
+    core_api = client.CoreV1Api(api_client)
+
+    _, name = _extract_kind_and_name(kube_yaml)
 
     patch_map = {
-        "Deployment": lambda: client.AppsV1Api(api_client).patch_namespaced_deployment(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "Deployment": lambda: apps_api.patch_namespaced_deployment(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "StatefulSet": lambda: client.AppsV1Api(api_client).patch_namespaced_stateful_set(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "StatefulSet": lambda: apps_api.patch_namespaced_stateful_set(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "DaemonSet": lambda: client.AppsV1Api(api_client).patch_namespaced_daemon_set(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "DaemonSet": lambda: apps_api.patch_namespaced_daemon_set(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "ReplicaSet": lambda: client.AppsV1Api(api_client).patch_namespaced_replica_set(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "ReplicaSet": lambda: apps_api.patch_namespaced_replica_set(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "Job": lambda: client.BatchV1Api(api_client).patch_namespaced_job(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "Job": lambda: batch_api.patch_namespaced_job(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "CronJob": lambda: client.BatchV1Api(api_client).patch_namespaced_cron_job(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "CronJob": lambda: batch_api.patch_namespaced_cron_job(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "ReplicationController": lambda: client.CoreV1Api(
-            api_client
-        ).patch_namespaced_replication_controller(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "ReplicationController": lambda: core_api.patch_namespaced_replication_controller(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "Pod": lambda: client.CoreV1Api(api_client).patch_namespaced_pod(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "Pod": lambda: core_api.patch_namespaced_pod(
+            name=name, namespace=namespace, body=kube_yaml
         ),
-        "Service": lambda: client.CoreV1Api(api_client).patch_namespaced_service(
-            name=name,
-            namespace=namespace,
-            body=kube_yaml,
+        "Service": lambda: core_api.patch_namespaced_service(
+            name=name, namespace=namespace, body=kube_yaml
         ),
     }
 
-    patch_fn = patch_map.get(kind)
-    if not patch_fn:
-        raise ValueError(f"Patch operation not supported for resource. kind: `{kind}`")
-    return patch_fn()
+    logger.debug(f"Patch the following config:\n{yaml.dump(kube_yaml)}")
+    return _kubectl_operation(
+        kube_yaml=kube_yaml,
+        namespace=namespace,
+        map=patch_map,
+    )
 
 
 def _kubectl_replace(kube_yaml: dict, namespace: str):
-    logger.debug(f"kubectl_replace the following config:\n{yaml.dump(kube_yaml)}")
-
-    kind = kube_yaml.get("kind")
-    name = kube_yaml.get("metadata", {}).get("name")
-    if not kind or not name:
-        raise ValueError(
-            "YAML missing nessesary attributes 'kind' and 'metadata.name'. " f"yaml: `{kube_yaml}`"
-        )
-
     api_client = client.ApiClient()
+
+    _, name = _extract_kind_and_name(kube_yaml)
 
     replace_map = {
         "Deployment": lambda: client.AppsV1Api(api_client).replace_namespaced_deployment(
@@ -313,11 +287,12 @@ def _kubectl_replace(kube_yaml: dict, namespace: str):
         ),
     }
 
-    replace_fn = replace_map.get(kind)
-    if not replace_fn:
-        raise ValueError(f"Replace operation not supported for resource. kind: `{kind}`")
-
-    return replace_fn()
+    logger.debug(f"kubectl_replace the following config:\n{yaml.dump(kube_yaml)}")
+    return _kubectl_operation(
+        kube_yaml=kube_yaml,
+        namespace=namespace,
+        map=replace_map,
+    )
 
 
 def kubectl_apply(
@@ -330,10 +305,10 @@ def kubectl_apply(
     if dry_run:
         _kubectl_apply_dry_run(kube_yaml, namespace, config_file=config_file)
     else:
-        _kubectl_apply(kube_yaml, namespace)
+        _kubectl_apply(kube_yaml, namespace, exist_ok=exist_ok)
 
 
-def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exists_ok=True):
+def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exist_ok=True):
     """Attempts to apply a yaml.
 
     :param exists_ok:
@@ -355,7 +330,7 @@ def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exists_ok=True
             temp.flush()
             utils.create_from_yaml(client.ApiClient(), yaml_file=temp.name, namespace=namespace)
     except FailToCreateError as e:
-        if not (is_already_exists_error(e) and exists_ok):
+        if not (is_already_exists_error(e) and exist_ok):
             raise
         _kubectl_patch(kube_yaml, namespace)
 

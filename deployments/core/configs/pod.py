@@ -4,6 +4,7 @@ from typing import Dict, List, Literal, Optional, TypeVar
 from kubernetes.client import (
     V1Container,
     V1ObjectMeta,
+    V1Pod,
     V1PodDNSConfig,
     V1PodSpec,
     V1PodTemplateSpec,
@@ -131,6 +132,36 @@ def build_pod_spec(config: PodSpecConfig) -> V1PodSpec:
 
 def build_pod_template_spec(config: PodTemplateSpecConfig) -> V1PodTemplateSpec:
     return V1PodTemplateSpec(
+        metadata=V1ObjectMeta(name=config.name, namespace=config.namespace, labels=config.labels),
+        spec=build_pod_spec(config.pod_spec_config),
+    )
+
+
+class PodConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    name: Optional[str] = None
+    namespace: Optional[str] = None
+    labels: Dict[str, str] = None
+    kind: Optional[str] = Field(default="Pod")
+    pod_spec_config: PodSpecConfig = Field(default_factory=PodSpecConfig)
+
+    def with_app(self, app: str, *, overwrite: bool = False):
+        if self.labels is None:
+            self.labels = {}
+
+        if not overwrite and app in [value for key, value in self.labels.items()]:
+            raise ValueError(
+                f'The {type(self)} already has a value for "app" in labels. '
+                f"app arg: `{app}` config: `{self}`"
+            )
+
+        self.labels["app"] = app
+
+
+def build_pod(config: PodConfig) -> V1Pod:
+    return V1Pod(
+        api_version="v1",
+        kind=config.kind,
         metadata=V1ObjectMeta(name=config.name, namespace=config.namespace, labels=config.labels),
         spec=build_pod_spec(config.pod_spec_config),
     )

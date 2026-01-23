@@ -1,5 +1,27 @@
 import json
 import logging
+from typing import Optional, Union
+
+from kubernetes.client import (
+    V1CronJob,
+    V1DaemonSet,
+    V1Deployment,
+    V1Job,
+    V1Pod,
+    V1PodTemplateSpec,
+    V1StatefulSet,
+)
+
+V1Deployable = Union[
+    V1PodTemplateSpec,
+    V1Pod,
+    V1Deployment,
+    V1StatefulSet,
+    V1DaemonSet,
+    V1Job,
+    V1CronJob,
+]
+
 import os
 import shutil
 from abc import ABC, abstractmethod
@@ -11,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-from kubernetes.client import ApiClient
+from kubernetes.client import ApiClient, V1PodTemplateSpec, V1StatefulSet
 from pydantic import BaseModel, Field
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap
@@ -166,6 +188,13 @@ class BaseExperiment(ABC, BaseModel):
             default=False,
             help="If True, does not actually deploy kubernetes configs but run kubectl apply --dry-run.",
         )
+        subparser.add_argument(
+            "--namespace",
+            type=str,
+            required=False,
+            default="zerotesting",
+            help="The namespace for deployments.",
+        )
 
     def build(self, values_yaml, workdir, service: str, *, extra_values_paths=None):
         yaml_obj = build_deployment(
@@ -196,19 +225,58 @@ class BaseExperiment(ABC, BaseModel):
         *,
         service: Optional[str] = None,
         workdir: Optional[str] = None,
-        deployment_yaml: Optional[yaml.YAMLObject] = None,
+        deployment: Optional[yaml.YAMLObject | V1Deployable] = None,
         wait_for_ready: bool = True,
         extra_values_paths: List[str] = None,
+        exist_ok: bool = False,
         timeout=3600,
     ):
         def given(var):
+            if isinstance(var, list):
+                return all(given(val) for val in var)
             return var is not None
 
-        if given(deployment_yaml) == (given(service) and given(workdir)):
+        if given(deployment) == (given(service) and given(workdir)):
             raise ValueError(
-                "Invalid arguments. Pass `deployment_yaml` xor (`service` and `workdir`) as arguments."
+                "Invalid arguments. Pass one of the following: `deployment`, xor (`service` and `workdir`)."
             )
 
+        if isinstance(deployment, V1Deployable):
+            deployment = api_client.sanitize_for_serialization(deployment)
+
+        yaml_obj = (
+            deployment
+            if deployment is not None
+            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+        )
+
+        await self.deploy_yaml(
+            api_client,
+            stack,
+            args,
+            values_yaml,
+            deployment_yaml=yaml_obj,
+            wait_for_ready=wait_for_ready,
+            extra_values_paths=extra_values_paths,
+            exist_ok=exist_ok,
+            timeout=timeout,
+        )
+
+    async def deploy_yaml(
+        self,
+        api_client: ApiClient,
+        stack,
+        args: Namespace,
+        values_yaml,
+        *,
+        service: Optional[str] = None,
+        workdir: Optional[str] = None,
+        deployment_yaml: Optional[yaml.YAMLObject] = None,
+        wait_for_ready: bool = True,
+        extra_values_paths: List[str] = None,
+        exist_ok: bool = False,
+        timeout=3600,
+    ):
         yaml_obj = (
             deployment_yaml
             if deployment_yaml is not None
@@ -249,7 +317,7 @@ class BaseExperiment(ABC, BaseModel):
 
         self.log_event({"phase": "start", **deployment_metadata})
         self.deployed[namespace].append(yaml_obj)
-        kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run)
+        kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
 
         if not dry_run:
             if wait_for_ready:

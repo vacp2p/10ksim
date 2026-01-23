@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import glob
 import itertools
+import json
 import logging
 import logging.config
 import os
@@ -14,6 +15,7 @@ import time
 from copy import deepcopy
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
 
@@ -23,6 +25,7 @@ from kubernetes import client, utils
 from kubernetes.client import ApiClient
 from kubernetes.client.models import V1Node
 from kubernetes.client.rest import ApiException
+from kubernetes.utils import FailToCreateError
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
@@ -140,16 +143,106 @@ def get_node_ip(node: V1Node) -> str:
         raise ValueError(f"Failed to find IP for node. Node: `{node.metadata.name}`") from e
 
 
-def kubectl_apply(
-    kube_yaml: yaml.YAMLObject, namespace="zerotesting", *, config_file=None, dry_run=False
+def _extract_kind_and_name(kube_yaml: dict) -> Tuple[str, str]:
+    kind = kube_yaml.get("kind")
+    name = kube_yaml.get("metadata", {}).get("name")
+    if not kind or not name:
+        raise ValueError(
+            f"YAML missing nessesary attributes 'kind' and 'metadata.name'. yaml: `{kube_yaml}`"
+        )
+    return kind, name
+
+
+@lru_cache(maxsize=16)
+def _kind_api_map(operation: str) -> Dict[str, Tuple[str, str]]:
+    kind_map = {
+        "Deployment": ("apps", "deployment"),
+        "StatefulSet": ("apps", "statefulset"),
+        "DaemonSet": ("apps", "daemonset"),
+        "ReplicaSet": ("apps", "replicaset"),
+        "Job": ("batch", "job"),
+        "CronJob": ("batch", "cronjob"),
+        "ReplicationController": ("core", "replicationcontroller"),
+        "Pod": ("core", "pod"),
+        "Service": ("core", "service"),
+    }
+
+    template = {}
+    api_prefix = f"{operation}_namespaced"
+
+    for kind, (group, suffix) in kind_map.items():
+        template[kind] = (group, f"{api_prefix}_{suffix}")
+
+    return template
+
+
+def _kubectl_operation(
+    kube_yaml: dict,
+    namespace: str,
+    name: str,
+    operation: str,
 ):
+    """Execute kubectl operation for specific kind of Kubernetes resource."""
+    logger.debug(f"{operation} the following config:\n{yaml.dump(kube_yaml)}")
+    kind, _ = _extract_kind_and_name(kube_yaml)
+
+    try:
+        group, method_name = _kind_api_map(operation)[kind]
+    except KeyError:
+        raise ValueError(
+            f"The attempted operation is not supported for this resource. kind: `{kind}`"
+        )
+
+    api_client = client.ApiClient()
+    api_group_map = {
+        "apps": client.AppsV1Api(api_client),
+        "batch": client.BatchV1Api(api_client),
+        "core": client.CoreV1Api(api_client),
+    }
+    api = api_group_map[group]
+    method = getattr(api, method_name)
+
+    needs_name = operation != "create"
+    if needs_name:
+        method = partial(method, name=name)
+    method = partial(method, namespace=namespace, body=kube_yaml)
+
+    return method()
+
+
+def _kubectl_create(kube_yaml: dict, namespace: str):
+    return _kubectl_operation(kube_yaml, namespace, "", "create")
+
+
+def _kubectl_patch(kube_yaml: dict, namespace: str):
+    _, name = _extract_kind_and_name(kube_yaml)
+    return _kubectl_operation(kube_yaml, namespace, name, "patch")
+
+
+def _kubectl_replace(kube_yaml: dict, namespace: str):
+    _, name = _extract_kind_and_name(kube_yaml)
+    return _kubectl_operation(kube_yaml, namespace, name, "replace")
+
+
+def kubectl_apply(
+    kube_yaml: yaml.YAMLObject, namespace: str, *, config_file=None, dry_run=False, exist_ok=False
+):
+    """Attempts to apply a yaml, similar to the command `kubectl apply`.
+
+    Unlike `kubectl apply`, does not track previous resources; thus, does not prune old resources.
+    """
     if dry_run:
         _kubectl_apply_dry_run(kube_yaml, namespace, config_file=config_file)
     else:
-        _kubectl_apply(kube_yaml, namespace)
+        _kubectl_apply(kube_yaml, namespace, exist_ok=exist_ok)
 
 
-def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace="zerotesting"):
+def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exist_ok=True):
+    """Attempts to apply a yaml.
+
+    :param exists_ok:
+        If True, replaces the deployment if it already.
+        If False, reraises the exception if the deployment already exists."""
     logger.debug(f"kubectl_apply the following config:\n{str(yaml.dump(kube_yaml))}")
     kind = kube_yaml.get("kind")
     name = kube_yaml.get("metadata", {}).get("name")
@@ -160,46 +253,15 @@ def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace="zerotesting"):
 
     api_client = client.ApiClient()
 
-    replace_map = {
-        "Deployment": lambda: client.AppsV1Api(api_client).replace_namespaced_deployment(
-            name, namespace, kube_yaml
-        ),
-        "StatefulSet": lambda: client.AppsV1Api(api_client).replace_namespaced_stateful_set(
-            name, namespace, kube_yaml
-        ),
-        "DaemonSet": lambda: client.AppsV1Api(api_client).replace_namespaced_daemon_set(
-            name, namespace, kube_yaml
-        ),
-        "ReplicaSet": lambda: client.AppsV1Api(api_client).replace_namespaced_replica_set(
-            name, namespace, kube_yaml
-        ),
-        "Job": lambda: client.BatchV1Api(api_client).replace_namespaced_job(
-            name, namespace, kube_yaml
-        ),
-        "CronJob": lambda: client.BatchV1Api(api_client).replace_namespaced_cron_job(
-            name, namespace, kube_yaml
-        ),
-        "ReplicationController": lambda: client.CoreV1Api(
-            api_client
-        ).replace_namespaced_replication_controller(name, namespace, kube_yaml),
-        "Pod": lambda: client.CoreV1Api(api_client).replace_namespaced_pod(
-            name, namespace, kube_yaml
-        ),
-        "Service": lambda: client.CoreV1Api(api_client).replace_namespaced_service(
-            name, namespace, kube_yaml
-        ),
-    }
-
     try:
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as temp:
             yaml.dump(kube_yaml, temp)
             temp.flush()
             utils.create_from_yaml(client.ApiClient(), yaml_file=temp.name, namespace=namespace)
-    except utils.FailToCreateError:
-        replace_fn = replace_map.get(kind)
-        if not replace_fn:
-            raise ValueError(f"Replace operation not supported for resource. kind: `{kind}`")
-        replace_fn()
+    except FailToCreateError as e:
+        if not (is_already_exists_error(e) and exist_ok):
+            raise
+        _kubectl_patch(kube_yaml, namespace)
 
 
 def _kubectl_apply_dry_run(kube_yaml: yaml.YAMLObject, namespace: str, *, config_file: str):
@@ -227,6 +289,18 @@ def _kubectl_apply_dry_run(kube_yaml: yaml.YAMLObject, namespace: str, *, config
             raise ValueError("Dry run for applying kubernetes config failed.")
         logger.debug(f"Dry run deploying `{kube_yaml}`" f"stdout: `{result.stdout}`")
         return result
+
+
+def is_already_exists_error(error: FailToCreateError) -> bool:
+    for api_exception in error.api_exceptions:
+        try:
+            body = json.loads(api_exception.body or "{}")
+        except ValueError:
+            continue
+        reason = body.get("reason", "").lower()
+        if reason == "alreadyexists":
+            return True
+    return False
 
 
 def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str]] = None):

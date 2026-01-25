@@ -50,7 +50,7 @@ class Publisher:
         config: Optional[PublisherConfig] = None,
         namespace: Optional[str] = None,
         service_name: Optional[str] = None,
-        image: Optional[Image] = None,
+        image: Optional[Image | str] = None,
     ) -> dict:
 
         #Create publisher pod specification
@@ -62,6 +62,8 @@ class Publisher:
             service_name = Publisher.DEFAULT_SERVICE_NAME
         if image is None:
             image = Publisher.DEFAULT_IMAGE
+        elif isinstance(image, str):
+            image = Image.from_str(image)
 
         service_dns = f"{service_name}.{namespace}.svc.cluster.local"
         
@@ -107,6 +109,7 @@ class Publisher:
         port: Optional[int] = None,
         namespace: Optional[str] = None,
         service_name: Optional[str] = None,
+        image: Optional[Image | str] = None,
     ) -> dict:
 
         # Create publisher pod with individual parameters.
@@ -123,4 +126,5 @@ class Publisher:
             config=config,
             namespace=namespace,
             service_name=service_name,
+            image=image,
         )

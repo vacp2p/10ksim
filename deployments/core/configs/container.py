@@ -7,6 +7,7 @@ from kubernetes.client import (
     V1EnvVar,
     V1Probe,
     V1ResourceRequirements,
+    V1SecurityContext,
     V1VolumeMount,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,6 +34,7 @@ class ContainerConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     command_config: CommandConfig = Field(default_factory=CommandConfig)
     readiness_probe: Optional[V1Probe] = None
+    security_context: Optional[V1SecurityContext] = None
     # Optional fields default to None to avoid inclusion in the deployment yaml
     # when we pass them to the constructor of Kubernetes objects.
     # These fields are set to `[]` before `.append` is called if needed.
@@ -97,6 +99,7 @@ def build_container(config: ContainerConfig) -> V1Container:
         env=deepcopy(config.env),
         resources=deepcopy(config.resources),
         readiness_probe=deepcopy(config.readiness_probe),
+        security_context=deepcopy(config.security_context),
         volume_mounts=deepcopy(config.volume_mounts),
         command=command,
         args=args,

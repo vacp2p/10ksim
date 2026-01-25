@@ -26,7 +26,8 @@ class Libp2pEnvConfig:
     service: Optional[str] = None
     muxer: Optional[str] = None
     fragments: Optional[int] = None
-    self_trigger: Optional[bool] = None    
+    self_trigger: Optional[bool] = None
+    shadow_env: Optional[bool] = None
 
     # Mix protocol configuration
     mounts_mix: Optional[bool] = None
@@ -54,6 +55,8 @@ class Libp2pEnvConfig:
             env_vars.append(V1EnvVar(name="SERVICE", value=self.service))
         if self.max_connections is not None:
             env_vars.append(V1EnvVar(name="MAXCONNECTIONS", value=str(self.max_connections)))
+        if self.shadow_env is not None:
+            env_vars.append(V1EnvVar(name="SHADOWENV", value=str(self.shadow_env).lower()))
         if self.mounts_mix is not None:
             env_vars.append(V1EnvVar(name="MOUNTSMIX", value="1" if self.mounts_mix else "0"))
         if self.uses_mix is not None:

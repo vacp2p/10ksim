@@ -8,6 +8,7 @@ from core.configs.container import Image
 from core.configs.statefulset import StatefulSetConfig
 from libp2p.builders import mix as Mix
 from libp2p.builders import network_delay as NetworkDelay
+from libp2p.builders import ovn as Ovn
 from libp2p.builders.helpers import find_libp2p_container_config
 from libp2p.builders.nodes import Libp2pEnvConfig, Nodes
 
@@ -51,6 +52,8 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         muxer: Optional[str] = None,
         fragments: Optional[int] = None,
         self_trigger: Optional[bool] = None,
+        shadow_env: Optional[bool] = None,
+        image: Optional[Image | str] = None,
     ) -> Self:
 
         env_config = Libp2pEnvConfig(
@@ -61,6 +64,7 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
             muxer=muxer,
             fragments=fragments,
             self_trigger=self_trigger,
+            shadow_env=shadow_env,
             # Mix defaults (set using with_mix())
             mounts_mix=None,
             uses_mix=None,
@@ -79,6 +83,11 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
             env_config=env_config,
             namespace=namespace,
         )
+
+        # Apply custom image
+        if image is not None:
+            self.with_image(image)
+
         return self
 
     def with_network_delay(
@@ -139,6 +148,35 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
             ),
             overwrite=True,
         )
+        return self
+
+    def with_ovn_bandwidth(
+        self,
+        ingress_mbps: int,
+        egress_mbps: Optional[int] = None,
+    ) -> Self:
+        """Apply OVN bandwidth shaping to the pods."""
+        Ovn.apply_bandwidth_limit(self.config, ingress_mbps, egress_mbps)
+        return self
+
+    def with_ovn_logical_switch(self, logical_switch: str) -> Self:
+        """Attach pods to an OVN logical switch (subnet)."""
+        Ovn.apply_logical_switch(self.config, logical_switch)
+        return self
+    
+    def with_ovn_config(
+        self,
+        ingress_mbps: Optional[int] = None,
+        egress_mbps: Optional[int] = None,
+        logical_switch: Optional[str] = None,
+    ) -> Self:
+        """Apply full OVN configuration (bandwidth + subnet)."""
+        ovn_config = Ovn.OvnConfig(
+            ingress_rate=ingress_mbps,
+            egress_rate=egress_mbps,
+            logical_switch=logical_switch,
+        )
+        Ovn.apply_ovn_statefulset(self.config, ovn_config)
         return self
 
 def create_mix_pvc(

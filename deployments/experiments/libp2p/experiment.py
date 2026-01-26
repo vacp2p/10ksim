@@ -399,32 +399,38 @@ def parse_args():
     parser.add_argument(
         "--namespace",
         type=str,
+        default=DEFAULTS["namespace"],
         help=f"Kubernetes namespace (default: {DEFAULTS['namespace']})",
     )
     parser.add_argument(
         "--servicename",
         type=str,
+        default=DEFAULTS["servicename"],
         help=f"Service name for DNS resolution (default: {DEFAULTS['servicename']})",
     )
     parser.add_argument(
         "--statefulset-name",
         type=str,
+        default=DEFAULTS["statefulset_name"],
         help=f"StatefulSet name (default: {DEFAULTS['statefulset_name']})",
     )
     parser.add_argument(
         "--peers",
         type=int,
+        default=DEFAULTS["peers"],
         help=f"Number of peers/replicas (default: {DEFAULTS['peers']})",
     )
     parser.add_argument(
         "--muxer",
         type=str,
+        default=DEFAULTS["muxer"],
         choices=["mplex", "yamux", "quic"],
-        help=f"Muxer type (default: {DEFAULTS['muxer']})",
+        help=f"Muxer type - mplex is only available for nim (default: {DEFAULTS['muxer']})",
     )
     parser.add_argument(
         "--image",
         type=str,
+        default=DEFAULTS["image"],
         help=f"Container image for the libp2p test node (default: {DEFAULTS['image']})",
     )
     parser.add_argument(
@@ -441,11 +447,13 @@ def parse_args():
     parser.add_argument(
         "--delay-ms",
         type=int,
+        default=DEFAULTS["delay_ms"],
         help=f"Average link delay in milliseconds. Applied for --with-delay only (default: {DEFAULTS['delay_ms']})",
     )
     parser.add_argument(
         "--jitter-ms",
         type=int,
+        default=DEFAULTS["jitter_ms"],
         help=f"Average jitter in milliseconds. Applied for --with-delay only (default: {DEFAULTS['jitter_ms']})",
     )
     parser.add_argument(
@@ -456,16 +464,19 @@ def parse_args():
     parser.add_argument(
         "--num-mix",
         type=int,
+        default=DEFAULTS["num_mix"],
         help=f"Number of mix nodes (default: {DEFAULTS['num_mix']})",
     )
     parser.add_argument(
         "--mix-d",
         type=int,
+        default=DEFAULTS["mix_d"],
         help=f"Mix tunnel length (default: {DEFAULTS['mix_d']})",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
+        default=DEFAULTS["output_dir"],
         help=f"Output directory for YAML files (default: {DEFAULTS['output_dir']})",
     )
 

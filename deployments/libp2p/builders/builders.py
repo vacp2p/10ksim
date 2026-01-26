@@ -21,7 +21,7 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
     Usage:
         statefulset = (
             Libp2pStatefulSetBuilder(StatefulSetConfig())
-            .with_libp2p_config(name="pod", namespace="refactortesting-libp2p", num_nodes=50)
+            .with_libp2p_config(name="pod", namespace="zerotesting-nimlibp2p", num_nodes=50)
             .with_network_delay(delay_ms=100, jitter_ms=30)
             .build()
         )
@@ -29,7 +29,7 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         # With mix protocol
         statefulset = (
             Libp2pStatefulSetBuilder(StatefulSetConfig())
-            .with_libp2p_config(name="pod", namespace="refactortesting-libp2p", num_nodes=50)
+            .with_libp2p_config(name="pod", namespace="zerotesting-nimlibp2p", num_nodes=50)
             .with_mix(num_mix=50, mix_d=3)
             .build()
         )
@@ -180,7 +180,7 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         return self
 
 def create_mix_pvc(
-    namespace: str = "refactortesting-libp2p",
+    namespace: str = "zerotesting-nimlibp2p",
     name: str = Mix.DEFAULT_PVC_NAME,
     storage_size: str = "1Gi",
     storage_class: str = "moosefs-storage",

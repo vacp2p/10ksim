@@ -12,7 +12,7 @@ def network_delay_init_container(
     :param jitter_ms: Jitter/variation in milliseconds
     :param distribution: Distribution types
     """
-    command = (
+    tc_command = (
         f"tc qdisc add dev eth0 root netem delay {delay_ms}ms {jitter_ms}ms "
         f"distribution {distribution}"
     )
@@ -26,7 +26,8 @@ def network_delay_init_container(
                 "add": ["NET_ADMIN"],
             },
         },
-        "command": ["sh", "-c", command],
+        "command": ["sh"],
+        "args": ["-c", tc_command],
     }
 
 def apply_network_delay_pod_spec(

@@ -42,7 +42,7 @@ class PublisherConfig:
 class Publisher:
 
     DEFAULT_IMAGE = Image(repo="ufarooqstatus/libp2p-publisher", tag="v1.0")
-    DEFAULT_NAMESPACE = "refactortesting-libp2p"
+    DEFAULT_NAMESPACE = "zerotesting-nimlibp2p"
     DEFAULT_SERVICE_NAME = "nimp2p-service"
 
     @staticmethod

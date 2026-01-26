@@ -23,7 +23,7 @@ DEFAULT_STORAGE_SIZE = "1Gi"
 
 def create_mix_pvc(
     name: str = DEFAULT_PVC_NAME,
-    namespace: str = "refactortesting-libp2p",
+    namespace: str = "zerotesting-nimlibp2p",
     storage_size: str = DEFAULT_STORAGE_SIZE,
     storage_class: str = DEFAULT_STORAGE_CLASS,
 ) -> V1PersistentVolumeClaim:

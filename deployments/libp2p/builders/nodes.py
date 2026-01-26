@@ -78,7 +78,7 @@ class Libp2pEnvConfig:
 class Nodes:
     """Base configuration for libp2p nodes."""
     # Default values
-    DEFAULT_NAMESPACE = "refactortesting-libp2p"
+    DEFAULT_NAMESPACE = "zerotesting-nimlibp2p"
     DEFAULT_SERVICE_NAME = "nimp2p-service"
     DEFAULT_IMAGE = Image(repo="ufarooqstatus/refactored-test-node", tag="v1.0")
 

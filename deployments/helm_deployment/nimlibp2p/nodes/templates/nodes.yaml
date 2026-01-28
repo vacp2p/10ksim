@@ -6,7 +6,7 @@ metadata:
 spec:
   replicas: {{ .Values.nimlibp2p.nodes.replicas }}
   podManagementPolicy: "Parallel"
-  serviceName: nimp2p-service
+  serviceName: {{ default "nimp2p-service" .Values.nimlibp2p.nodes.serviceName }}
   selector:
     matchLabels:
       app: {{ default "zerotenkay" .Values.nimlibp2p.nodes.app }}
@@ -17,6 +17,7 @@ spec:
     spec:
       dnsConfig:
         {{- toYaml .Values.nimlibp2p.nodes.dnsConfig | nindent 8 }}
+      {{- if .Values.nimlibp2p.nodes.network.enabled }}
       initContainers:
         - name: slowyourroll
           image: soutullostatus/tc-container:1
@@ -26,7 +27,8 @@ spec:
           command:
             - sh
             - -c
-            - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+            - tc qdisc add dev eth0 root netem delay {{ .Values.nimlibp2p.nodes.network.delay }}ms {{ .Values.nimlibp2p.nodes.network.jitter }}ms distribution {{ .Values.nimlibp2p.nodes.network.distribution }}
+      {{- end }}
       containers:
         - name: container-0
           image: {{ default "soutullostatus/dst-test-node" .Values.nimlibp2p.nodes.image.repository }}:{{ default "v1.8.0-mplex" .Values.nimlibp2p.nodes.image.tag }}
@@ -34,6 +36,7 @@ spec:
           ports:
             - containerPort: 5000
             - containerPort: 8008
+            - containerPort: 8645
           resources:
             requests:
               memory: "64Mi"
@@ -42,16 +45,14 @@ spec:
               memory: "600Mi"
               cpu: "400m"
           env:
-                - name: POD_NAME
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.name
             {{- $envArgs := .Values.nimlibp2p.nodes.env }}
             {{- $preset := $envArgs.type | default "basic" -}}
             {{- include "env.genVars" ( dict
               "args" $envArgs.vars
               "presets" $envArgs.presets
-              "preset" $preset)  | nindent 16 }}
+              "preset" $preset)  | nindent 12 }}
+          {{- if .Values.nimlibp2p.nodes.args }}
           args:
             - {{ quote .Values.nimlibp2p.nodes.minutes }}
             - {{ quote .Values.nimlibp2p.nodes.hours }}
+          {{- end }}

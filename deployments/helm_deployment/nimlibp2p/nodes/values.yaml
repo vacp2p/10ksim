@@ -1,16 +1,25 @@
 nimlibp2p:
   nodes:
     name: pod
-    numNodes: 1000
+    replicas: 1000
     namespace: "zerotesting-nimlibp2p"
+    serviceName: nimp2p-service
+    dnsConfig:
+      searches:
+        - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
     image:
       repository: soutullostatus/dst-test-node
       tag: v1.8.0-mplex
     network:
+      # Set false to disable delay
+      enabled: true
       # Delay in ms
-      delay: 0
+      delay: 100
       # Jitter in ms
-      jitter: 0
+      jitter: 30
+      distribution: normal
     env:
       type: basic
-      vars: {}
+      vars:
+        PEERS: "50"
+        MUXER: "yamux"

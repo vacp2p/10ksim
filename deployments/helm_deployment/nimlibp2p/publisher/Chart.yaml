@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nimlibp2p-publisher
+description: Publisher pod for nim-libp2p traffic generation
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

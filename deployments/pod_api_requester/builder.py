@@ -2,42 +2,33 @@ from typing import List, Literal, Optional, Self
 
 from kubernetes.client import (
     V1ConfigMapVolumeSource,
-    V1ObjectMeta,
-    V1Subject,
-    V1RoleRef,
-    V1PolicyRule,
     V1ContainerPort,
-    V1RoleBinding,
-    V1EnvVar,
-    V1EnvVarSource,
-    V1ObjectFieldSelector,
+    V1ObjectMeta,
     V1Pod,
     V1PodDNSConfig,
-    V1PodTemplateSpec,
+    V1PolicyRule,
     V1ResourceRequirements,
     V1Role,
+    V1RoleBinding,
+    V1RoleRef,
+    V1Subject,
     V1Volume,
     V1VolumeMount,
 )
-from pydantic import BaseModel
 
 from core.builders import (
-    ContainerBuilder,
     PodBuilder,
-    PodSpecBuilder,
-    PodTemplateSpecBuilder,
-    StatefulSetBuilder,
 )
 from core.configs.command import Command, CommandConfig
 from core.configs.container import ContainerConfig, Image
 from core.configs.helpers import find_container_config
 from core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
-from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
 
 ScriptMode = Literal["server", "batch"]
 
 
 NAME = "pod-api-requester-container"
+
 
 class PodApiRequesterBuilder(PodBuilder):
     _mode: Optional[ScriptMode] = None
@@ -99,7 +90,7 @@ class PodApiRequesterBuilder(PodBuilder):
         self._mode = mode
         return self
 
-    def with_command(self, command : str, args : List[str]) -> Self:
+    def with_command(self, command: str, args: List[str]) -> Self:
         container_config = find_container_config(self.config.pod_spec_config, NAME)
         container_config.command_config = CommandConfig(
             commands=[Command(command=command, args=args)]
@@ -130,7 +121,7 @@ def create_container_config() -> ContainerConfig:
     config = ContainerConfig(
         name=NAME,
         image=Image(
-            repo="pearsonwhite/pod-api-requester", tag="d0dd4a2d254e2efc81b18f224952472a250c1a81"
+            repo="pearsonwhite/pod-api-requester", tag="4575c70fd1efddabb7673ebe8a1f2b482473e0db"
         ),
         image_pull_policy="Always",
     )
@@ -189,5 +180,3 @@ def create_resources() -> V1ResourceRequirements:
     return V1ResourceRequirements(
         requests={"memory": "64Mi", "cpu": "150m"}, limits={"memory": "600Mi", "cpu": "400m"}
     )
-
-

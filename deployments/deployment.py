@@ -10,7 +10,7 @@ from kubernetes import config
 from kubernetes.client import ApiClient
 from ruamel import yaml
 
-from core.kube_utils import init_logger, set_config_file
+from core.kube_utils import init_logger, set_config_file, get_YAML
 from registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ async def run_experiment(
 
     try:
         with open(values_path, "r") as values:
-            values_yaml = yaml.safe_load(values.read())  # todo: change to get_YAML().load()...
+            values_yaml = get_YAML().load(values)
     except TypeError:
         # values_path is None.
         values_yaml = None

@@ -6,9 +6,8 @@ from pydantic import PositiveInt
 from core.builders import StatefulSetBuilder
 from core.configs.container import Image
 from core.configs.statefulset import StatefulSetConfig
-from libp2p.builders import mix as Mix
-from libp2p.builders import network_delay as NetworkDelay
-from libp2p.builders import ovn as Ovn
+import libp2p.builders.mix as Mix
+import libp2p.builders.network_delay as NetworkDelay
 from libp2p.builders.helpers import find_libp2p_container_config
 from libp2p.builders.nodes import Libp2pEnvConfig, Nodes
 
@@ -148,35 +147,6 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
             ),
             overwrite=True,
         )
-        return self
-
-    def with_ovn_bandwidth(
-        self,
-        ingress_mbps: int,
-        egress_mbps: Optional[int] = None,
-    ) -> Self:
-        """Apply OVN bandwidth shaping to the pods."""
-        Ovn.apply_bandwidth_limit(self.config, ingress_mbps, egress_mbps)
-        return self
-
-    def with_ovn_logical_switch(self, logical_switch: str) -> Self:
-        """Attach pods to an OVN logical switch (subnet)."""
-        Ovn.apply_logical_switch(self.config, logical_switch)
-        return self
-    
-    def with_ovn_config(
-        self,
-        ingress_mbps: Optional[int] = None,
-        egress_mbps: Optional[int] = None,
-        logical_switch: Optional[str] = None,
-    ) -> Self:
-        """Apply full OVN configuration (bandwidth + subnet)."""
-        ovn_config = Ovn.OvnConfig(
-            ingress_rate=ingress_mbps,
-            egress_rate=egress_mbps,
-            logical_switch=logical_switch,
-        )
-        Ovn.apply_ovn_statefulset(self.config, ovn_config)
         return self
 
 def create_mix_pvc(

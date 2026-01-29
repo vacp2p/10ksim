@@ -14,6 +14,11 @@ from pod_api_requester.configs import Endpoint, Target
 
 logger = logging.getLogger(__name__)
 
+_DEFAULTS = {
+    "service_name": "zerotesting-publisher",
+    "app": "zerotenkay-publisher",
+}
+
 
 class PodApiError(Exception):
     """Base for all Pod API errors."""
@@ -84,6 +89,7 @@ def wrap_arg(arg: Union[Target, Endpoint, str]) -> dict:
 
 
 async def request(
+    # TODO: Consider passing in publisher k8s object and extract namespace, service_name, and app from there.
     namespace: str,
     target: Union[Target, str],
     endpoint: Union[Endpoint, str],
@@ -95,8 +101,8 @@ async def request(
 
     return await pod_api_request(
         namespace=namespace,
-        service_name="zerotesting-publisher",
-        app="zerotenkay-publisher",
+        service_name=_DEFAULTS["service_name"],
+        app=_DEFAULTS["app"],
         url_template="http://{target_ip}:{node_port}/process",
         data=data,
     )

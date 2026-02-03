@@ -157,7 +157,6 @@ def plot_message_latency_distributions(
     # Process each file separately
     for path in received_summary_paths:
         df = pd.read_csv(path)
-        #df.set_index(['shard', 'msg_hash', 'timestamp'], inplace=True)
 
         df["source"] = path.stem     # label dataset
 

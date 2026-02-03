@@ -118,6 +118,7 @@ def v1container_to_container_config(v1container: V1Container) -> ContainerConfig
         env=deepcopy(v1container.env),
         volume_mounts=deepcopy(v1container.volume_mounts),
         readiness_probe=deepcopy(v1container.readiness_probe),
+        security_context=deepcopy(v1container.security_context),
         image_pull_policy=v1container.image_pull_policy,
         resources=deepcopy(v1container.resources),
         command_config=command_config,

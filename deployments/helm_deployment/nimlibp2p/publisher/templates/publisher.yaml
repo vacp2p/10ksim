@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.nimlibp2p.publisher.name }}
+  namespace: {{ default "zerotesting-nimlibp2p" .Values.nimlibp2p.publisher.namespace }}
+spec:
+  restartPolicy: Never
+  dnsConfig:
+    searches:
+      - {{ .Values.nimlibp2p.publisher.serviceName }}.{{ .Values.nimlibp2p.publisher.namespace }}.svc.cluster.local
+  containers:
+    - name: publisher-container
+      image: {{ .Values.nimlibp2p.publisher.image.repository }}:{{ .Values.nimlibp2p.publisher.image.tag }}
+      imagePullPolicy: Always
+      command: ["sh", "-c"]
+      args:
+        - |
+          python /app/traffic.py \
+          {{- with .Values.nimlibp2p.publisher.args }}
+          {{- if .pubsubTopic }}
+          --pubsub-topic={{ .pubsubTopic }} \
+          {{- end }}
+          {{- if .msgSizeBytes }}
+          --msg-size-bytes={{ .msgSizeBytes }} \
+          {{- end }}
+          {{- if .delaySeconds }}
+          --delay-seconds={{ .delaySeconds }} \
+          {{- end }}
+          {{- if .messages }}
+          --messages={{ .messages }} \
+          {{- end }}
+          {{- if .peerSelection }}
+          --peer-selection={{ .peerSelection }} \
+          {{- end }}
+          {{- if .port }}
+          --port={{ .port }} \
+          {{- end }}
+          {{- end }}
+          && echo "Publisher finished"

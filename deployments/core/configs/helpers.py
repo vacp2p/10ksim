@@ -1,14 +1,13 @@
-import json
 from copy import deepcopy
 from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
 
-from kubernetes import client
-from kubernetes.client import V1Container, V1Probe
+from kubernetes.client import V1Container
 
 from core.configs.command import CommandConfig
 from core.configs.container import ContainerConfig, Image
 from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from core.kube_utils import dict_to_k8s_object
 
 T = TypeVar("T")
 _sentinel = object()
@@ -125,44 +124,9 @@ def v1container_to_container_config(v1container: V1Container) -> ContainerConfig
     return container_config
 
 
-K8sModelStr = Literal[
-    "V1Pod",
-    "V1PodSpec",
-    "V1Container",
-    "V1Service",
-    "V1Deployment",
-    "V1StatefulSet",
-    "V1DaemonSet",
-    "V1Job",
-    "V1ConfigMap",
-    "V1Secret",
-    "V1PersistentVolumeClaim",
-    "V1Ingress",
-    "V1ResourceRequirements",
-    "V1Volume",
-    "V1EnvVar",
-    "V1Probe",
-]
-
-
-def dict_to_k8s_object(data: dict, model: K8sModelStr):
-    """Convert a dict to a Kubernetes object."""
-    api_client = client.ApiClient()
-
-    class _FakeResponse:
-        def __init__(self, obj):
-            self.data = json.dumps(obj)
-
-    return api_client.deserialize(_FakeResponse(data), model)
-
-
 def dict_to_container_config(container_dict: dict) -> ContainerConfig:
     v1container = dict_to_k8s_object(container_dict, "V1Container")
     return v1container_to_container_config(v1container)
-
-
-def dict_to_v1probe(probe_dict: dict) -> V1Probe:
-    return dict_to_k8s_object(probe_dict, "V1Probe")
 
 
 def convert_to_container_config(container: ContainerConfig | V1Container | dict) -> ContainerConfig:

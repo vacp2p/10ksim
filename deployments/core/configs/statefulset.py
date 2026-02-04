@@ -44,7 +44,7 @@ class StatefulSetConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     name: Optional[str] = None
     namespace: Optional[str] = None
-    apiVersion: Optional[str] = None
+    apiVersion: Optional[str] = Field(default="apps/v1")
     kind: Optional[str] = Field(default="StatefulSet")
     labels: Optional[Dict[str, str]] = None
     stateful_set_spec: StatefulSetSpecConfig = StatefulSetSpecConfig()

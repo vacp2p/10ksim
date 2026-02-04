@@ -198,7 +198,7 @@ class BaseExperiment(ABC, BaseModel):
 
     def build(self, values_yaml, workdir, service: str, *, extra_values_paths=None):
         yaml_obj = build_deployment(
-            deployment_dir=Path(os.path.dirname(__file__)) / service,
+            deployment_dir=Path(os.path.dirname(__file__)) / ".." / "helm_deployment" / service,
             workdir=os.path.join(workdir, service),
             cli_values=values_yaml,
             name=service,

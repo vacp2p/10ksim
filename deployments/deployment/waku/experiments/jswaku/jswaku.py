@@ -23,7 +23,9 @@ from experiments.base_experiment import (
     get_valid_shifted_times,
     parse_events_log,
 )
-from pod_api_requester.pod_api_requester import publish_message
+from pod_api_requester.builder import PodApiRequesterBuilder
+from pod_api_requester.configs import Target
+from pod_api_requester.pod_api_requester import request
 from registry import experiment
 
 logger = logging.getLogger(__name__)
@@ -340,28 +342,25 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             "waku/nodes",
             extra_values_paths=[Path(__file__).parent / "lps.values.yaml"],
         )
-        await self.deploy(api_client, stack, args, lps_values, deployment_yaml=lps_deploy)
+        await self.deploy(api_client, stack, args, lps_values, deployment=lps_deploy)
 
         # Publisher
-        lpc_values = deepcopy(values_yaml)
-        with open(Path(__file__).parent / "./publisher.yaml", "r") as publisher_yaml:
-            import yaml
-
-            publisher_spec = yaml.safe_load(publisher_yaml.read())
+        publisher = (
+            PodApiRequesterBuilder().with_namespace(args.namespace).with_mode("server").build()
+        )
         await self.deploy(
-            api_client, stack, args, lpc_values, deployment_yaml=publisher_spec, wait_for_ready=True
+            api_client, stack, args, values_yaml, deployment=publisher, wait_for_ready=True
         )
 
         # Client
+        lpc_values = deepcopy(values_yaml)
         if values_yaml["client"] == "nwaku":
             # nWaku
             with open(Path(__file__).parent / "./nwaku_lpc.yaml", "r") as lpc_yaml:
                 import yaml
 
                 lpc_dep = yaml.safe_load(lpc_yaml.read())
-            lpc_deploy = await self.deploy(
-                api_client, stack, args, lpc_values, deployment_yaml=lpc_dep
-            )
+            lpc_deploy = await self.deploy(api_client, stack, args, lpc_values, deployment=lpc_dep)
             port = 8645
         elif values_yaml["client"] == "jswaku":
             # JsWaku
@@ -372,7 +371,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
                 "waku/nodes",
                 extra_values_paths=[Path(__file__).parent / "lpc.values.yaml"],
             )
-            await self.deploy(api_client, stack, args, lpc_values, deployment_yaml=lpc_deploy)
+            await self.deploy(api_client, stack, args, lpc_values, deployment=lpc_deploy)
             port = 8080
         else:
             raise ValueError(f"Unknown client: {client}")
@@ -394,12 +393,15 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             await asyncio.sleep(values_yaml["delay_after_reconnect"])
             self.log_event({"event": "publish", "node": random_name})
             try:
-                await publish_message(
+                await request(
                     namespace=namespace,
-                    message_type="lightpush",
-                    pod_name_template=random_name,
-                    service="zerotesting-lightpush-client",
-                    port=port,
+                    target=Target(
+                        name="lightpush_client",
+                        name_template=random_name,
+                        service="zerotesting-lightpush-client",
+                        port=port,
+                    ),
+                    endpoint="lightpush-publish-static-sharding",
                 )
             except (ConnectionError, ValueError) as e:
                 logger.error(f"Error: {e} {traceback.format_exc()}")

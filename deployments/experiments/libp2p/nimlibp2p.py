@@ -15,6 +15,7 @@ from core.configs.statefulset import StatefulSetConfig
 from core.kube_utils import get_YAML, k8s_obj_to_dict
 from experiments.base_experiment import BaseExperiment
 from libp2p.builders.builders import Libp2pStatefulSetBuilder
+from libp2p.builders.builders import Option as NimLibp2p
 from pod_api_requester.builder import PodApiRequesterBuilder
 from pod_api_requester.configs import Target
 from pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError, request
@@ -28,8 +29,11 @@ def build_nodes(
     num_nodes: int,
 ) -> V1StatefulSet:
     return (
-        Libp2pStatefulSetBuilder(config=StatefulSetConfig())
+        Libp2pStatefulSetBuilder()
         .with_libp2p_config(name="pod", namespace=namespace, num_nodes=num_nodes)
+        .with_option(NimLibp2p.peers, 100)
+        .with_option(NimLibp2p.muxer, "yamux")
+        .with_option(NimLibp2p.connect_to, 10)
         .build()
     )
 

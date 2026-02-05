@@ -1,10 +1,24 @@
 from typing import Self
 
-from kubernetes.client import V1StatefulSet
+from kubernetes.client import (
+    V1EnvVar,
+    V1StatefulSet,
+)
 from pydantic import PositiveInt
 
 from core.builders import StatefulSetBuilder
+from libp2p.builders.helpers import find_libp2p_container_config
 from libp2p.builders.nodes import Nodes
+
+
+class Option:
+    peers = "PEERS"
+    connect_to = "CONNECTTO"
+    muxer = "MUXER"
+    fragments = "FRAGMENTS"
+    self_trigger = "SELFTRIGGER"
+    service = "SERVICE"
+    max_connections = "MAXCONNECTIONS"
 
 
 class Libp2pStatefulSetBuilder(StatefulSetBuilder):
@@ -28,4 +42,9 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         )
         self.config.stateful_set_spec.replicas = num_nodes
 
+        return self
+
+    def with_option(self, key, value) -> Self:
+        container = find_libp2p_container_config(self.config)
+        container.with_env_var(V1EnvVar(name=key, value=str(value)))
         return self

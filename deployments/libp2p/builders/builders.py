@@ -46,5 +46,5 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
 
     def with_option(self, key, value) -> Self:
         container = find_libp2p_container_config(self.config)
-        container.with_env_var(V1EnvVar(name=key, value=value))
+        container.with_env_var(V1EnvVar(name=key, value=str(value)))
         return self

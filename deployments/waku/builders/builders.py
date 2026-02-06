@@ -101,7 +101,9 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
     def with_bootstrap(self) -> Self:
         if not self.config.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
-        WakuBootstrapNode.apply_stateful_set_config(self.config, self.config.namespace, overwrite=True)
+        WakuBootstrapNode.apply_stateful_set_config(
+            self.config, self.config.namespace, overwrite=True
+        )
         self.with_args(WakuBootstrapNode.create_args())
         return self
 

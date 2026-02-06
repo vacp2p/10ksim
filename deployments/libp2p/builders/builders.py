@@ -1,9 +1,6 @@
 from typing import Self
 
-from kubernetes.client import (
-    V1EnvVar,
-    V1StatefulSet,
-)
+from kubernetes.client import V1EnvVar, V1StatefulSet
 from pydantic import PositiveInt
 
 from core.builders import StatefulSetBuilder

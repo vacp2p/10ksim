@@ -1,1 +1,1 @@
-from .builders import WakuStatefulSetBuilder
+from .builders import WakuStatefulSetBuilder  # noqa: F401

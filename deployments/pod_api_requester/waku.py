@@ -4,11 +4,7 @@ from typing import Union
 from pydantic import NonNegativeInt
 
 from pod_api_requester.configs import Target
-from pod_api_requester.pod_api_requester import (
-    _DEFAULTS,
-    pod_api_request,
-    wrap_arg,
-)
+from pod_api_requester.pod_api_requester import _DEFAULTS, pod_api_request, wrap_arg
 
 logger = logging.getLogger(__name__)
 

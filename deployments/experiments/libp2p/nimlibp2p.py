@@ -11,7 +11,6 @@ from typing import Optional
 from kubernetes.client import ApiClient, V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
-from core.configs.statefulset import StatefulSetConfig
 from core.kube_utils import get_YAML, k8s_obj_to_dict
 from experiments.base_experiment import BaseExperiment
 from libp2p.builders.builders import Libp2pStatefulSetBuilder

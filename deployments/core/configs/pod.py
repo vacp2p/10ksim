@@ -95,7 +95,20 @@ class PodTemplateSpecConfig(BaseModel):
     name: Optional[str] = None
     namespace: Optional[str] = None
     labels: Dict[str, str] = None
+    annotations: Optional[Dict[str, str]] = None
     pod_spec_config: PodSpecConfig = Field(default_factory=PodSpecConfig)
+
+    def with_annotation(self, key: str, value: str, *, overwrite: bool = False):
+        """Add annotation to pod template metadata."""
+        if self.annotations is None:
+            self.annotations = {}
+
+        if not overwrite and key in self.annotations:
+            raise ValueError(
+                f"Annotation already exists in {type(self)}. "
+                f"key: `{key}` value: `{value}` config: `{self}`"
+            )
+        self.annotations[key] = value
 
     def with_app(self, app: str, *, overwrite: bool = False):
         if self.labels is None:
@@ -131,7 +144,12 @@ def build_pod_spec(config: PodSpecConfig) -> V1PodSpec:
 
 def build_pod_template_spec(config: PodTemplateSpecConfig) -> V1PodTemplateSpec:
     return V1PodTemplateSpec(
-        metadata=V1ObjectMeta(name=config.name, namespace=config.namespace, labels=config.labels),
+        metadata=V1ObjectMeta(
+            name=config.name,
+            namespace=config.namespace,
+            labels=config.labels,
+            annotations=config.annotations,
+        ),
         spec=build_pod_spec(config.pod_spec_config),
     )
 

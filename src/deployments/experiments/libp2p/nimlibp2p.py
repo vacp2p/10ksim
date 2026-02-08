@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Optional
 
+from core.configs.container import Image
 from kubernetes.client import ApiClient, V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
@@ -33,8 +34,15 @@ def build_nodes(
         Libp2pStatefulSetBuilder()
         .with_libp2p_config(name="pod", namespace=namespace, num_nodes=num_nodes)
         .with_option(NimLibp2p.peers, num_nodes)
+        .with_option(NimLibp2p.peers, num_nodes)
         .with_option(NimLibp2p.muxer, "yamux")
         .with_option(NimLibp2p.connect_to, 10)
+        .with_image(
+            Image(
+                repo="pearsonwhite/dst-nimlibp2p-logging",
+                tag="wip-2",
+            )
+        )
         .build()
     )
 
@@ -71,6 +79,15 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         self.log_event("run_start")
 
         config = self.ExpConfig(**values_yaml)
+        # config.num_messages = 100
+        # config.delay_after_publish = .5
+        # config.num_nodes = 20
+
+        config.num_messages = 20
+        config.delay_after_publish = 0.2
+        config.message_size_kb = 1
+        config.num_nodes = 20
+
         self.log_metadata({"params": vars(config)})
 
         # Publisher
@@ -117,6 +134,9 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
                 await libp2p_dst_node_publish(
                     namespace=namespace, target=target, msg_size_kbytes=config.message_size_kb
                 )
+                # await request(
+                #     namespace=namespace, target=target, endpoint="libp2p-dst-node-publish"
+                # )
             except PodApiApplicationError as e:
                 logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
             except PodApiError as e:

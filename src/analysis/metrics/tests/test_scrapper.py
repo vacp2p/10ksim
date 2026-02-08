@@ -286,7 +286,7 @@ class TestScrapper(unittest.TestCase):
             },
         }
 
-        self.assertEqual(expected_config, test_scrapper._query_config)
+        self.assertEqual(expected_config, test_scrapper._scrape_config)
 
     def test__create_query(self, _mock_get_query_data: MagicMock):
         file_path = os.path.join(self.current_directory, "single_test_scrape.yaml")

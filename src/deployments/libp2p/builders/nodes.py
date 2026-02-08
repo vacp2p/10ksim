@@ -13,7 +13,8 @@ class Nodes:
 
     DEFAULT_NAMESPACE = "zerotesting-nimlibp2p"
     DEFAULT_SERVICE_NAME = "nimp2p-service"
-    DEFAULT_IMAGE = Image(repo="ufarooqstatus/refactored-test-node", tag="v1.0")
+    # DEFAULT_IMAGE = Image(repo="pearsonwhite/dst-test-node-musl", tag="v1.16.0")
+    DEFAULT_IMAGE = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="v3")
 
     @staticmethod
     def create_container_config() -> ContainerConfig:

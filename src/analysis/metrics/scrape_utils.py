@@ -28,6 +28,7 @@ def create_promql(
 def get_query_data(request: str) -> Result[Dict, str]:
     response = urllib.request.urlopen(request, timeout=30)
 
+    print(f"Response: {response.status}")
     if response.status != 200:
         return Err(
             f"Error in query. Status code {response.status}. {response.read().decode('utf-8')}"

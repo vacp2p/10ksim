@@ -45,9 +45,8 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         subparser = subparsers.add_parser(cls.name, help="nimlibp2p2 experiment")
         BaseExperiment.add_args(subparser)
 
-    def log_event(self, event):
-        logger.info(event)
-        return super().log_event(event)
+    def _get_metadata(self) -> dict:
+        return Bridge().get_metadata(self.events_log_path)
 
     class ExpConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
@@ -68,6 +67,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         self.log_event("run_start")
 
         config = self.ExpConfig(**values_yaml)
+        self.log_metadata({"params": vars(config)})
 
         # Publisher
         publisher = (
@@ -96,6 +96,8 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         await asyncio.sleep(config.delay_cold_start)
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
+
+        self.log_event("start_messages")
 
         for _ in range(config.num_messages):
             index = random.randint(0, config.num_nodes - 1)

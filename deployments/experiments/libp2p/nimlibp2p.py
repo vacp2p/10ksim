@@ -5,8 +5,6 @@ import random
 import traceback
 from argparse import Namespace
 from contextlib import ExitStack
-from dataclasses import Field
-from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -23,62 +21,6 @@ from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 from registry import experiment
 
 logger = logging.getLogger(__name__)
-
-
-class EventMapping(BaseModel):
-    key: dict
-    target: Path
-    time_shift: timedelta = Field(default_factory=lambda: timedelta(0))
-
-
-def waku_links_maps():
-    links_map = {
-        "grafana": "https://grafana.vaclab.org/d/jIrqsZTIz/nwaku?orgId=1&from={start}&to={end}&timezone=utc",
-        "victoria": "https://vlselect.vaclab.org/select/vmui/?#/?query=*&g0.start_input={start}&g0.end_input={end}&g0.relative_time=none",
-    }
-
-
-def add_links(metadata, links_map):
-    # For interval_type in [completed, stable] (if they were added).
-    for interval_type in metadata.keys():
-        try:
-            for link_type, base in links_map.items():
-                metadata[interval_type][link_type] = base.format(
-                    start=metadata[interval_type]["start"], end=metadata[interval_type]["end"]
-                )
-        except KeyError:
-            pass
-
-
-class BridgeBase:
-    def _get_metadata_from_events_list(self, events_log_path: str, events_list: List[EventMapping]):
-        # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].
-        events_maps = [(obj.key, obj.target) for obj in events_list]
-        metadata = parse_events_log(events_log_path, events_maps)
-
-        # Get timedeltas for each path. dict of {path : timedelta}.
-        deltatime_map = {obj.target: obj.time_shift for obj in events_list}
-        shifted = get_valid_shifted_times(deltatime_map, metadata)
-        metadata.update(shifted)
-
-        metadata = format_metadata_timestamps(metadata)
-
-        return metadata
-
-
-class Metadata(BridgeBase):
-    def _get_metadata_event(self, events_log_path: str):
-        events_list = map(
-            lambda obj: EventMapping(key=obj[0], target=obj[1], time_shift=obj[2]),
-            [
-                ({"event": "wait_for_clear_finished"}, "complete.start", timedelta(seconds=0)),
-                ({"event": "internal_run_finished"}, "complete.end", timedelta(seconds=30)),
-                ({"event": "start_messages"}, "stable.start", timedelta(minutes=3)),
-                ({"event": "publisher_messages_finished"}, "stable.end", timedelta(seconds=-30)),
-            ],
-        )
-        metadata = self._get_metadata_from_events_list(events_log_path, events_list)
-        return metadata
 
 
 def build_nodes(

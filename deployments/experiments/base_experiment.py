@@ -13,6 +13,8 @@ from kubernetes.client import (
     V1StatefulSet,
 )
 
+from core.base_bridge import BaseBridge
+
 V1Deployable = Union[
     V1PodTemplateSpec,
     V1Pod,
@@ -257,8 +259,15 @@ class BaseExperiment(ABC, BaseModel):
         with open(out_path, "a") as out_file:
             out_file.write(json.dumps(metadata, default=str))
 
-    def _metadata_event(self, events_log_path: str):
-        self.log_event(self.__class__._get_metadata_event(events_log_path))
+    def log_metadata(self, metadata: dict):
+        self.log_event({**{"event": "metadata"}, **metadata})
+
+    def _dump_metadata(self):
+        metadata = self._get_metadata()
+        self.log_metadata(metadata)
+        out_path = Path(self.metadata_log_path)
+        with open(out_path, "a") as out_file:
+            out_file.write(json.dumps(metadata, default=str))
 
     async def run(
         self,

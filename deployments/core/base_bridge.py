@@ -215,7 +215,7 @@ class BaseBridge(BaseModel):
         counts = metadata["stack"][self.nodes_key]
         sets = metadata["stack"][self.statefulsets_key]
         nodes_str = "__".join(f"{set}_{count}" for set, count in zip(sets, counts))
-        return f"{metadata['experiment']['experiment_name']}__{nodes_str}"
+        return f"{metadata['experiment']['experiment_name']}__{nodes_str}" # TODO add random number thing
 
     def _aggregate_metadata_events(self, events_log: Path) -> dict:
         """Collect all metadata from events log, and gather StatefulSet deployments."""

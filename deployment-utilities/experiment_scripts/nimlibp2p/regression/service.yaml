@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: nimp2p-service
-  namespace: zerotesting-nimlibp2p
+  namespace: zerotesting-pwhite
 spec:
   clusterIP: None
   selector:

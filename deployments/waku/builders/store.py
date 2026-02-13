@@ -30,7 +30,7 @@ def apply_container_config(config: ContainerConfig):
 
 def apply_pod_spec_config(config: PodSpecConfig):
     config.with_volume(V1Volume(name="postgres-data", empty_dir={}))
-    config.with_dns_service("zerotesting-store.zerotesting.svc.cluster.local")
+    config.with_dns_service("zerotesting-store.zerotesting.svc.cluster.local")  # TODO: namespace
     config.add_container(postgress_container(), order="prepend")
     waku_container = find_waku_container_config(config)
     if waku_container is None:

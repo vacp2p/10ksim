@@ -1,19 +1,39 @@
 # Python Imports
 import logging
 from pathlib import Path
+import pandas as pd
+import seaborn as sns
 from typing import List, Optional, Tuple
+from pydantic import BaseModel, NonNegativeInt
+from result import Result, Err, Ok
 
 import pandas as pd
 from result import Err, Ok, Result
 from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-
+from src.utils import file_utils, path_utils, list_utils
 # Project Imports
 
 
 logger = logging.getLogger(__name__)
+sns.set_theme()
 
+class MessageReliabilityResult(BaseModel):
+    num_unique_messages: NonNegativeInt
+    num_peers: NonNegativeInt
+    nodes_missing_messages: List[str]
+
+
+class StatefulSetNodes(BaseModel):
+    name: str
+    expected: NonNegativeInt
+    actual: NonNegativeInt
+
+
+class MessageReliabilityAnalysis(BaseModel):
+    ss_nodes: List[StatefulSetNodes]
+    reliability_result: MessageReliabilityResult
 
 class Nimlibp2pAnalyzer:
     """
@@ -60,7 +80,8 @@ class Nimlibp2pAnalyzer:
         if result.is_err():
             logger.error(f"Issue dumping message summary. {result.err_value}")
 
-    def analyze_reliability(self, n_jobs: int):
+
+    def analyze_reliability(self, n_jobs: int) -> MessageReliabilityAnalysis:
         """
         This function automatically assumes two scenarios, analysis from online data, and analysis from local data.
 
@@ -78,7 +99,7 @@ class Nimlibp2pAnalyzer:
         :return: None
         """
         if self._local_path_to_analyze is None:
-            self._analyze_reliability_cluster(n_jobs)
+            return self._analyze_reliability_cluster(n_jobs)
         else:
             self._analyze_reliability_local(n_jobs)
 
@@ -106,8 +127,41 @@ class Nimlibp2pAnalyzer:
         if result.is_err():
             logger.error(f"Issue dumping message summary. {result.err_value}")
 
-    def _analyze_reliability_cluster(self, n_jobs: int):
-        self._assert_num_nodes()
+
+    def _num_statefulset_nodes(self) -> List[StatefulSetNodes]:
+        tracer = Nimlibp2pTracer().with_wildcard_pattern()
+        namespace = self._kwargs.get("namespace", None)
+        if namespace:
+            query = f"kubernetes.pod_namespace:{namespace} "
+        else:
+            query = "*"
+
+        reader_builder = VictoriaReaderBuilder(tracer, query, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        num_nodes_per_ss = stack_analysis.get_number_nodes()
+        results = []
+        for i, num_nodes in enumerate(num_nodes_per_ss):
+            results.append(
+                StatefulSetNodes(
+                    name=stack_analysis._kwargs["stateful_sets"][i],
+                    expected=self._kwargs["nodes_per_statefulset"][i],
+                    actual=num_nodes,
+                )
+            )
+
+        if any(map(lambda ss: ss.expected != ss.actual, results)):
+            logger.error(
+                f"Number of nodes in cluster {num_nodes_per_ss} doesnt match"
+                f'with provided {self._kwargs["nodes_per_statefulset"]} data. StatefulSets: {results}'
+            )
+        return results
+
+
+    def _analyze_reliability_cluster(self, n_jobs: int)->MessageReliabilityAnalysis:
+        ss_nodes = self._num_statefulset_nodes()
+        logger.info(f"Num stateful sets: {ss_nodes}")
+        # self._assert_num_nodes()
 
         tracer = (
             Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"])
@@ -127,12 +181,13 @@ class Nimlibp2pAnalyzer:
             logger.error(f"Issue dumping message summary. {result.err_value}")
             return None
 
-        nodes_with_issues = self._has_message_reliability_issues(
-            "msgId", "kubernetes.pod_name", dfs[0], dfs[1], self._dump_analysis_path
-        )
-        if nodes_with_issues:
-            logger.info("Dumping logs from nodes with issues")
-            self._dump_logs(nodes_with_issues)
+        reliability_results = self._has_message_reliability_issues('msgId', 'kubernetes.pod_name', dfs[0], dfs[1],
+                                                                 self._dump_analysis_path)
+        if reliability_results.nodes_missing_messages:
+            logger.info('Dumping logs from nodes with issues')
+            self._dump_logs(reliability_results.nodes_missing_messages)
+
+        return MessageReliabilityAnalysis(ss_nodes=ss_nodes, reliability_result=reliability_results)
 
     def _assert_num_nodes(self) -> None:
         tracer = Nimlibp2pTracer().with_wildcard_pattern()
@@ -268,16 +323,16 @@ class Nimlibp2pAnalyzer:
 
         return Ok(None)
 
-    def _has_message_reliability_issues(
-        self,
-        msg_identifier: str,
-        peer_identifier: str,
-        received_df: pd.DataFrame,
-        sent_df: pd.DataFrame,
-        issue_dump_location: Path,
-    ) -> Optional[List[str]]:
+    def _has_message_reliability_issues(self, msg_identifier: str, peer_identifier: str,
+                                        received_df: pd.DataFrame, sent_df: pd.DataFrame,
+                                        issue_dump_location: Path) -> MessageReliabilityResult:
         logger.info(f'Nº of Peers: {len(received_df["kubernetes.pod_name"].unique())}')
-        logger.info(f"Nº of unique messages: {len(received_df.index.get_level_values(0).unique())}")
+
+        num_peers = len(received_df["kubernetes.pod_name"].unique())
+        logger.info(f"Nº of Peers: {num_peers}")
+
+        unique_messages = len(received_df.index.get_level_values(0).unique())
+        logger.info(f'Nº of unique messages: {unique_messages}')
 
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(
             msg_identifier, peer_identifier, received_df
@@ -300,7 +355,11 @@ class Nimlibp2pAnalyzer:
                         exit(1)
             return peers_missed_messages
 
-        return None
+        return MessageReliabilityResult(
+            num_unique_messages=unique_messages,
+            num_peers=num_peers,
+            nodes_missing_messages=peers_missed_messages,
+        )
 
     def _get_peers_missed_messages(
         self, msg_identifier: str, peer_identifier: str, df: pd.DataFrame

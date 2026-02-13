@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -19,11 +20,9 @@ async def run_experiment(
     name: str,
     args: argparse.Namespace,
     values_path: Optional[str],
-    kube_config=None,
+    kube_config: Path,
 ):
     logger.debug(f"params: {args}")
-    if not kube_config:
-        kube_config = "~/.kube/config"
     config.load_kube_config(config_file=kube_config)
     set_config_file(kube_config)
     api_client = ApiClient()
@@ -48,7 +47,10 @@ def setup_output_folder(args: argparse.Namespace) -> Path:
             args.out_folder if args.out_folder.is_absolute() else base_out_dir / args.out_folder
         )
     else:
-        out_dir = base_out_dir / datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
+        # Adding a random number helps distinguish experiments.
+        random_number = random.randint(1000, 9999)
+        datetime_str = datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
+        out_dir = base_out_dir / f"{datetime_str}_{random_number}"
 
     out_dir.mkdir(parents=True, exist_ok=False)
     return out_dir
@@ -66,6 +68,7 @@ async def main():
         "--config",
         required=False,
         help="Config passed to --kubeconfig in kubernetes commands.",
+        default="~/.kube/config",
         dest="kube_config",
     )
     parser.add_argument(

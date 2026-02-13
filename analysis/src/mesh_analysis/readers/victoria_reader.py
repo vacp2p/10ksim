@@ -10,10 +10,144 @@ from httpx import Response
 from result import Err, Ok, Result
 
 # Project Imports
+from src.mesh_analysis.readers.tracers.waku_tracer import NewTracer
 from src.mesh_analysis.readers.reader import Reader
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
+
+
+class NewVictoriaReader(Reader):
+    """
+    Note: Queries should follow the same order as the patterns in the Tracer.
+    ie:
+    tracer = Tracer.with_SENT_pattern_group().with_RECEIVED_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['SENT QUERY', 'RECEIVED QUERY'])
+
+    or
+
+    tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
+    builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
+    """
+
+    def __init__(
+        self,
+        tracer: Optional[NewTracer],
+        victoria_config_query: Dict,
+        extra_fields: Optional[List[str]] = None,
+    ):
+        """
+        :param tracer: MessageTracer instance to retrieve raw message patterns from Victoria.
+        :param victoria_config_query: Configuration for the Victoria query. This allows to do a first filtering by the
+        monitoring stack retrieving only the lines we are interested in, saving time in the parsing process.
+        """
+        self._tracer: NewTracer = tracer
+        self._config_query = victoria_config_query
+        # self.extra_fields = extra_fields or []
+        # logger.info(f"self.extra_fields: {self.extra_fields}")
+
+    def _fetch_data(
+        self, url: str, headers: Dict, params: Dict, extra_fields: List[str]
+    ):
+        logs = []
+        logger.debug(f"Fetching {params}")
+        with requests.post(
+            url=url, headers=headers, params=params, stream=True
+        ) as response:
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        parsed_object = json.loads(line)
+                    except json.decoder.JSONDecodeError as e:
+                        logger.info(line)
+                        exit()
+                    logs.append(
+                        (parsed_object["_msg"],)
+                        + tuple(parsed_object[k] for k in extra_fields)
+                    )
+        logger.debug(f"Fetched {len(logs)} log lines")
+
+        return logs
+
+    def make_queries(self) -> List:
+        """
+        This function returns a list of lists, structured hierarchically as follows:
+        - The outer list corresponds to the pattern groups.
+        - Each element in the outer list is a list representing a specific pattern group.
+        - Within each pattern group list, there are sublists, one for each pattern in that group.
+        - Each sublist contains the lines that match the corresponding pattern.
+
+        The result is organized as [pattern_groups -> patterns -> matched_lines], where:
+        - Each pattern group can have multiple patterns.
+        - Each pattern can match multiple lines.
+        """
+        params = self._config_query["params"]
+        if isinstance(params, Dict):
+            params = [params]
+
+        results = [[] for _ in self._tracer.patterns]
+        for i, pattern_group in enumerate(self._tracer.patterns):
+            logs = self._fetch_data(
+                self._config_query["url"],
+                self._config_query["headers"],
+                params[i],
+                self._tracer.extra_fields,
+            )
+            with open("./query.log", "w") as f:
+                f.write(f"params: `{params}`")
+            query_results = [[] for _ in pattern_group.trace_pairs]
+            for log_line in logs:
+                for j, trace_pair in enumerate(pattern_group.trace_pairs):
+                    pattern = trace_pair.regex
+                    match = re.search(pattern, log_line[0])
+                    if match:
+                        match_as_list = list(match.groups())
+                        match_as_list.extend(log_line[1:])
+                        query_results[j].append(match_as_list)
+
+            results[i].extend(query_results)
+
+        return results
+
+    def get_dataframes(self) -> List[pd.DataFrame]:
+        results = self.make_queries()
+        dfs = self._tracer.trace(results)
+
+        return dfs
+
+    def single_query_info(self) -> Result[Dict, Response]:
+        response = requests.post(**self._config_query)
+        if response.status_code != 200:
+            logger.error(f"Request failed with status code: {response.status_code}")
+            return Err(response)
+
+        try:
+            data = response.json()
+            return Ok(data)
+        except json.decoder.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON: {e}")
+            logger.error(f"Response content: {response.content}")
+
+            return Err(response)
+
+    def multiline_query_info(self) -> Result[Iterator, str]:
+        response = requests.post(
+            self._config_query["url"],
+            headers=self._config_query["headers"],
+            params=self._config_query["params"],
+        )
+        if response.status_code != 200:
+            logger.error(f"Request failed with status code: {response.status_code}")
+            return Err(response.text)
+
+        try:
+            data = response.iter_lines()
+            return Ok(data)
+        except json.decoder.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON: {e}")
+            logger.error(f"Response content: {response.content}")
+
+            return Err(response.text)
 
 
 class VictoriaReader(Reader):
@@ -29,7 +163,12 @@ class VictoriaReader(Reader):
     builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
     """
 
-    def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
+    def __init__(
+        self,
+        tracer: Optional[MessageTracer],
+        victoria_config_query: Dict,
+        extra_fields: Optional[List[str]] = None,
+    ):
         """
         :param tracer: MessageTracer instance to retrieve raw message patterns from Victoria.
         :param victoria_config_query: Configuration for the Victoria query. This allows to do a first filtering by the
@@ -37,11 +176,14 @@ class VictoriaReader(Reader):
         """
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
+        self.extra_fields = extra_fields or []
 
     def _fetch_data(self, url: str, headers: Dict, params: Dict):
         logs = []
         logger.debug(f"Fetching {params}")
-        with requests.post(url=url, headers=headers, params=params, stream=True) as response:
+        with requests.post(
+            url=url, headers=headers, params=params, stream=True
+        ) as response:
             for line in response.iter_lines():
                 if line:
                     try:
@@ -51,7 +193,7 @@ class VictoriaReader(Reader):
                         exit()
                     logs.append(
                         (parsed_object["_msg"],)
-                        + tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or [])
+                        + tuple(parsed_object[k] for k in self.extra_fields())
                     )
         logger.debug(f"Fetched {len(logs)} log lines")
 

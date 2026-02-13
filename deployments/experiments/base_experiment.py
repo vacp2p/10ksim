@@ -14,6 +14,7 @@ from kubernetes.client import (
 )
 
 from core.base_bridge import BaseBridge
+from registry import experiment
 
 V1Deployable = Union[
     V1PodTemplateSpec,

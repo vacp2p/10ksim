@@ -54,7 +54,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
 
         num_nodes: NonNegativeInt = 10
         num_messages: NonNegativeInt = 20
-        delay_cold_start: NonNegativeFloat = 60
+        delay_cold_start: NonNegativeFloat = 60 # dst-test-node waits 60s to establish connections ??
         delay_after_publish: NonNegativeFloat = 1
 
     async def _run(
@@ -77,6 +77,9 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         await self.deploy(
             api_client, stack, args, values_yaml, deployment=publisher, wait_for_ready=True
         )
+
+        # async launch something <cond> -> We should have stability self.log_event("should_be_stable")
+
 
         # Nodes
         nodes = build_nodes(

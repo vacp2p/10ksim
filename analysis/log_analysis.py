@@ -11,13 +11,13 @@ from src.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 
 if __name__ == '__main__':
     stack = {'type': 'vaclab',
-             'url': 'https://vmselect.riff.cc/select/logsql/query',
+             'url': 'https://vlselect.vaclab.org/select/logsql/query',
              'start_time': '2025-05-26T13:10:00',
              'end_time': '2025-05-26T13:15:00',
              'reader': 'victoria',
              'stateful_sets': ['nodes-0'],
              'nodes_per_statefulset': [50],
-             'container_name': 'waku',
+             'container_name': '(waku OR container)',
              'extra_fields': ['kubernetes.pod_name', 'kubernetes.pod_node_name']
              }
     log_analyzer = WakuAnalyzer(dump_analysis_dir='local_data/simulations_data/refactor_nimlibp2p/',
@@ -31,7 +31,7 @@ if __name__ == '__main__':
                                          'Title',
                                          Path('local_data/simulations_data/refactor/plot.png'))
     stack = {'type': 'vaclab',
-             'url': 'https://vmselect.riff.cc/select/logsql/query',
+             'url': 'https://vlselect.vaclab.org/select/logsql/query',
              'start_time': '2025-06-04T17:10:00',
              'end_time': '2025-06-04T17:30:00',
              'reader': 'victoria',

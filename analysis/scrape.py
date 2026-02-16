@@ -1,7 +1,6 @@
 # Python Imports
 
 # Project Imports
-import src.logger.logger
 from src.metrics.scrapper import Scrapper
 from src.plotting.metrics_plotter import MetricsPlotter
 from src.utils import file_utils
@@ -19,5 +18,5 @@ def main():
     plotter.create_plots()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

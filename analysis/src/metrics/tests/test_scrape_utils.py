@@ -15,9 +15,11 @@ class TestScrapeUtils(unittest.TestCase):
         step = 60
 
         result = create_promql(address, query, start_scrape, finish_scrape, step)
-        expected_result = ("0.0.0.0:9090/api/query_range?query=bandwidth&"
-                           "start=1710257040.0&"
-                           "end=1710257400.0&"
-                           "step=60")
+        expected_result = (
+            "0.0.0.0:9090/api/query_range?query=bandwidth&"
+            "start=1710257040.0&"
+            "end=1710257400.0&"
+            "step=60"
+        )
 
         self.assertEqual(expected_result, result)

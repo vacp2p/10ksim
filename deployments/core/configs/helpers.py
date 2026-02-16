@@ -1,13 +1,12 @@
 from copy import deepcopy
 from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
 
-from kubernetes.client import V1Container
-
 from core.configs.command import CommandConfig
 from core.configs.container import ContainerConfig, Image
 from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
 from core.kube_utils import dict_to_k8s_object
+from kubernetes.client import V1Container
 
 T = TypeVar("T")
 _sentinel = object()

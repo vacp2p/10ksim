@@ -1,12 +1,11 @@
 import logging
 from argparse import Namespace
 
-from ruamel import yaml
-
 from experiments.base_experiment import BaseExperiment
 from helm_deployment.nimlibp2p.experiments.regression.regression import NimRegressionNodes
 from helm_deployment.waku.experiments.regression.regression import WakuRegressionNodes
 from registry import experiment
+from ruamel import yaml
 
 logger = logging.getLogger(__name__)
 

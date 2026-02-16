@@ -2,11 +2,12 @@
 import json
 import logging
 import re
+from typing import Dict, Iterator, List, Optional
+
 import pandas as pd
 import requests
-from typing import Dict, List, Iterator, Optional
 from httpx import Response
-from result import Result, Ok, Err
+from result import Err, Ok, Result
 
 # Project Imports
 from src.mesh_analysis.readers.reader import Reader
@@ -39,7 +40,7 @@ class VictoriaReader(Reader):
 
     def _fetch_data(self, url: str, headers: Dict, params: Dict):
         logs = []
-        logger.debug(f'Fetching {params}')
+        logger.debug(f"Fetching {params}")
         with requests.post(url=url, headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
                 if line:
@@ -48,9 +49,11 @@ class VictoriaReader(Reader):
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    logs.append((parsed_object['_msg'],) +
-                                tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or []))
-        logger.debug(f'Fetched {len(logs)} log lines')
+                    logs.append(
+                        (parsed_object["_msg"],)
+                        + tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or [])
+                    )
+        logger.debug(f"Fetched {len(logs)} log lines")
 
         return logs
 
@@ -66,16 +69,16 @@ class VictoriaReader(Reader):
         - Each pattern group can have multiple patterns.
         - Each pattern can match multiple lines.
         """
-        params = self._config_query['params']
+        params = self._config_query["params"]
         if isinstance(params, Dict):
             params = [params]
 
         results = [[] for _ in range(self._tracer.get_num_patterns_group())]
         for i, patterns in enumerate(self._tracer.patterns):
             query_results = [[] for _ in patterns]
-            logs = self._fetch_data(self._config_query['url'],
-                                    self._config_query['headers'],
-                                    params[i])
+            logs = self._fetch_data(
+                self._config_query["url"], self._config_query["headers"], params[i]
+            )
             for log_line in logs:
                 for j, pattern in enumerate(patterns):
                     match = re.search(pattern, log_line[0])
@@ -97,29 +100,33 @@ class VictoriaReader(Reader):
     def single_query_info(self) -> Result[Dict, Response]:
         response = requests.post(**self._config_query)
         if response.status_code != 200:
-            logger.error(f'Request failed with status code: {response.status_code}')
+            logger.error(f"Request failed with status code: {response.status_code}")
             return Err(response)
 
         try:
             data = response.json()
             return Ok(data)
         except json.decoder.JSONDecodeError as e:
-            logger.error(f'Failed to decode JSON: {e}')
-            logger.error(f'Response content: {response.content}')
+            logger.error(f"Failed to decode JSON: {e}")
+            logger.error(f"Response content: {response.content}")
 
             return Err(response)
 
     def multiline_query_info(self) -> Result[Iterator, str]:
-        response = requests.post(self._config_query['url'], headers=self._config_query['headers'], params=self._config_query['params'])
+        response = requests.post(
+            self._config_query["url"],
+            headers=self._config_query["headers"],
+            params=self._config_query["params"],
+        )
         if response.status_code != 200:
-            logger.error(f'Request failed with status code: {response.status_code}')
+            logger.error(f"Request failed with status code: {response.status_code}")
             return Err(response.text)
 
         try:
             data = response.iter_lines()
             return Ok(data)
         except json.decoder.JSONDecodeError as e:
-            logger.error(f'Failed to decode JSON: {e}')
-            logger.error(f'Response content: {response.content}')
+            logger.error(f"Failed to decode JSON: {e}")
+            logger.error(f"Response content: {response.content}")
 
             return Err(response.text)

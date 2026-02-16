@@ -1,12 +1,11 @@
 from typing import List, Literal, Optional, Self
 
-from kubernetes.client import V1PodSpec, V1Probe
-from pydantic import PositiveInt
-
 from core.builders import ContainerBuilder, PodSpecBuilder, StatefulSetBuilder
 from core.configs.container import ContainerConfig, Image
 from core.configs.helpers import with_container_command_args
 from core.configs.pod import PodSpecConfig
+from kubernetes.client import V1PodSpec, V1Probe
+from pydantic import PositiveInt
 from waku.builders import bootstrap as WakuBootstrapNode
 from waku.builders import store as Store
 from waku.builders.enr_or_addr import Addrs, Enr

@@ -1,11 +1,10 @@
 from typing import Self
 
-from kubernetes.client import V1EnvVar, V1StatefulSet
-from pydantic import PositiveInt
-
 from core.builders import StatefulSetBuilder
+from kubernetes.client import V1EnvVar, V1StatefulSet
 from libp2p.builders.helpers import find_libp2p_container_config
 from libp2p.builders.nodes import Nodes
+from pydantic import PositiveInt
 
 
 class Option:

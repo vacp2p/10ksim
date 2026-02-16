@@ -11,10 +11,6 @@ from datetime import timezone as dt_timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
-from kubernetes.client import ApiClient
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
-from ruamel import yaml
-
 from core.kube_utils import (
     dict_get,
     dict_set,
@@ -30,7 +26,10 @@ from experiments.base_experiment import (
     parse_events_log,
 )
 from helm_deployment.builders import build_deployment
+from kubernetes.client import ApiClient
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from registry import experiment
+from ruamel import yaml
 
 logger = logging.getLogger(__name__)
 

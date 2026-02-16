@@ -1,10 +1,11 @@
 # Python Imports
 import argparse
 import logging
-import requests
 import socket
 import time
 from typing import Dict, List
+
+import requests
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -14,7 +15,7 @@ def resolve_dns(node: str) -> str:
     name, port = node.split(":")
     ip_address = socket.gethostbyname(name)
     entire_hostname = socket.gethostbyaddr(ip_address)
-    hostname = entire_hostname[0].split('.')[0]
+    hostname = entire_hostname[0].split(".")[0]
     elapsed = (time.time() - start_time) * 1000
     logging.info(f"{node} DNS Response took {elapsed} ms")
     logging.info(f"Talking with {hostname}, ip address: {ip_address}")
@@ -24,19 +25,28 @@ def resolve_dns(node: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Waku storage retriever")
-    parser.add_argument('-c', '--contentTopics', type=str, help='Content topic', default="/my-app/1/dst/proto")
-    parser.add_argument('-p', '--pubsubTopic', type=str, help='Pubsub topic',
-                        default="/waku/2/rs/2/0")
-    parser.add_argument('-ps', '--pageSize', type=int,
-                        help='Number of messages to retrieve per page', default=60)
-    parser.add_argument('-cs', '--cursor', type=str,
-                        help='Cursor field intended for pagination purposes. ', default="")
+    parser.add_argument(
+        "-c", "--contentTopics", type=str, help="Content topic", default="/my-app/1/dst/proto"
+    )
+    parser.add_argument(
+        "-p", "--pubsubTopic", type=str, help="Pubsub topic", default="/waku/2/rs/2/0"
+    )
+    parser.add_argument(
+        "-ps", "--pageSize", type=int, help="Number of messages to retrieve per page", default=60
+    )
+    parser.add_argument(
+        "-cs",
+        "--cursor",
+        type=str,
+        help="Cursor field intended for pagination purposes. ",
+        default="",
+    )
 
     return parser.parse_args()
 
 
 def next_cursor(data: Dict) -> str | None:
-    cursor = data.get('paginationCursor')
+    cursor = data.get("paginationCursor")
     if not cursor:
         logging.info("No more messages")
         return None
@@ -57,9 +67,9 @@ def fetch_all_messages(base_url: str, initial_params: Dict, headers: Dict) -> Li
 
         data = response.json()
         logging.info(data)
-        paged_messages = [message['messageHash'] for message in data['messages']]
+        paged_messages = [message["messageHash"] for message in data["messages"]]
         logging.info(f"Retrieved {len(paged_messages)} messages")
-        all_messages.extend([message['messageHash'] for message in data['messages']])
+        all_messages.extend([message["messageHash"] for message in data["messages"]])
 
         cursor = next_cursor(data)
         if not cursor:

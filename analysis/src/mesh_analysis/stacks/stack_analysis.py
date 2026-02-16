@@ -7,7 +7,6 @@ from typing import List
 from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 
 
-
 class StackAnalysis(ABC):
 
     def __init__(self, reader_builder: VictoriaReaderBuilder, **kwargs):
@@ -19,5 +18,5 @@ class StackAnalysis(ABC):
         pass
 
     @abstractmethod
-    def dump_node_logs(self,  n_jobs: int, identifiers: List[str], dump_path: Path):
+    def dump_node_logs(self, n_jobs: int, identifiers: List[str], dump_path: Path):
         pass

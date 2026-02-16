@@ -33,11 +33,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-from kubernetes.client import ApiClient, V1PodTemplateSpec, V1StatefulSet
-from pydantic import BaseModel, Field
-from ruamel import yaml
-from ruamel.yaml.comments import CommentedMap
-
 from core.kube_utils import (
     dict_apply,
     dict_get,
@@ -51,6 +46,10 @@ from core.kube_utils import (
     wait_for_rollout,
 )
 from helm_deployment.builders import build_deployment
+from kubernetes.client import ApiClient, V1PodTemplateSpec, V1StatefulSet
+from pydantic import BaseModel, Field
+from ruamel import yaml
+from ruamel.yaml.comments import CommentedMap
 
 logger = logging.getLogger(__name__)
 

@@ -1,13 +1,14 @@
 # Python Imports
-from matplotlib import pyplot as plt, patheffects as path_effects
-from result import Result, Err, Ok
+from matplotlib import patheffects as path_effects
+from matplotlib import pyplot as plt
+from result import Err, Ok, Result
 
 # Project Imports
 
 
-
-def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "median",
-                            scale_by: float = 1.0) -> Result[None, str]:
+def add_boxplot_stat_labels(
+    ax: plt.Axes, fmt: str = ".3f", value_type: str = "median", scale_by: float = 1.0
+) -> Result[None, str]:
     # Refactor from https://stackoverflow.com/a/63295846
     """
     Add text labels to the median, minimum, or maximum lines of a seaborn boxplot.
@@ -39,12 +40,22 @@ def add_boxplot_stat_labels(ax: plt.Axes, fmt: str = ".3f", value_type: str = "m
         x, y = (data.mean() for data in value_line.get_data())
         # choose value depending on horizontal or vertical plot orientation
         value = x if len(set(value_line.get_xdata())) == 1 else y
-        text = ax.text(x, y, f'{value/scale_by:{fmt}}', ha='center', va='center',
-                       fontweight='bold', color='white', size=10)
+        text = ax.text(
+            x,
+            y,
+            f"{value/scale_by:{fmt}}",
+            ha="center",
+            va="center",
+            fontweight="bold",
+            color="white",
+            size=10,
+        )
         # create colored border around white text for contrast
-        text.set_path_effects([
-            path_effects.Stroke(linewidth=3, foreground=value_line.get_color()),
-            path_effects.Normal(),
-        ])
+        text.set_path_effects(
+            [
+                path_effects.Stroke(linewidth=3, foreground=value_line.get_color()),
+                path_effects.Normal(),
+            ]
+        )
 
     return Ok(None)

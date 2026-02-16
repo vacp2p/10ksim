@@ -2,9 +2,9 @@
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import Union, Callable
-from result import Result, Err, Ok
+from typing import Callable, Union
 
+from result import Err, Ok, Result
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +14,12 @@ def prepare_path_for_file(file_location: Union[str, Path]) -> Result[Path, str]:
         file_location = Path(file_location)
 
     if file_location.exists():
-        logger.warning(f'{file_location} is already existing. File will be overwritten.')
+        logger.warning(f"{file_location} is already existing. File will be overwritten.")
 
     try:
         file_location.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        return Err(f'Error creating {file_location.parent}. {e}')
+        return Err(f"Error creating {file_location.parent}. {e}")
 
     return Ok(file_location)
 
@@ -34,7 +34,7 @@ def prepare_path_for_folder(folder_location: Union[str, Path]) -> Result[Path, s
     try:
         folder_location.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        return Err(f'Error creating {folder_location.parent}. {e}')
+        return Err(f"Error creating {folder_location.parent}. {e}")
 
     return Ok(folder_location)
 
@@ -42,12 +42,12 @@ def prepare_path_for_folder(folder_location: Union[str, Path]) -> Result[Path, s
 def _validate_path(param):
     if isinstance(param, Path):
         if not param.exists():
-            error = f'Path {param} does not exist'
+            error = f"Path {param} does not exist"
             logger.error(error)
             return Err(error)
     elif isinstance(param, list):
         if not all(isinstance(p, Path) for p in param):
-            error = 'All elements in the list must be Path objects'
+            error = "All elements in the list must be Path objects"
             logger.error(error)
             return Err(error)
         if not all(p.exists() for p in param):
@@ -67,7 +67,9 @@ def check_params_path_exists_by_position(arg_position: int = 0) -> Callable:
             if error:
                 return error
             return func(self, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -85,6 +87,7 @@ def check_params_path_exists_by_position_or_kwargs(arg_position: int, karg_name:
             if error:
                 return error
             return func(self, *args, **kwargs)
+
         return wrapper
 
     return decorator

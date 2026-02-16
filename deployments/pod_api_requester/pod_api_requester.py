@@ -6,11 +6,10 @@ from typing import Dict, Optional, Tuple, Union
 
 import aiohttp
 import aiohttp.http_exceptions
-from kubernetes import client
-from pydantic import BaseModel, NonNegativeInt
-
 from core import kube_utils
+from kubernetes import client
 from pod_api_requester.configs import Endpoint, Target
+from pydantic import BaseModel, NonNegativeInt
 
 logger = logging.getLogger(__name__)
 

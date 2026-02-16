@@ -7,10 +7,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, List, Optional
 
-from kubernetes.client import ApiClient
-from pydantic import BaseModel, ConfigDict, Field
-from ruamel import yaml
-
 from core.kube_utils import get_flag_value, wait_for_rollout
 from experiments.base_experiment import (
     BaseExperiment,
@@ -18,7 +14,10 @@ from experiments.base_experiment import (
     get_valid_shifted_times,
     parse_events_log,
 )
+from kubernetes.client import ApiClient
+from pydantic import BaseModel, ConfigDict, Field
 from registry import experiment
+from ruamel import yaml
 
 logger = logging.getLogger(__name__)
 

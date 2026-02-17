@@ -1,9 +1,8 @@
-from kubernetes.client import V1EnvVar, V1Volume
-
 from core.configs.command import CommandConfig
 from core.configs.container import ContainerConfig
 from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from kubernetes.client import V1EnvVar, V1Volume
 from waku.builders.helpers import WAKU_COMMAND_STR, find_waku_container_config
 from waku.builders.nodes import Nodes
 

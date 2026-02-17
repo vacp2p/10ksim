@@ -10,11 +10,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from kubernetes import client
-from kubernetes.client import ApiClient
-from pydantic import BaseModel, ConfigDict
-from ruamel import yaml
-
 from core.kube_utils import dict_set
 from core.pod_interaction import exec_command_in_pod
 from experiments.base_experiment import (
@@ -23,10 +18,11 @@ from experiments.base_experiment import (
     get_valid_shifted_times,
     parse_events_log,
 )
-from pod_api_requester.builder import PodApiRequesterBuilder
-from pod_api_requester.configs import Target
-from pod_api_requester.pod_api_requester import request
+from kubernetes import client
+from kubernetes.client import ApiClient
+from pydantic import BaseModel, ConfigDict
 from registry import experiment
+from ruamel import yaml
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,13 @@
 # Python Imports
 import argparse
 import logging
-import urllib
-import requests
 import socket
 import time
+import urllib
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, List, Optional
+
+import requests
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,9 +25,15 @@ def resolve_dns(address: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Waku filter message retriever")
-    parser.add_argument('-c', '--contentTopic', type=str, help='Content topic', default="/my-app/1/dst/proto")
-    parser.add_argument('-n', '--numNodes', type=int, help='Number of filter nodes to get messages from', default=1)
-    parser.add_argument('-s', '--numShards', type=int, help='Number of shards in the cluster', default=1)
+    parser.add_argument(
+        "-c", "--contentTopic", type=str, help="Content topic", default="/my-app/1/dst/proto"
+    )
+    parser.add_argument(
+        "-n", "--numNodes", type=int, help="Number of filter nodes to get messages from", default=1
+    )
+    parser.add_argument(
+        "-s", "--numShards", type=int, help="Number of shards in the cluster", default=1
+    )
 
     return parser.parse_args()
 
@@ -39,7 +46,7 @@ def fetch_all_messages(base_url: str, headers: Dict, address: str) -> Optional[L
         return None
 
     data = response.json()
-    messages = [message_data['payload'] for message_data in data]
+    messages = [message_data["payload"] for message_data in data]
     logging.info(f"Retrieved {len(messages)} messages from {address}")
 
     return messages
@@ -47,7 +54,7 @@ def fetch_all_messages(base_url: str, headers: Dict, address: str) -> Optional[L
 
 def process_node_messages(address: str, content_topic: str) -> Optional[List[str]]:
     node_ip = resolve_dns(address)
-    content_topic = urllib.parse.quote(content_topic, safe='')
+    content_topic = urllib.parse.quote(content_topic, safe="")
     url = f"http://{node_ip}/filter/v2/messages/{content_topic}"
     logging.debug(f"Query to {url}")
     headers = {"accept": "text/plain"}
@@ -71,7 +78,10 @@ def main():
 
     all_messages = []
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(process_node_messages, address, args.contentTopic) for address in addresses]
+        futures = [
+            executor.submit(process_node_messages, address, args.contentTopic)
+            for address in addresses
+        ]
 
         for future in as_completed(futures):
             result = future.result()

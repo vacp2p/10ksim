@@ -1,12 +1,11 @@
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from kubernetes.client import V1EmptyDirVolumeSource, V1Volume, V1VolumeMount
-from pydantic import PositiveInt
-
 from core.configs.command import CommandConfig
 from core.configs.container import ContainerConfig, Image
 from core.configs.pod import PodSpecConfig
+from kubernetes.client import V1EmptyDirVolumeSource, V1Volume, V1VolumeMount
+from pydantic import PositiveInt
 from waku.builders.helpers import find_waku_command, find_waku_container_config
 
 

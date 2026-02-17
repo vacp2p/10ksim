@@ -16,3 +16,5 @@ dependencies = [
     "ruamel-yaml==0.17.21",
     "seaborn>=0.13.2",
 ]
+[tool.black]
+line-length = 100

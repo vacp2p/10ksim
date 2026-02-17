@@ -133,5 +133,6 @@ def main() -> None:
         extractor=lambda obj: extract_address(obj, require_ws=config.websocket),
     )
 
+
 if __name__ == "__main__":
     main()

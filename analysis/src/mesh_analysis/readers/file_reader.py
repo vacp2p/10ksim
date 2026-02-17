@@ -1,14 +1,15 @@
 # Python Imports
-import re
 import logging
 import multiprocessing
-from typing import List
+import re
 from pathlib import Path
+from typing import List
+
+from src.mesh_analysis.readers.reader import Reader
 
 # Project Imports
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.utils import file_utils
-from src.mesh_analysis.readers.reader import Reader
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +22,15 @@ class FileReader(Reader):
         self._n_jobs = n_jobs
 
     def get_dataframes(self) -> List:
-        logger.info(f'Reading {self._folder_path}')
-        files_result = file_utils.get_files_from_folder_path(self._folder_path, extension='*.log')
+        logger.info(f"Reading {self._folder_path}")
+        files_result = file_utils.get_files_from_folder_path(self._folder_path, extension="*.log")
 
         if files_result.is_err():
-            logger.error(f'Could not read {self._folder_path}')
+            logger.error(f"Could not read {self._folder_path}")
             exit()
 
         parsed_logs = self._read_files(files_result.ok_value)
-        logger.info(f'Tracing {self._folder_path}')
+        logger.info(f"Tracing {self._folder_path}")
 
         def merge_sublists(biglist):
             transposed = list(zip(*biglist))

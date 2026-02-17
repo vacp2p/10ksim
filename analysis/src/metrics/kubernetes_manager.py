@@ -1,9 +1,10 @@
 # Python Imports
-import socket
 import logging
-import kubernetes
 import multiprocessing
+import socket
 from typing import List, Tuple
+
+import kubernetes
 from kubernetes.client import V1PodList, V1Service
 from kubernetes.stream import portforward
 
@@ -21,8 +22,8 @@ class KubernetesManager:
 
     def create_connection(self, address, *args, **kwargs) -> socket.socket:
         dns_name = self._get_dns_name(address)
-        if dns_name[-1] != 'kubernetes':
-            logger.warning(f'Not a kubernetes DNS name: {dns_name}')
+        if dns_name[-1] != "kubernetes":
+            logger.warning(f"Not a kubernetes DNS name: {dns_name}")
             return socket.create_connection(address, *args, **kwargs)
 
         namespace, name = self._split_dns(dns_name)
@@ -31,15 +32,17 @@ class KubernetesManager:
         if len(dns_name) == 4:
             name, port = self._find_pod_in_service(dns_name, name, namespace, port)
 
-        logger.debug(f'Forwarding port {port} from pod {name} in namespace {namespace}')
-        pf = portforward(self._api.connect_get_namespaced_pod_portforward,
-                         name, namespace, ports=str(port))
+        logger.debug(f"Forwarding port {port} from pod {name} in namespace {namespace}")
+        pf = portforward(
+            self._api.connect_get_namespaced_pod_portforward, name, namespace, ports=str(port)
+        )
 
         return pf.socket(port)
 
     @staticmethod
-    def download_logs_from_pod_asyncable(kube_config: str, namespace: str, pod_name: str,
-                                         location: str):
+    def download_logs_from_pod_asyncable(
+        kube_config: str, namespace: str, pod_name: str, location: str
+    ):
         kube_client = kubernetes.config.new_client_from_config(kube_config)
         api = kubernetes.client.CoreV1Api(kube_client)
 
@@ -53,7 +56,8 @@ class KubernetesManager:
             logger.debug(f"Logs from pod {pod_name} downloaded successfully.")
         else:
             logger.error(
-                f"Unable to download logs from pod {pod_name}. Error: {path_location_result.err}")
+                f"Unable to download logs from pod {pod_name}. Error: {path_location_result.err}"
+            )
 
     def download_pod_logs(self, namespace: str, location: str):
         logger.info(f"Downloading logs from namespace '{namespace}' to {location}")
@@ -63,8 +67,10 @@ class KubernetesManager:
 
         for pod in pods.items:
             pod_name = pod.metadata.name
-            pool.apply_async(KubernetesManager.download_logs_from_pod_asyncable,
-                             args=(self._kube_config, namespace, pod_name, location))
+            pool.apply_async(
+                KubernetesManager.download_logs_from_pod_asyncable,
+                args=(self._kube_config, namespace, pod_name, location),
+            )
 
         pool.close()
         pool.join()
@@ -91,16 +97,13 @@ class KubernetesManager:
             if service_port.port == port:
                 return service_port.target_port
         else:
-            raise RuntimeError(
-                f"Unable to find service port: {port}")
+            raise RuntimeError(f"Unable to find service port: {port}")
 
     def _get_pods_and_name(self, service: V1Service, namespace: str) -> Tuple[V1PodList, str]:
         label_selector = []
         for key, value in service.spec.selector.items():
             label_selector.append(f"{key}={value}")
-        pods = self._api.list_namespaced_pod(
-            namespace, label_selector=",".join(label_selector)
-        )
+        pods = self._api.list_namespaced_pod(namespace, label_selector=",".join(label_selector))
         if not pods.items:
             raise RuntimeError("Unable to find service pods.")
         name = pods.items[0].metadata.name
@@ -113,17 +116,15 @@ class KubernetesManager:
                 if container_port.name == port:
                     return container_port.container_port
         else:
-            raise RuntimeError(
-                f"Unable to find service port name: {port}")
+            raise RuntimeError(f"Unable to find service port name: {port}")
 
     def _find_pod_in_service(self, dns_name, name, namespace, port) -> Tuple[str, int]:
-        if dns_name[1] in ('svc', 'service'):
+        if dns_name[1] in ("svc", "service"):
             service = self._api.read_namespaced_service(name, namespace)
             port = self._find_service_target_port(service, port)
             pods, name = self._get_pods_and_name(service, namespace)
             port = self._find_service_port_name_in_pods(port, pods)
 
             return name, port
-        elif dns_name[1] != 'pod':
-            raise RuntimeError(
-                f"Unsupported resource type: {dns_name[1]}")
+        elif dns_name[1] != "pod":
+            raise RuntimeError(f"Unsupported resource type: {dns_name[1]}")

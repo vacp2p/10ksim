@@ -20,7 +20,6 @@ from experiments.base_experiment import (
 )
 from kubernetes import client
 from kubernetes.client import ApiClient
-from pod_api_requester.pod_api_requester import publish_message
 from pydantic import BaseModel, ConfigDict
 from registry import experiment
 from ruamel import yaml

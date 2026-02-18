@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Optional, Union
 
+from core.base_bridge import BaseBridge
 from kubernetes.client import (
     V1CronJob,
     V1DaemonSet,
@@ -28,17 +29,12 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from contextlib import ExitStack
-from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from core.kube_utils import (
-    dict_apply,
     dict_get,
-    dict_partial_compare,
-    dict_set,
-    dict_visit,
     get_cleanup,
     kubectl_apply,
     poll_namespace_has_objects,
@@ -54,101 +50,6 @@ from ruamel.yaml.comments import CommentedMap
 logger = logging.getLogger(__name__)
 
 
-def find_events(
-    log_path: str,
-    key: Dict[str, str],
-) -> Iterator[dict]:
-    """
-    Return a list of all events where all keys match `key`.
-    Each line in `log_path` is converted to an event (dict).
-    If the event contains all of the (key, value) items from key,
-    then the event is converted to a new value using `extract(event)`
-    """
-    results = []
-    with open(log_path, "r") as events_log:
-        for line in events_log:
-            event = json.loads(line)
-            if dict_partial_compare(event, key):
-                results.append(event)
-    return results
-
-
-def parse_events_log(
-    log_path: str,
-    events_list: List[Tuple[Dict[str, str], str]],
-    *,
-    extract: Callable[[dict], Any] | None = None,
-) -> dict:
-    """
-    Return a new dict constructed by parsing the event log.
-    Each line in `log_path` is converted to an event (dict).
-    If the event contains all of the (key, value) items from a dict in `events_list`,
-    then the event is converted to a new value using `extract(event)` and added at `path` in the new dict,
-    where `path` is the value from the `events_list`.
-
-    :param log_path: Path to events log.
-    :param events_list: List of tuples mapping a dict to compare to the line to a path in the return dict.
-    :param extract: A function mapping the json loaded from the event log to the value in the return dict.
-    :return: dict constructed from extracting matchign lines from log_path and converting them to values using `extract`.
-    :rtype: dict
-    """
-    if extract is None:
-        extract = lambda event: datetime.strptime(event["timestamp"], "%Y-%m-%d %H:%M:%S")
-    return_dict = {}
-    with open(log_path, "r") as events_log:
-        for line in events_log:
-            event = json.loads(line)
-            for key, path in events_list:
-                try:
-                    if dict_partial_compare(event, key):
-                        new_value = extract(event)
-                        dict_set(
-                            return_dict,
-                            path,
-                            new_value,
-                            sep=".",
-                        )
-                except KeyError:
-                    pass
-    return return_dict
-
-
-def format_metadata_timestamps(metadata: dict) -> dict:
-    def format_item(node):
-        try:
-            return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        except AttributeError:
-            pass
-
-    return dict_apply(metadata, format_item)
-
-
-def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
-    shifted = deepcopy(metadata)
-    for path, delta in deltatime_map.items():
-        time_value = dict_get(shifted, path, default=None, sep=".")
-        if time_value is not None:
-            shifted_time = time_value + delta
-            dict_set(shifted, path, shifted_time, sep=".", replace_leaf=True)
-
-    filtered = {}
-
-    def filter(path, obj):
-        try:
-            start_dt = obj["start"]
-            end_dt = obj["end"]
-            if end_dt <= start_dt:
-                return
-            dict_set(filtered, path / "start", start_dt)
-            dict_set(filtered, path / "end", end_dt)
-        except (KeyError, TypeError) as e:
-            pass
-
-    dict_visit(shifted, filter)
-
-    return filtered
-
-
 class BaseExperiment(ABC, BaseModel):
     """Base experiment that add an ExitStack with `workdir` to `run` and uses an internal `_run`.
 
@@ -159,6 +60,7 @@ class BaseExperiment(ABC, BaseModel):
     """
 
     events_log_path: Path = Field(default=Path("events.log"))
+    metadata_log_path: Path = Field(default=Path("metadata.json"))
 
     deployed: dict[str, list] = defaultdict(list)
     """Dict of [namespace : yamls] for every yaml deployed with self.deploy.
@@ -332,15 +234,28 @@ class BaseExperiment(ABC, BaseModel):
 
         return yaml_obj
 
-    def _set_events_log(self, workdir: Optional[str]) -> None:
-        if self.events_log_path.is_absolute():
-            return
-        if not self.events_log_path.is_absolute():
-            if workdir is None:
+    def _get_out_path(self, path: Path, out_dir: Optional[str]) -> Path:
+        if path.is_absolute():
+            return path
+        if not path.is_absolute():
+            if out_dir is None:
                 raise ValueError(
-                    f"Logging event requires absolute events_log_path or non-None workdir. Path: `{self.events_log_path}` workdir: `{workdir}` experiment type: `{type(self)}`"
+                    f"Out paths are required to be absolute paths or have a non-None out path. Path: `{path}` out_dir: `{out_dir}` experiment type: `{type(self)}`"
                 )
-            self.events_log_path = Path(workdir) / self.events_log_path
+            return Path(out_dir) / path
+
+    def _get_metadata(self) -> dict:
+        return BaseBridge().get_metadata(self.events_log_path)
+
+    def log_metadata(self, metadata: dict):
+        self.log_event({**{"event": "metadata"}, **metadata})
+
+    def _dump_metadata(self):
+        metadata = self._get_metadata()
+        self.log_metadata(metadata)
+        out_path = Path(self.metadata_log_path)
+        with open(out_path, "a") as out_file:
+            out_file.write(json.dumps(metadata, default=str))
 
     async def run(
         self,
@@ -360,12 +275,16 @@ class BaseExperiment(ABC, BaseModel):
         with ExitStack() as stack:
             stack.callback(lambda: self.log_event("cleanup_finished"))
             os.makedirs(workdir, exist_ok=True)
-            self._set_events_log(workdir)
+            self.events_log_path = self._get_out_path(self.events_log_path, args.output_folder)
+            self.metadata_log_path = self._get_out_path(self.metadata_log_path, args.output_folder)
+            logger.info(f"Events path: `{self.events_log_path}`")
+            logger.info(f"Metadata path: `{self.metadata_log_path}`")
             self.log_event(
                 {
                     "event": "metadata",
                     "experiment_name": self.__class__.name,
                     "experiment_class": self.__class__.__name__,
+                    "args": vars(args),
                 }
             )
             shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
@@ -379,6 +298,7 @@ class BaseExperiment(ABC, BaseModel):
             stack.callback(lambda: self.log_event("cleanup_start"))
 
         self.log_event("run_finished")
+        self._dump_metadata()
 
     @abstractmethod
     async def _run(
@@ -411,41 +331,13 @@ class BaseExperiment(ABC, BaseModel):
 
         if isinstance(event, dict):
             event["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            return json.dumps(event)
+            return json.dumps(event, default=str)
         else:
             return event
 
     def log_event(self, event: Any):
+        logger.info(event)
         out_path = Path(self.events_log_path)
         with open(out_path, "a") as out_file:
             out_file.write(self._preprocess_event(event))
             out_file.write("\n")
-
-    @classmethod
-    def get_metadata_event(_cls, events_log_path: str) -> dict:
-        """Get metadata common to all experiments."""
-        metadata = {}
-        namespaces = set()
-
-        # Create list of all deployed StatefulSets to plug into analysis script.
-        ss_key = "stateful_sets"
-        metadata[ss_key] = []
-        nodes_key = "nodes_per_stateful_set"
-        metadata[nodes_key] = []
-        for event in find_events(
-            events_log_path, {"event": "deployment", "phase": "start", "kind": "StatefulSet"}
-        ):
-            metadata[ss_key].append(event["name"])
-            metadata[nodes_key].append(event["replicas"])
-            namespaces.add(event["namespace"])
-
-        if len(namespaces) == 1:
-            metadata["namespace"] = next(iter(namespaces))
-        else:
-            metadata["namespaces"] = list(namespaces)
-
-        for event in find_events(events_log_path, {"event": "metadata"}):
-            metadata["experiment_name"] = event["experiment_name"]
-            metadata["experiment_class"] = event["experiment_class"]
-
-        return metadata

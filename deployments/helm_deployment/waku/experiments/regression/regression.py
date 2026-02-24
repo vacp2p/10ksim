@@ -7,13 +7,9 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, List, Optional
 
+from core.base_bridge import format_metadata_timestamps, get_valid_shifted_times, parse_events_log
 from core.kube_utils import get_flag_value, wait_for_rollout
-from experiments.base_experiment import (
-    BaseExperiment,
-    format_metadata_timestamps,
-    get_valid_shifted_times,
-    parse_events_log,
-)
+from experiments.base_experiment import BaseExperiment
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from registry import experiment

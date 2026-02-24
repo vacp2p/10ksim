@@ -10,16 +10,15 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal, Optional
 
+from core.base_bridge import format_metadata_timestamps, get_valid_shifted_times, parse_events_log
 from core.kube_utils import dict_set
 from core.pod_interaction import exec_command_in_pod
-from experiments.base_experiment import (
-    BaseExperiment,
-    format_metadata_timestamps,
-    get_valid_shifted_times,
-    parse_events_log,
-)
+from experiments.base_experiment import BaseExperiment
 from kubernetes import client
 from kubernetes.client import ApiClient
+from pod_api_requester.builder import PodApiRequesterBuilder
+from pod_api_requester.configs import Target
+from pod_api_requester.pod_api_requester import request
 from pydantic import BaseModel, ConfigDict
 from registry import experiment
 from ruamel import yaml

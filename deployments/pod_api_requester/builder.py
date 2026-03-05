@@ -16,7 +16,6 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1RoleRef,
-    V1Subject,
     V1Volume,
     V1VolumeMount,
 )
@@ -60,11 +59,11 @@ class PodApiRequesterBuilder(PodBuilder):
                 apiGroup="rbac.authorization.k8s.io",
             ),
             subjects=[
-                V1Subject(
-                    kind="ServiceAccount",
-                    name="default",
-                    namespace=self.config.namespace,
-                ),
+                {
+                    "kind": "ServiceAccount",
+                    "name": "default",
+                    "namespace": self.config.namespace,
+                },
             ],
         )
 

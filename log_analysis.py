@@ -2,9 +2,9 @@
 from pathlib import Path
 
 # Project Imports
-from src.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
-from src.mesh_analysis.analyzers.waku import waku_plots
-from src.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
+from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
+from src.analysis.mesh_analysis.analyzers.waku import waku_plots
+from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 
 if __name__ == "__main__":
     stack = {

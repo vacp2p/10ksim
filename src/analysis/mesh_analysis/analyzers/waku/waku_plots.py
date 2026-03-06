@@ -1,22 +1,20 @@
 # Python Imports
 import logging
-from pathlib import Path
-from typing import Optional
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from pathlib import Path
+from typing import Optional
 from matplotlib import patheffects as path_effects
 from matplotlib import pyplot as plt
 from result import Err, Ok, Result
-from src.utils.path_utils import (
+
+# Project Imports
+from src.analysis.utils.path_utils import (
     check_params_path_exists_by_position,
     check_params_path_exists_by_position_or_kwargs,
 )
-
-# Project Imports
-from src.utils.plot_utils import add_boxplot_stat_labels
+from src.analysis.utils.plot_utils import add_boxplot_stat_labels
 
 logger = logging.getLogger(__name__)
 sns.set_theme()

@@ -5,11 +5,10 @@ import re
 from pathlib import Path
 from typing import List
 
-from src.mesh_analysis.readers.reader import Reader
-
 # Project Imports
-from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
-from src.utils import file_utils
+from src.analysis.mesh_analysis.readers.reader import Reader
+from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
+from src.analysis.utils import file_utils
 
 logger = logging.getLogger(__name__)
 

@@ -1,14 +1,13 @@
 # Python Imports
 import logging
+import pandas as pd
 from pathlib import Path
 from typing import List, Optional
-
-import pandas as pd
 from result import Err, Ok, Result
-from src.data.data_handler import DataHandler
 
 # Project Imports
-from src.utils import file_utils
+from src.analysis.data.data_handler import DataHandler
+from src.analysis.utils import file_utils
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,9 @@
+# Python Imports
 from copy import deepcopy
 from typing import List, Literal, Optional, TypeVar
 
-from core.configs.command import CommandConfig, build_command
+# Project Imports
+from src.deployments.core.configs.command import CommandConfig, build_command
 from kubernetes.client import (
     V1Container,
     V1ContainerPort,

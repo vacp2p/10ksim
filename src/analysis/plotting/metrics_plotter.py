@@ -1,17 +1,16 @@
 # Python Imports
 import logging
-from typing import Dict, List
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from typing import Dict, List
 from matplotlib import ticker
-from src.data.data_file_handler import DataFileHandler
 
 # Project Imports
-from src.data.data_handler import DataHandler
-from src.utils.plot_utils import add_boxplot_stat_labels
+from src.analysis.data.data_file_handler import DataFileHandler
+from src.analysis.data.data_handler import DataHandler
+from src.analysis.utils.plot_utils import add_boxplot_stat_labels
 
 logger = logging.getLogger(__name__)
 sns.set_theme()

@@ -1,11 +1,13 @@
+# Python Imports
 from copy import deepcopy
 from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
 
-from core.configs.command import CommandConfig
-from core.configs.container import ContainerConfig, Image
-from core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
-from core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from core.kube_utils import dict_to_k8s_object
+# Project Imports
+from src.deployments.core.configs.command import CommandConfig
+from src.deployments.core.configs.container import ContainerConfig, Image
+from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from src.deployments.core.kube_utils import dict_to_k8s_object
 from kubernetes.client import V1Container
 
 T = TypeVar("T")

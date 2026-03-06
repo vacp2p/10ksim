@@ -1,7 +1,8 @@
 # Python Imports
+import pandas as pd
 from abc import ABC, abstractmethod
 
-import pandas as pd
+# Project Imports
 
 
 class Reader(ABC):

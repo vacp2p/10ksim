@@ -1,11 +1,10 @@
 # Python Imports
 import logging
+import pandas as pd
 from typing import List, Optional
 
-import pandas as pd
-
 # Project Imports
-from src.utils import path_utils
+from src.analysis.utils import path_utils
 
 logger = logging.getLogger(__name__)
 

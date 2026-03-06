@@ -1,12 +1,11 @@
 # Python Imports
 import logging
-from typing import List, Optional, Self
-
 import numpy as np
 import pandas as pd
+from typing import List, Optional, Self
 
 # Project Imports
-from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
+from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,15 @@
+# Python Imports
 import json
 import logging
 from collections import defaultdict
+from copy import deepcopy
+from datetime import datetime, timedelta
+from pathlib import Path
+from pydantic import BaseModel, Field
 from typing import Literal, Union
+from typing import Any, Callable, Dict, Iterator, List, Tuple
 
+# Project Imports
 from kubernetes.client import (
     V1CronJob,
     V1DaemonSet,
@@ -12,6 +19,7 @@ from kubernetes.client import (
     V1PodTemplateSpec,
     V1StatefulSet,
 )
+from src.deployments.core.kube_utils import dict_apply, dict_get, dict_partial_compare, dict_set, dict_visit
 
 V1Deployable = Union[
     V1PodTemplateSpec,
@@ -22,15 +30,6 @@ V1Deployable = Union[
     V1Job,
     V1CronJob,
 ]
-
-from copy import deepcopy
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Tuple
-
-from core.kube_utils import dict_apply, dict_get, dict_partial_compare, dict_set, dict_visit
-from kubernetes.client import V1PodTemplateSpec, V1StatefulSet
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

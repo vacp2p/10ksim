@@ -1,7 +1,9 @@
+# Python Imports
 from copy import deepcopy
 from typing import Dict, List, Literal, Optional, TypeVar
 
-from core.configs.container import ContainerConfig, build_container
+# Project Imports
+from src.deployments.core.configs.container import ContainerConfig, build_container
 from kubernetes.client import (
     V1Container,
     V1ObjectMeta,

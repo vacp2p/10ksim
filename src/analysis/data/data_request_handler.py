@@ -1,12 +1,11 @@
 # Python Imports
 import logging
+import pandas as pd
 from typing import Dict, List, Optional
 
-import pandas as pd
-
 # Project Imports
-from src.data.data_handler import DataHandler
-from src.utils import list_utils
+from src.analysis.data.data_handler import DataHandler
+from src.analysis.utils import list_utils
 
 logger = logging.getLogger(__name__)
 

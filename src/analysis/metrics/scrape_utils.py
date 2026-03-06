@@ -1,11 +1,10 @@
 # Pyton Imports
 import json
 import logging
-import urllib
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from typing import Dict
-
-import six.moves.urllib.request as urllib_request
 from result import Err, Ok, Result
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ def create_promql(
 
 
 def get_query_data(request: str) -> Result[Dict, str]:
-    response = urllib_request.urlopen(request, timeout=30)
+    response = urllib.request.urlopen(request, timeout=30)
 
     if response.status != 200:
         return Err(

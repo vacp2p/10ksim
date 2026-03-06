@@ -1,13 +1,12 @@
 # Python Imports
 import logging
 from typing import Dict, List, Optional
-
 from result import Err, Ok
-from src.data.data_request_handler import DataRequestHandler
 
 # Project Imports
-from src.metrics import kubernetes_manager, scrape_utils
-from src.utils.file_utils import read_yaml_file
+from src.analysis.data.data_request_handler import DataRequestHandler
+from src.analysis.metrics import kubernetes_manager, scrape_utils
+from src.analysis.utils.file_utils import read_yaml_file
 
 logger = logging.getLogger(__name__)
 

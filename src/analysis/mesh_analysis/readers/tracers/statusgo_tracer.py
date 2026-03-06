@@ -1,8 +1,10 @@
+# Python Imports
 from typing import List
-
 import numpy as np
 import pandas as pd
-from src.mesh_analysis.tracers.message_tracer import MessageTracer
+
+# Project Imports
+from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 
 class StatusgoTracer(MessageTracer):

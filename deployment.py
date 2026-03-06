@@ -1,3 +1,4 @@
+# Python Imports
 import argparse
 import asyncio
 import logging
@@ -6,12 +7,13 @@ import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-from core.kube_utils import init_logger, set_config_file
 from kubernetes import config
 from kubernetes.client import ApiClient
-from registry import registry as experiment_registry
 from ruamel import yaml
+
+# Project Imports
+from src.deployments.core.kube_utils import init_logger, set_config_file
+from src.deployments.registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
 

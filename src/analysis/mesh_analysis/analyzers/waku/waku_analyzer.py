@@ -2,19 +2,18 @@
 import ast
 import base64
 import logging
-from pathlib import Path
-from typing import List, Optional, Tuple
-
 import pandas as pd
 import seaborn as sns
+from pathlib import Path
 from result import Err, Ok, Result
+from typing import List, Optional, Tuple
 
 # Project Imports
-from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
-from src.mesh_analysis.readers.file_reader import FileReader
-from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
-from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-from src.utils import file_utils, list_utils, path_utils
+from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.analysis.mesh_analysis.readers.file_reader import FileReader
+from src.analysis.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
+from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
+from src.analysis.utils import file_utils, list_utils, path_utils
 
 logger = logging.getLogger(__name__)
 sns.set_theme()

@@ -2,14 +2,13 @@
 import logging
 import multiprocessing
 import socket
-from typing import List, Tuple
-
 import kubernetes
+from typing import List, Tuple
 from kubernetes.client import V1PodList, V1Service
 from kubernetes.stream import portforward
 
 # Project Imports
-from src.utils import path_utils
+from src.analysis.utils import path_utils
 
 logger = logging.getLogger(__name__)
 

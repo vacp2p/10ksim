@@ -2,7 +2,7 @@
 from typing import List, Optional, Union
 
 # Project Imports
-from src.mesh_analysis.readers.victoria_reader import VictoriaReader
+from src.analysis.mesh_analysis.readers.victoria_reader import VictoriaReader
 
 
 class VictoriaReaderBuilder:

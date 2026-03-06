@@ -1,15 +1,17 @@
+# Python Imports
 import asyncio
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
-
 import aiohttp
 import aiohttp.http_exceptions
-from core import kube_utils
+from pathlib import Path
+from typing import Dict, Optional, Tuple, Union
 from kubernetes import client
-from pod_api_requester.configs import Endpoint, Target
 from pydantic import BaseModel, NonNegativeInt
+
+# Project Imports
+from src.deployments.core import kube_utils
+from src.deployments.pod_api_requester.configs import Endpoint, Target
 
 logger = logging.getLogger(__name__)
 

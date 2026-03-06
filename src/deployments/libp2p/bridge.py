@@ -1,10 +1,12 @@
+# Python imports
 import logging
 from datetime import timedelta
 from pathlib import Path
 from typing import Literal
 
-from core.base_bridge import BaseBridge, EventMapping
-from libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
+# Project Imports
+from src.deployments.core.base_bridge import BaseBridge, EventMapping
+from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 

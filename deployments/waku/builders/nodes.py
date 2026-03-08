@@ -83,11 +83,16 @@ class Nodes:
         return config
 
     @staticmethod
-    def create_stateful_set_spec_config(namespace: str) -> StatefulSetSpecConfig:
+    def create_stateful_set_spec_config(
+        namespace: str, *, with_annotations: bool = False
+    ) -> StatefulSetSpecConfig:
+        inner_config = Nodes.create_pod_template_spec_config(namespace)
+        if with_annotations:
+            inner_config.with_annotation("ovn.kubernetes.io/logical_switch", f"{namespace}-subnet")
         config = StatefulSetSpecConfig(
             replicas=0,
             service_name="zerotesting-service",
-            pod_template_spec_config=Nodes.create_pod_template_spec_config(namespace),
+            pod_template_spec_config=inner_config,
         )
         config.with_app("zerotenkay")
         return config
@@ -100,5 +105,7 @@ class Nodes:
             apiVersion="apps/v1",
             kind="StatefulSet",
             pod_management_policy="Parallel",
-            stateful_set_spec=Nodes.create_stateful_set_spec_config(namespace),
+            stateful_set_spec=Nodes.create_stateful_set_spec_config(
+                namespace, with_annotations=True
+            ),
         )

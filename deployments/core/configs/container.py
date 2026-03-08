@@ -12,6 +12,9 @@ from kubernetes.client import (
 )
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.configs.command import CommandConfig, build_command
+from core.kube_utils import dict_to_v1probe
+
 T = TypeVar("T")
 
 
@@ -77,8 +80,6 @@ class ContainerConfig(BaseModel):
             self.env.append(var)
 
     def with_readiness_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
-        from core.configs.helpers import dict_to_v1probe
-
         if self.readiness_probe is not None and not overwrite:
             raise ValueError("ContainerConfig already has readiness probe.")
         if isinstance(readiness_probe, dict):

@@ -1,18 +1,33 @@
 # Python Imports
+from functools import partial
 import ast
 import base64
+import json
 import logging
-from pathlib import Path
-from typing import List, Optional, Tuple
-
+import traceback
 import pandas as pd
+from pydantic import BaseModel, Field, NonNegativeInt, PositiveInt
 import seaborn as sns
-from result import Err, Ok, Result
+from pathlib import Path
+from typing import Callable, ClassVar, Dict, List, Literal, Self, Tuple, Optional, Type
+from result import Ok, Err, Result
 
 # Project Imports
-from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.mesh_analysis.analyzers.waku.analyzer import AnalysisResult, AnalysisStep, Analyzer, OnFail
+from src.mesh_analysis.analyzers.waku.data_puller import DataPuller
+from src.mesh_analysis.stacks.file_stack_analysis import FileStack
+from src.mesh_analysis.readers.reader import Reader
+from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
+from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
+from src.mesh_analysis.readers.builders.victoria_reader_builder import (
+    VictoriaReaderBuilder,
+)
 from src.mesh_analysis.readers.file_reader import FileReader
-from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
+from src.mesh_analysis.readers.tracers.waku_tracer import (
+    NewTracer,
+    NewWakuTracer,
+    WakuTracer,
+)
 from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.utils import file_utils, list_utils, path_utils
 
@@ -20,117 +35,187 @@ logger = logging.getLogger(__name__)
 sns.set_theme()
 
 
-class WakuAnalyzer:
-    """
-    Handles the analysis of Waku message reliability from either local log files or online data.
+class MessageReliabilityResult(BaseModel):
+    num_unique_messages: NonNegativeInt
+    num_peers: NonNegativeInt
+    all_in_same_shard: bool
+    nodes_missing_messages: List[str]
 
-    The class ensures that every Waku node received every expected message. It facilitates both local
-    and online analysis of message reliability, merging and processing dataframes, and dumping results.
-    In cases of missed messages, the class logs details and optionally dumps relevant node logs. It
-    supports parallel processing to improve analysis efficiency.
 
-    :ivar _dump_analysis_path: Path where analysis results are dumped.
-    :ivar _local_path_to_analyze: Path to the folder containing local logs for analysis.
-    :ivar _kwargs: Additional settings and configurations for analysis.
-    :ivar _message_hashes: List of message hashes analyzed.
-    """
+class StatefulSetNodes(BaseModel):
+    name: str
+    expected: NonNegativeInt
+    actual: NonNegativeInt
 
-    def __init__(
-        self, dump_analysis_dir: str = None, local_folder_to_analyze: str = None, **kwargs
-    ):
-        self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
-        self._kwargs = kwargs
-        self._message_hashes = []
 
-    def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
-        self._dump_analysis_path = Path(dump_analysis_dir) if dump_analysis_dir else None
-        self._local_path_to_analyze = (
-            Path(local_folder_to_analyze) if local_folder_to_analyze else None
+class MessageReliabilityAnalysis(BaseModel):
+    ss_nodes: List[StatefulSetNodes]
+    reliability_result: MessageReliabilityResult
+
+
+class NewWakuAnalyzer(Analyzer):
+
+    def with_ss_check(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+        *,
+        on_fail: OnFail = "continue",
+    ) -> Self:
+        return self._with_parameterized_check(
+            self.check_ss_nodes,
+            on_fail=on_fail,
+            stateful_sets=stateful_sets,
+            expected_ss_nodes=expected_ss_nodes,
         )
-        result = path_utils.prepare_path_for_folder(self._dump_analysis_path)
-        if result.is_err():
-            logger.error(result.err_value)
-            exit(1)
 
-    def _analyze_reliability_local(self, n_jobs: int):
-        waku_tracer = WakuTracer(["file"])
-        waku_tracer.with_received_pattern_group()
-        waku_tracer.with_sent_pattern_group()
+    def with_reliability_check(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+        expected_num_peers: NonNegativeInt,
+        expected_num_messages: NonNegativeInt,
+        *,
+        on_fail: OnFail = "continue",
+    ) -> Self:
+        return self._with_parameterized_check(
+            self.analyze_reliability,
+            on_fail=on_fail,
+            stateful_sets=stateful_sets,
+            nodes_per_ss=nodes_per_ss,
+            expected_num_peers=expected_num_peers,
+            expected_num_messages=expected_num_messages,
+        )
 
-        reader = FileReader(self._local_path_to_analyze, waku_tracer, n_jobs)
-        dfs = reader.get_dataframes()
-        dfs = self._merge_dfs_local(dfs)
+    def check_ss_nodes(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+    ) -> AnalysisResult:
+        ss_nodes: List[StatefulSetNodes] = self._num_statefulset_nodes(
+            stateful_sets, expected_ss_nodes
+        )
+        passed = all(map(lambda ss: ss.expected == ss.actual, ss_nodes))
 
-        received_df = dfs[0].assign(shard=0)
-        received_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        received_df.sort_index(inplace=True)
+        if not passed:
+            error_message = f"Number of nodes in cluster does not match with provided data.\nStatefulSets: {ss_nodes}"
+            logger.error(error_message)
 
-        sent_df = dfs[1].assign(shard=0)
-        sent_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        sent_df.sort_index(inplace=True)
+        return AnalysisResult(
+            name="num_ss_nodes",
+            intermediates={
+                "ss_nodes": ss_nodes,
+                **({"failed": error_message} if not passed else {}),
+            },
+            status="passed" if passed else "failed",
+        )
 
-        result = self._dump_dfs([received_df, sent_df])
-        if result.is_err():
+    def _num_statefulset_nodes(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+    ) -> List[StatefulSetNodes]:
+        num_nodes_per_ss = self.data_puller.get_number_nodes(stateful_sets)
+
+        results = []
+        for i, num_nodes in enumerate(num_nodes_per_ss):
+            results.append(
+                StatefulSetNodes(
+                    name=stateful_sets[i],
+                    expected=expected_ss_nodes[i],
+                    actual=num_nodes,
+                )
+            )
+
+        return results
+
+    def analyze_reliability(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+        expected_num_peers: NonNegativeInt,
+        expected_num_messages: NonNegativeInt,
+    ) -> AnalysisResult:
+        reliability_result = self._analyze_reliability_cluster(
+            stateful_sets, nodes_per_ss
+        )
+        passed = (
+            reliability_result.all_in_same_shard
+            and reliability_result.num_peers == expected_num_peers
+            and reliability_result.num_unique_messages == expected_num_messages
+        )
+        return AnalysisResult(
+            name="reliability",
+            intermediates=reliability_result.model_dump(),
+            status="passed" if passed else "failed",
+        )
+
+    def _analyze_reliability_cluster(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+    ) -> MessageReliabilityResult:
+        # For local data puller, use "kubernetes.pod_name" as the header for file name.
+        # For Victoria use "kubernetes.pod_name" and "kubernetes.pod_node_name".
+        extra_fields = (
+            ["kubernetes.pod_name"]
+            if self.data_puller.is_local()
+            else ["kubernetes.pod_name", "kubernetes.pod_node_name"]
+        )
+
+        tracer = (
+            NewWakuTracer()
+            .with_received_pattern_group()
+            .with_sent_pattern_group()
+            .with_extra_fields(extra_fields)
+        )
+        dfs = self.data_puller.get_all_node_dataframes_new(
+            tracer, stateful_sets, nodes_per_ss
+        )
+
+        dfs = self._merge_dfs(dfs)
+
+        try:
+            result = self._dump_dfs(dfs)
+        except:
             logger.warning(f"Issue dumping message summary. {result.err_value}")
-            exit(1)
 
-        self._has_message_reliability_issues(
+        reliability_results = self._has_message_reliability_issues(
             "shard",
             "msg_hash",
-            "kubernetes.pod-name",
-            received_df,
-            sent_df,
+            "kubernetes.pod_name",
+            dfs[0],
+            dfs[1],
             self._dump_analysis_path,
         )
 
-    def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        logger.info("Merging and sorting information")
+        if reliability_results.nodes_missing_messages:
+            logger.info("Dumping logs from nodes with issues")
+            self._dump_logs(reliability_results.nodes_missing_messages)
 
-        received_df = pd.concat(
-            [pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        received_df = received_df.assign(
-            shard=received_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
-        )
-        received_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        received_df.sort_index(inplace=True)
+        return reliability_results
 
-        sent_df = pd.concat(
-            [pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        sent_df = sent_df.assign(
-            shard=sent_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
-        )
-        sent_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        sent_df.sort_index(inplace=True)
 
-        return [received_df, sent_df]
-
-    def _merge_dfs_local(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        """
-        TODO currently shard information is picked in the pod's name during the experiment. If you are working with
-        local logs, make sure that each node has it's own log file, named like <node>-<shard>-<node_index>.
-        """
-        logger.info("Merging and sorting information")
-
-        received_df = pd.concat(dfs[0], ignore_index=True)
-        received_df = received_df.assign(
-            shard=received_df["file"].str.extract(r".*-(\d+)-").astype(int)
-        )
-        received_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        received_df.sort_index(inplace=True)
-
-        sent_df = pd.concat(dfs[1], ignore_index=True)
-        sent_df = sent_df.assign(shard=sent_df["file"].str.extract(r".*-(\d+)-").astype(int))
-        sent_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
-        sent_df.sort_index(inplace=True)
-
-        return [received_df, sent_df]
-
-    def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+    def adjust_dfs(self, dfs: List[pd.DataFrame]):
         # We either had legacy lightpush requests xor lightpush requests.
         # Thus, dfs[0] is our received
         self.fill_unknown_in_received_df(dfs[0])
+
+    def fill_unknown_in_received_df(self, df: pd.DataFrame):
+        unknown_key = WakuTracer.unknown_sender_str
+        # Mapping from kubernetes.pod_name to receiver_peer_id
+        # for cases where my_peer_id was not included in sender (legacy lightpush requests)
+        pod_to_peer_map = (
+            df.loc[df["receiver_peer_id"] != unknown_key]
+            .drop_duplicates("kubernetes.pod_name")
+            .set_index("kubernetes.pod_name")["receiver_peer_id"]
+        )
+        df.loc[df["receiver_peer_id"] == unknown_key, "receiver_peer_id"] = df.loc[
+            df["receiver_peer_id"] == unknown_key, "kubernetes.pod_name"
+        ].map(pod_to_peer_map)
+
+    def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
+        self.adjust_dfs(dfs)
 
         received = dfs[0].reset_index()
         received = received.astype(str)
@@ -154,96 +239,32 @@ class WakuAnalyzer:
 
         return Ok(None)
 
-    def _assert_num_nodes(self) -> Result[str, str]:
-        tracer = WakuTracer().with_wildcard_pattern()
-        query = "*"
+    def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
+        logger.info("Merging and sorting information")
 
-        reader_builder = VictoriaReaderBuilder(tracer, query, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
-
-        num_nodes_per_ss = stack_analysis.get_number_nodes()
-        for i, num_nodes in enumerate(num_nodes_per_ss):
-            if num_nodes != self._kwargs["nodes_per_statefulset"][i]:
-                return Err(
-                    f"Number of nodes in cluster {num_nodes_per_ss} doesnt match"
-                    f'with provided {self._kwargs["nodes_per_statefulset"]} data.'
-                )
-
-        return Ok(f"Found {num_nodes_per_ss} nodes")
-
-    def _dump_logs(self, nodes_with_issues: List[str]):
-        tracer = WakuTracer().with_wildcard_pattern()
-        vreader = VictoriaReaderBuilder(tracer, "*", **self._kwargs)
-        stack = VaclabStackAnalysis(vreader, **self._kwargs)
-        stack.dump_node_logs(8, nodes_with_issues, self._dump_analysis_path)
-
-    def _analyze_reliability_cluster(self, n_jobs: int):
-        result = self._assert_num_nodes()
-        if result.is_ok():
-            logger.info(result.ok_value)
-        else:
-            logger.error(result.err_value)
-            exit(1)
-
-        tracer = (
-            WakuTracer(extra_fields=self._kwargs["extra_fields"])
-            .with_received_pattern_group()
-            .with_sent_pattern_group()
+        received_df = pd.concat(
+            [pd.concat(group["received"], ignore_index=True) for group in dfs],
+            ignore_index=True,
         )
-
-        queries = ["(received relay message OR  handling lightpush request)", "sent relay message"]
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
-
-        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
-        dfs = self._merge_dfs(dfs)
-
-        result = self._dump_dfs(dfs)
-        if result.is_err():
-            logger.warning(f"Issue dumping message summary. {result.err_value}")
-            exit(1)
-
-        nodes_with_issues = self._has_message_reliability_issues(
-            "shard", "msg_hash", "kubernetes.pod_name", dfs[0], dfs[1], self._dump_analysis_path
+        received_df = received_df.assign(
+            shard=received_df["kubernetes.pod_name"]
+            .str.extract(r".*-(\d+)-")
+            .astype(int)
         )
-        if nodes_with_issues:
-            logger.info("Dumping logs from nodes with issues")
-            self._dump_logs(nodes_with_issues)
+        received_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
+        received_df.sort_index(inplace=True)
 
-    def fill_unknown_in_received_df(self, df: pd.DataFrame):
-        unknown_key = WakuTracer.unknown_sender_str
-        # Mapping from kubernetes.pod_name to receiver_peer_id
-        # for cases where my_peer_id was not included in sender (legacy lightpush requests)
-        pod_to_peer_map = (
-            df.loc[df["receiver_peer_id"] != unknown_key]
-            .drop_duplicates("kubernetes.pod_name")
-            .set_index("kubernetes.pod_name")["receiver_peer_id"]
+        sent_df = pd.concat(
+            [pd.concat(group["sent"], ignore_index=True) for group in dfs],
+            ignore_index=True,
         )
-        df.loc[df["receiver_peer_id"] == unknown_key, "receiver_peer_id"] = df.loc[
-            df["receiver_peer_id"] == unknown_key, "kubernetes.pod_name"
-        ].map(pod_to_peer_map)
+        sent_df = sent_df.assign(
+            shard=sent_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
+        )
+        sent_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
+        sent_df.sort_index(inplace=True)
 
-    def analyze_reliability(self, n_jobs: int):
-        """
-        This function automatically assumes two scenarios, analysis from online data, and analysis from local data.
-
-        Online: It will search in the logs tracked in the used monitoring system. It makes sure that every waku node
-        received every message. It will create a summary folder in dump_analysis_dir, with 2 csv files gathering all
-        the information from the received messages and sent messages. If it detects that a waku node missed messages,
-        it will log the information, and also dump the logs of that node into a <node>.log file.
-
-        Local: It will read the logs provided in local_folder_to_analyze. It makes sure that every waku node received
-        every message. It will create a summary folder IN dump_analysis_dir, with 2 csv files gathering all the
-        information from the received messages and sent messages.
-
-        :param n_jobs: The number of parallel jobs to use for the analysis.
-        :type n_jobs: int
-        :return: None
-        """
-        if self._local_path_to_analyze is None:
-            self._analyze_reliability_cluster(n_jobs)
-        else:
-            self._analyze_reliability_local(n_jobs)
+        return [received_df, sent_df]
 
     def _has_message_reliability_issues(
         self,
@@ -253,9 +274,11 @@ class WakuAnalyzer:
         received_df: pd.DataFrame,
         sent_df: pd.DataFrame,
         issue_dump_location: Path,
-    ) -> Optional[List[str]]:
-        logger.info(f'Nº of Peers: {len(received_df["receiver_peer_id"].unique())}')
-        logger.info(f"Nº of unique messages: {len(received_df.index.get_level_values(1).unique())}")
+    ) -> MessageReliabilityResult:
+        num_peers = len(received_df["receiver_peer_id"].unique())
+        logger.info(f"Nº of Peers: {num_peers}")
+        unique_messages = len(received_df.index.get_level_values(1).unique())
+        logger.info(f"Nº of unique messages: {unique_messages}")
 
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(
             shard_identifier, msg_identifier, peer_identifier, received_df
@@ -277,7 +300,9 @@ class WakuAnalyzer:
             )
             for data in msg_sent_data:
                 peer_id = data[0].split("*")[-1]
-                logger.info(f"Peer {peer_id} message information dumped in {issue_dump_location}")
+                logger.info(
+                    f"Peer {peer_id} message information dumped in {issue_dump_location}"
+                )
                 match path_utils.prepare_path_for_file(
                     issue_dump_location / f"{data[0].split('*')[-1]}.csv"
                 ):
@@ -286,43 +311,67 @@ class WakuAnalyzer:
                     case Err(err):
                         logger.error(err)
                         exit(1)
-            return peers_missed_messages
 
-        return None
+        return MessageReliabilityResult(
+            all_in_same_shard=violations.empty,
+            num_unique_messages=unique_messages,
+            num_peers=num_peers,
+            nodes_missing_messages=peers_missed_messages,
+        )
 
-    def _check_if_msg_has_been_sent(
-        self, peers: List, missed_messages: List, sent_df: pd.DataFrame
-    ) -> List:
-        messages_sent_to_peer = []
-        for peer in peers:
-            try:
-                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
-                filtered_df = filtered_df[filtered_df["receiver_peer_id"] == peer]
-                messages_sent_to_peer.append((peer, filtered_df))
-            except KeyError as _:
-                logger.warning(
-                    f"Message {missed_messages} has not ben sent to {peer} by any other node."
-                )
+    def _merge_dfs_local(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
+        """
+        TODO currently shard information is picked in the pod's name during the experiment. If you are working with
+        local logs, make sure that each node has it's own log file, named like <node>-<shard>-<node_index>.
+        """
+        logger.info("Merging and sorting information")
 
-        return messages_sent_to_peer
+        received_df = pd.concat(dfs[0], ignore_index=True)
+        received_df = received_df.assign(
+            shard=received_df["file"].str.extract(r".*-(\d+)-").astype(int)
+        )
+        received_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
+        received_df.sort_index(inplace=True)
+
+        sent_df = pd.concat(dfs[1], ignore_index=True)
+        sent_df = sent_df.assign(
+            shard=sent_df["file"].str.extract(r".*-(\d+)-").astype(int)
+        )
+        sent_df.set_index(["shard", "msg_hash", "timestamp"], inplace=True)
+        sent_df.sort_index(inplace=True)
+
+        return [received_df, sent_df]
 
     def _get_peers_missed_messages(
-        self, shard_identifier: str, msg_identifier: str, peer_identifier: str, df: pd.DataFrame
+        self,
+        shard_identifier: str,
+        msg_identifier: str,
+        peer_identifier: str,
+        df: pd.DataFrame,
     ) -> Tuple[List, List]:
         all_peers_missed_messages = []
         all_missing_messages = []
 
         for shard, df_shard in df.groupby(level=shard_identifier):
-            unique_messages = len(df_shard.index.get_level_values(msg_identifier).unique())
+            unique_messages = len(
+                df_shard.index.get_level_values(msg_identifier).unique()
+            )
 
             grouped = (
-                df_shard.groupby([msg_identifier, peer_identifier]).size().reset_index(name="count")
+                df_shard.groupby([msg_identifier, peer_identifier])
+                .size()
+                .reset_index(name="count")
             )
             pivot_df = grouped.pivot_table(
-                index=msg_identifier, columns=peer_identifier, values="count", fill_value=0
+                index=msg_identifier,
+                columns=peer_identifier,
+                values="count",
+                fill_value=0,
             )
 
-            peers_missed_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
+            peers_missed_msg = pivot_df.columns[
+                pivot_df.sum() != unique_messages
+            ].to_list()
             missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
 
             if not peers_missed_msg:
@@ -365,12 +414,17 @@ class WakuAnalyzer:
         :return:
         """
         waku_tracer = WakuTracer().with_wildcard_pattern()
+
+        self.stack.get_pod_logs(pod_identifier="get-store-messages", query="*")
+
         reader = VictoriaReaderBuilder(waku_tracer, "*", **self._kwargs)
         stack = VaclabStackAnalysis(reader, **self._kwargs)
         data = stack.get_pod_logs("get-store-messages")
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        messages_list = ast.literal_eval(log_list[-1])  # Last line in get-store-messages
+        messages_list = ast.literal_eval(
+            log_list[-1]
+        )  # Last line in get-store-messages
         messages_list = ["0x" + base64.b64decode(msg).hex() for msg in messages_list]
         logger.debug(f"Messages from store: {messages_list}")
 
@@ -403,7 +457,9 @@ class WakuAnalyzer:
         data = stack.get_pod_logs("get-filter-messages")
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        all_ok_boolean = ast.literal_eval(log_list[-1])  # Last line in get-filter-messages
+        all_ok_boolean = ast.literal_eval(
+            log_list[-1]
+        )  # Last line in get-filter-messages
 
         all_ok = ast.literal_eval(all_ok_boolean)
         if all_ok:

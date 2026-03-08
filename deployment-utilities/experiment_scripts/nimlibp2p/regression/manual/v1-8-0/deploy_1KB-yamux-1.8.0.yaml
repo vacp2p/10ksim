@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: pod
-  namespace: zerotesting-nimlibp2p
+  namespace: zerotesting-pwhite
 spec:
-  replicas: 1000
+  replicas: 30
   podManagementPolicy: "Parallel"
   serviceName: nimp2p-service
   selector:
@@ -17,20 +17,12 @@ spec:
     spec:
       dnsConfig:
         searches:
-          - nimp2p-service.zerotesting-nimlibp2p.svc.cluster.local
-      initContainers:
-        - name: slowyourroll
-          image: soutullostatus/tc-container:1
-          securityContext:
-            capabilities:
-              add: [ "NET_ADMIN" ]
-          command:
-            - sh
-            - -c
-            - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+          - nimp2p-service.zerotesting-pwhite.svc.cluster.local
       containers:
         - name: container-0
-          image: soutullostatus/dst-test-node:v1.7.1-yamux
+          # image: soutullostatus/dst-test-node:v1.14.0-yamux
+          # image: ufarooqstatus/refactored-test-node:v1.0
+          image: pearsonwhite/test_node:c16faa8fb1d18570823e3a511e8a91618e13d937
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -43,16 +35,39 @@ spec:
               memory: "600Mi"
               cpu: "400m"
           env:
-            - name: PEERNUMBER
+            # # - name: PEERNUMBER
+            # #   value: "0"
+            # - name: PEERS
+            #   value: "12"
+            # - name: CONNECTTO
+            #   value: "10"
+            # - name: MUXER
+            #   value: yamux
+            # # - name: MSGRATE
+            # #   value: "10000"
+            # # - name: MSGSIZE
+            # #   value: "1000"
+
+            - name: "NODES"
+              value: "12"
+            - name: "MESSAGES"
+              value: "1000"
+            - name: "MSGRATE"
+              value: "1000"
+            - name: "MSGSIZE"
+              value: "1000"
+            - name: "PUBLISHERS"
+              value: "6"
+            - name: "ISMIX"
+              value: "false"
+            - name: "CONNECTTO"
+              value: "6"
+            - name: "NUMMIX"
               value: "0"
-            - name: PEERS
-              value: "1000"
-            - name: CONNECTTO
-              value: "10"
-            - name: MSGRATE
-              value: "1000"
-            - name: MSGSIZE
-              value: "1000"
+            - name: "SELFTRIGGER"
+              value: "false"
+
+
           args:
-            - "30"
+            - "55"
             - "20"

@@ -22,7 +22,7 @@ class Bridge(BaseBridge):
     def get_metadata(self, events_log_path: str) -> dict:
         metadata = super().get_metadata(events_log_path)
         events = self._get_metadata_events(events_log_path)
-        metadata["metadata"].update(events)
+        metadata["results"] = events
         metadata["stack"]["start_time"] = events[self.interval]["start"]
         metadata["stack"]["end_time"] = events[self.interval]["end"]
         metadata["stack"]["container_name"] = LIBP2P_CONTAINER_NAME

@@ -8,15 +8,32 @@ from typing import List
 from src.mesh_analysis.readers.reader import Reader
 
 # Project Imports
+from src.mesh_analysis.readers.tracers.waku_tracer import NewTracer
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.utils import file_utils
 
 logger = logging.getLogger(__name__)
 
 
+def merge_logs_per_pattern(tracer : NewTracer, files_logs) -> List:
+    result = []
+
+    for group_idx, group in enumerate(tracer.patterns):
+        logs = []
+
+        for pattern_idx in range(len(group.trace_pairs)):
+            all_logs = []
+            for file_logs in files_logs:
+                all_logs.extend(file_logs[group_idx][pattern_idx])
+            logs.append(all_logs)
+        result.append(logs)
+
+    return result
+
+
 class FileReader(Reader):
 
-    def __init__(self, folder: Path, tracer: MessageTracer, n_jobs: int):
+    def __init__(self, folder: Path, tracer: NewTracer, n_jobs: int):
         self._folder_path = folder
         self._tracer = tracer
         self._n_jobs = n_jobs
@@ -32,15 +49,7 @@ class FileReader(Reader):
         parsed_logs = self._read_files(files_result.ok_value)
         logger.info(f"Tracing {self._folder_path}")
 
-        def merge_sublists(biglist):
-            transposed = list(zip(*biglist))
-            merged = [[item for sublist in sublists for item in sublist] for sublists in transposed]
-
-            return merged
-
-        test = merge_sublists(parsed_logs)
-        dfs = self._tracer.trace(test)
-
+        dfs = [self._tracer.trace(logs) for logs in parsed_logs]
         return dfs
 
     def _read_files(self, files: List) -> List:
@@ -54,13 +63,14 @@ class FileReader(Reader):
 
         with open(Path(self._folder_path) / file) as log_file:
             lines = log_file.readlines()
+            # TODO: test optimizations for different ways to read here.
 
-        for i, patterns in enumerate(self._tracer.patterns):
-            query_results = [[] for _ in patterns]
+        for i, pattern_group in enumerate(self._tracer.patterns):
+            query_results = [[] for _ in pattern_group.trace_pairs]
 
             for line in lines:
-                for j, pattern in enumerate(patterns):
-                    match = re.search(pattern, line)
+                for j, trace_pair in enumerate(pattern_group.trace_pairs):
+                    match = re.search(trace_pair.regex, line)
                     if match:
                         match_as_list = list(match.groups())
                         match_as_list.append(file)

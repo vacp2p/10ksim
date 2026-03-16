@@ -8,3 +8,5 @@ Nodes will use host IP directly and `NodePort` services starting from 31000. Ser
 already. Update if necessary
 
 Set to push metrics to vaclab OTLP, and logging level is changed to `INFO` (see `logos-blockchain.yaml` args).
+
+Nodes are deployed sequentially after each one finish `Bootstrapping` and goes to `Online` state.   

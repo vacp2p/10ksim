@@ -72,6 +72,17 @@ def find_container_config(
     return result
 
 
+def with_image_for_container(
+    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig,
+    image: Image,
+    container_name: str,
+    *,
+    overwrite: bool = False,
+):
+    container_config = find_container_config(config, container_name)
+    container_config.with_image(image, overwrite=overwrite)
+
+
 def get_container_command(
     config: HigherConfigTypes,
     container_name: str,

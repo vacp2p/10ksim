@@ -44,6 +44,11 @@ class ContainerConfig(BaseModel):
     ports: Optional[List[V1ContainerPort]] = None
     image_pull_policy: Literal["IfNotPresent", "Always", "Never"]
 
+    def with_image(self, image: Image, *, overwrite: bool = False):
+        if self.image is not None and not overwrite:
+            raise ValueError("Image already exist for container.")
+        self.image = image
+
     def with_resources(self, resources: V1ResourceRequirements, *, overwrite: bool = False):
         if self.resources is not None and not overwrite:
             raise ValueError("Resources already exist for container.")

@@ -152,7 +152,8 @@ def add_links(metadata, links_map):
         try:
             for link_type, base in links_map.items():
                 metadata[interval_type][link_type] = base.format(
-                    start=metadata[interval_type]["start"], end=metadata[interval_type]["end"]
+                    start=metadata[interval_type]["start"],
+                    end=metadata[interval_type]["end"],
                 )
         except KeyError:
             pass
@@ -202,8 +203,18 @@ class BaseBridge(BaseModel):
                 except KeyError:
                     pass
 
-        metadata["stack"]["extra_fields"] = ["kubernetes.pod_name", "kubernetes.pod_node_name"]
-        metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+        metadata["experiment"]["bridge_class"] = {
+            "__type__": f"{self.__class__.__module__}.{self.__class__.__name__}",
+            **self.model_dump(),
+        }
+        metadata["stack"]["extra_fields"] = [
+            "kubernetes.pod_name",
+            "kubernetes.pod_node_name",
+        ]
+        try:
+            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+        except ValueError as e:
+            logger.info(e)
         metadata["stack"]["name"] = self._get_name(metadata)
         try:
             metadata["params"] = all_metadata["params"]

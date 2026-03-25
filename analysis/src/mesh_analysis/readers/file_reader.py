@@ -3,15 +3,32 @@ import logging
 import multiprocessing
 import re
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
+import pandas as pd
 from src.mesh_analysis.readers.reader import Reader
+from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 # Project Imports
-from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.utils import file_utils
 
 logger = logging.getLogger(__name__)
+
+
+def merge_logs_per_pattern(tracer: MessageTracer, files_logs) -> List:
+    result = []
+
+    for group_idx, group in enumerate(tracer.patterns):
+        logs = []
+
+        for pattern_idx in range(len(group.trace_pairs)):
+            all_logs = []
+            for file_logs in files_logs:
+                all_logs.extend(file_logs[group_idx][pattern_idx])
+            logs.append(all_logs)
+        result.append(logs)
+
+    return result
 
 
 class FileReader(Reader):
@@ -21,7 +38,7 @@ class FileReader(Reader):
         self._tracer = tracer
         self._n_jobs = n_jobs
 
-    def get_dataframes(self) -> List:
+    def get_dataframes(self) -> List[Dict[str, List[pd.DataFrame]]]:
         logger.info(f"Reading {self._folder_path}")
         files_result = file_utils.get_files_from_folder_path(self._folder_path, extension="*.log")
 
@@ -32,15 +49,7 @@ class FileReader(Reader):
         parsed_logs = self._read_files(files_result.ok_value)
         logger.info(f"Tracing {self._folder_path}")
 
-        def merge_sublists(biglist):
-            transposed = list(zip(*biglist))
-            merged = [[item for sublist in sublists for item in sublist] for sublists in transposed]
-
-            return merged
-
-        test = merge_sublists(parsed_logs)
-        dfs = self._tracer.trace(test)
-
+        dfs = [self._tracer.trace(logs) for logs in parsed_logs]
         return dfs
 
     def _read_files(self, files: List) -> List:
@@ -54,13 +63,14 @@ class FileReader(Reader):
 
         with open(Path(self._folder_path) / file) as log_file:
             lines = log_file.readlines()
+            # TODO: Potential for optimizations for reading here.
 
-        for i, patterns in enumerate(self._tracer.patterns):
-            query_results = [[] for _ in patterns]
+        for i, pattern_group in enumerate(self._tracer.patterns):
+            query_results = [[] for _ in pattern_group.trace_pairs]
 
             for line in lines:
-                for j, pattern in enumerate(patterns):
-                    match = re.search(pattern, line)
+                for j, trace_pair in enumerate(pattern_group.trace_pairs):
+                    match = re.search(trace_pair.regex, line)
                     if match:
                         match_as_list = list(match.groups())
                         match_as_list.append(file)

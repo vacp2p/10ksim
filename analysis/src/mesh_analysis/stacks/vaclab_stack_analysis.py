@@ -1,13 +1,15 @@
 # Python Imports
 import logging
-
-# Project Imports
+import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 import pandas as pd
+from pydantic import NonNegativeInt
 from result import Err, Ok, Result
+
+# Project Imports
 from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
 from src.mesh_analysis.stacks.stack_analysis import StackAnalysis
 from src.utils import path_utils
@@ -19,11 +21,13 @@ class VaclabStackAnalysis(StackAnalysis):
     def __init__(self, reader_builder: VictoriaReaderBuilder, **kwargs):
         super().__init__(reader_builder, **kwargs)
 
-    def get_all_node_dataframes(self, n_jobs: int):
+    def get_all_node_dataframes(
+        self, stateful_sets: List[str], nodes_per_stateful_set: List[NonNegativeInt], n_jobs: int
+    ) -> List[Dict[str, List[pd.DataFrame]]]:
         dfs = []
 
         for stateful_set_name, num_nodes_in_stateful_set in zip(
-            self._kwargs["stateful_sets"], self._kwargs["nodes_per_statefulset"]
+            stateful_sets, nodes_per_stateful_set
         ):
             with ProcessPoolExecutor(n_jobs) as executor:
                 futures = {
@@ -36,25 +40,25 @@ class VaclabStackAnalysis(StackAnalysis):
                 for i, future in enumerate(as_completed(futures)):
                     i = i + 1
                     try:
-                        df = future.result()
-                        dfs.append(df)
+                        statefulset_name, node_index, df_dict = future.result()
+                        dfs.append(df_dict)
                         if i % 50 == 0 or i == num_nodes_in_stateful_set:
                             logger.info(
-                                f"Processed {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>"
+                                f"Processed {statefulset_name}-{node_index} {i}/{num_nodes_in_stateful_set} nodes in stateful set <{stateful_set_name}>"
                             )
 
                     except Exception as e:
                         logger.error(f"Error retrieving logs for node {futures[future]}: {e}")
+                        logger.error(traceback.format_exc())
 
         return dfs
 
     def _extract_dataframe_single_node(
         self, statefulset_name: str, node_index: int
-    ) -> List[pd.DataFrame]:
+    ) -> Tuple[str, int, Dict[str, List[pd.DataFrame]]]:
         reader = self._reader_builder.build_with_queries(statefulset_name, node_index)
         data = reader.get_dataframes()
-
-        return data
+        return statefulset_name, node_index, data
 
     def _dump_logs_for_single_node(self, node: str, dump_path: Path) -> Result[Path, None]:
         reader = self._reader_builder.build_with_single_query(node)
@@ -71,10 +75,9 @@ class VaclabStackAnalysis(StackAnalysis):
         else:
             return Err(None)
 
-    def get_number_nodes(self) -> List[int]:
+    def get_number_nodes(self, stateful_sets: List[str]) -> List[int]:
         num_nodes_per_stateful_set = []
-
-        for stateful_set_prefix in self._kwargs["stateful_sets"]:
+        for stateful_set_prefix in stateful_sets:
             reader = self._reader_builder.build_with_single_query(
                 stateful_set_prefix, uniq_by="|uniq by (kubernetes.pod_name)"
             )

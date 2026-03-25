@@ -1,21 +1,40 @@
-# Python Imports
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Self, Tuple
 
 import pandas as pd
+import seaborn as sns
+from pydantic import BaseModel, NonNegativeInt
 from result import Err, Ok, Result
-from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyzer, OnFail
+from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
-from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-
-# Project Imports
-
+from src.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
+from src.utils import file_utils, path_utils
 
 logger = logging.getLogger(__name__)
+sns.set_theme()
 
 
-class Nimlibp2pAnalyzer:
+class MessageReliabilityResult(BaseModel):
+    num_unique_messages: NonNegativeInt
+    num_peers: NonNegativeInt
+    all_in_same_shard: bool
+    nodes_missing_messages: List[str]
+
+
+class StatefulSetNodes(BaseModel):
+    name: str
+    expected: NonNegativeInt
+    actual: NonNegativeInt
+
+
+class MessageReliabilityAnalysis(BaseModel):
+    ss_nodes: List[StatefulSetNodes]
+    reliability_result: MessageReliabilityResult
+
+
+class Nimlibp2pAnalyzer(Analyzer):
     """
     Handles the analysis of Nimlibp2p message reliability from either local log files or online data.
 
@@ -24,180 +43,186 @@ class Nimlibp2pAnalyzer:
     In cases of missed messages, the class logs details and optionally dumps relevant node logs. It
     supports parallel processing to improve analysis efficiency.
 
-    :ivar _dump_analysis_path: Path where analysis results are dumped.
-    :ivar _local_path_to_analyze: Path to the folder containing local logs for analysis.
-    :ivar _kwargs: Additional settings and configurations for analysis.
-    :ivar _message_hashes: List of message hashes analyzed.
     """
 
-    def __init__(
-        self, dump_analysis_dir: str = None, local_folder_to_analyze: str = None, **kwargs
-    ):
-        self._set_up_paths(dump_analysis_dir, local_folder_to_analyze)
-        self._kwargs = kwargs
-        self._message_hashes = []
+    msg_hash_key: str = "msgId"
 
-    def _set_up_paths(self, dump_analysis_dir: str, local_folder_to_analyze: str):
-        self._dump_analysis_path = Path(dump_analysis_dir) if dump_analysis_dir else None
-        self._local_path_to_analyze = (
-            Path(local_folder_to_analyze) if local_folder_to_analyze else None
+    def with_ss_check(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+        *,
+        on_fail: OnFail = "continue",
+    ) -> Self:
+        return self._with_parameterized_check(
+            self.check_ss_nodes,
+            on_fail=on_fail,
+            stateful_sets=stateful_sets,
+            expected_ss_nodes=expected_ss_nodes,
         )
-        result = path_utils.prepare_path_for_folder(self._dump_analysis_path)
-        if result.is_err():
-            logger.error(result.err_value)
-            exit(1)
 
-    def grab_latencies(self):
-        tracer = Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"]).with_latency_pattern()
+    def with_reliability_check(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+        expected_num_peers: NonNegativeInt,
+        expected_num_messages: NonNegativeInt,
+        *,
+        on_fail: OnFail = "continue",
+    ) -> Self:
+        return self._with_parameterized_check(
+            self.analyze_reliability,
+            on_fail=on_fail,
+            stateful_sets=stateful_sets,
+            nodes_per_ss=nodes_per_ss,
+            expected_num_peers=expected_num_peers,
+            expected_num_messages=expected_num_messages,
+            has_shards=False,
+        )
 
-        queries = ["milliseconds"]
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+    def check_ss_nodes(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+    ) -> AnalysisResult:
+        ss_nodes: List[StatefulSetNodes] = self._num_statefulset_nodes(
+            stateful_sets, expected_ss_nodes
+        )
+        passed = all(map(lambda ss: ss.expected == ss.actual, ss_nodes))
 
-        dfs = stack_analysis.get_all_node_dataframes(4)
-        df = self._merge_latency_dfs(dfs)
-        result = self._dump_latency_df(df)
-        if result.is_err():
-            logger.error(f"Issue dumping message summary. {result.err_value}")
+        if not passed:
+            error_message = f"Number of nodes in cluster does not match with provided data.\nStatefulSets: {ss_nodes}"
+            logger.error(error_message)
 
-    def analyze_reliability(self, n_jobs: int):
-        """
-        This function automatically assumes two scenarios, analysis from online data, and analysis from local data.
+        return AnalysisResult(
+            name="num_ss_nodes",
+            intermediates={
+                "ss_nodes": ss_nodes,
+                **({"failed": error_message} if not passed else {}),
+            },
+            status="passed" if passed else "failed",
+        )
 
-        Online: It will search in the logs tracked in the used monitoring system. It makes sure that every nimlibp2p node
-        received every message. It will create a summary folder in dump_analysis_dir, with 2 csv files gathering all
-        the information from the received messages and sent messages. If it detects that a nimlibp2p node missed messages,
-        it will log the information, and also dump the logs of that node into a <node>.log file.
+    def _num_statefulset_nodes(
+        self,
+        stateful_sets: List[str],
+        expected_ss_nodes: List[NonNegativeInt],
+    ) -> List[StatefulSetNodes]:
+        num_nodes_per_ss = self.data_puller.get_number_nodes(stateful_sets)
 
-        Local: It will read the logs provided in local_folder_to_analyze. It makes sure that every nimlibp2p node received
-        every message. It will create a summary folder IN dump_analysis_dir, with 2 csv files gathering all the
-        information from the received messages and sent messages.
+        results = []
+        for i, num_nodes in enumerate(num_nodes_per_ss):
+            results.append(
+                StatefulSetNodes(
+                    name=stateful_sets[i],
+                    expected=expected_ss_nodes[i],
+                    actual=num_nodes,
+                )
+            )
 
-        :param n_jobs: The number of parallel jobs to use for the analysis.
-        :type n_jobs: int
-        :return: None
-        """
-        if self._local_path_to_analyze is None:
-            self._analyze_reliability_cluster(n_jobs)
-        else:
-            self._analyze_reliability_local(n_jobs)
+        return results
 
-    def analyze_mix_trace(self, n_jobs: int):
-        self._assert_num_nodes()
-
-        tracer = (
-            Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"])
+    def reliability_tracer(self, extra_fields) -> MessageTracer:
+        return (
+            Nimlibp2pTracer()
+            .with_extra_fields(extra_fields)
             .with_received_pattern_group()
             .with_sent_pattern_group()
-            .with_mix_pattern_group()
         )
 
-        queries = [
-            "Received message",
-            "Publishing message",
-            '("Sender " OR "Intermediate " OR "Exit ")',
-        ]
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+    def analyze_reliability(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+        expected_num_peers: NonNegativeInt,
+        expected_num_messages: NonNegativeInt,
+        has_shards: bool,
+    ) -> AnalysisResult:
+        # For local data puller, use "kubernetes.pod_name" as the header for file name.
+        # For Victoria use "kubernetes.pod_name" and "kubernetes.pod_node_name".
+        extra_fields = (
+            ["kubernetes.pod_name"]
+            if self.data_puller.is_local()
+            else ["kubernetes.pod_name", "kubernetes.pod_node_name"]
+        )
+        tracer = self.reliability_tracer(extra_fields)
 
-        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
-        dfs = self._merge_mix_dfs(dfs)
-        result = self._dump_mix_dfs(dfs)
-        if result.is_err():
-            logger.error(f"Issue dumping message summary. {result.err_value}")
-
-    def _analyze_reliability_cluster(self, n_jobs: int):
-        self._assert_num_nodes()
-
-        tracer = (
-            Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"])
-            .with_received_pattern_group()
-            .with_sent_pattern_group()
+        reliability_result = self._analyze_reliability_cluster(
+            stateful_sets, nodes_per_ss, tracer, has_shards
+        )
+        passed = (
+            reliability_result.all_in_same_shard
+            and reliability_result.num_peers == expected_num_peers
+            and reliability_result.num_unique_messages == expected_num_messages
+        )
+        results_dict = reliability_result.model_dump()
+        if not has_shards:
+            del results_dict["all_in_same_shard"]
+        return AnalysisResult(
+            name="reliability",
+            intermediates=results_dict,
+            status="passed" if passed else "failed",
         )
 
-        queries = ["Received message", "Publishing message"]
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+    def _analyze_reliability_cluster(
+        self,
+        stateful_sets: List[str],
+        nodes_per_ss: List[NonNegativeInt],
+        tracer: MessageTracer,
+        has_shards: bool,
+    ) -> MessageReliabilityResult:
+        dfs = self.data_puller.get_all_node_dataframes_new(tracer, stateful_sets, nodes_per_ss)
+        # Strip suffix for local read.
+        for dfs_dicts in dfs:
+            for _key, df_list in dfs_dicts.items():
+                for df in df_list:
+                    df["kubernetes.pod_name"] = df["kubernetes.pod_name"].str.removesuffix(".log")
 
-        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
-        dfs = self._merge_dfs(dfs)
+        # with open("./tmp_dfs", 'w') as tmp_file:
+        #     # tmp_file.writelines(json.dumps(dfs))
+        #     tmp_file.write(dumps_list_of_df_maps(dfs))
+        # with open("./tmp_dfs", 'r') as tmp_file:
+        #     dfs = loads_list_of_df_maps(tmp_file.read())
 
+        dfs = self._merge_dfs(dfs, has_shards)
+        self.adjust_dfs(dfs)
         result = self._dump_dfs(dfs)
         if result.is_err():
-            logger.error(f"Issue dumping message summary. {result.err_value}")
-            return None
+            logger.warning(f"Issue dumping message summary. {result.err_value}")
 
-        nodes_with_issues = self._has_message_reliability_issues(
-            "msgId", "kubernetes.pod_name", dfs[0], dfs[1], self._dump_analysis_path
+        reliability_results = self._has_message_reliability_issues(
+            "shard" if has_shards else None,
+            self.msg_hash_key,
+            "kubernetes.pod_name",
+            dfs[0],
+            dfs[1],
+            self._dump_analysis_path,
         )
-        if nodes_with_issues:
+
+        if reliability_results.nodes_missing_messages:
             logger.info("Dumping logs from nodes with issues")
-            self._dump_logs(nodes_with_issues)
+            self._dump_logs(reliability_results.nodes_missing_messages)
 
-    def _assert_num_nodes(self) -> None:
-        tracer = Nimlibp2pTracer().with_wildcard_pattern()
-        query = "*"
+        return reliability_results
 
-        reader_builder = VictoriaReaderBuilder(tracer, query, **self._kwargs)
-        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+    def adjust_dfs(self, dfs: List[pd.DataFrame]):
+        # We either had legacy lightpush requests xor lightpush requests.
+        # Thus, dfs[0] is our received
+        self.fill_unknown_in_received_df(dfs[0])
 
-        num_nodes_per_ss = stack_analysis.get_number_nodes()
-        for i, num_nodes in enumerate(num_nodes_per_ss):
-            assert (
-                num_nodes == self._kwargs["nodes_per_statefulset"][i]
-            ), f"Number of nodes in cluster {num_nodes_per_ss} doesnt match"
-            f'with provided {self._kwargs["nodes_per_statefulset"]} data.'
-
-    def _merge_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        logger.info("Merging and sorting information")
-
-        received_df = pd.concat(
-            [pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        received_df.set_index(["msgId", "current"], inplace=True)
-        received_df.sort_index(inplace=True)
-
-        sent_df = pd.concat(
-            [pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        sent_df.set_index(["msgId", "timestamp"], inplace=True)
-        sent_df.sort_index(inplace=True)
-
-        return [received_df, sent_df]
-
-    def _merge_mix_dfs(self, dfs: List[List[pd.DataFrame]]) -> List[pd.DataFrame]:
-        logger.info("Merging and sorting information")
-
-        received_df = pd.concat(
-            [pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        received_df.set_index(["msgId", "current"], inplace=True)
-        received_df.sort_index(inplace=True)
-
-        sent_df = pd.concat(
-            [pd.concat(group[1], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        sent_df.set_index(["msgId", "timestamp"], inplace=True)
-        sent_df.sort_index(inplace=True)
-
-        mix_df = pd.concat(
-            [pd.concat(group[2], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        mix_df.set_index(["msgId", "current"], inplace=True)
-        mix_df.sort_index(inplace=True)
-
-        return [received_df, sent_df, mix_df]
-
-    def _merge_latency_dfs(self, dfs: List[List[pd.DataFrame]]) -> pd.DataFrame:
-        logger.info("Merging and sorting information")
-
-        received_df = pd.concat(
-            [pd.concat(group[0], ignore_index=True) for group in dfs], ignore_index=True
-        )
-        received_df.set_index(["latency"], inplace=True)
-        received_df.sort_index(inplace=True)
-
-        return received_df
+    def fill_unknown_in_received_df(self, df: pd.DataFrame):
+        """Map from kubernetes.pod_name to receiver_peer_id
+        for cases where my_peer_id was not included in sender (legacy lightpush requests)"""
+        unknown_key = WakuTracer.unknown_sender_str
+        if "receiver_peer_id" in df.columns:
+            pod_to_peer_map = (
+                df.loc[df["receiver_peer_id"] != unknown_key]
+                .drop_duplicates("kubernetes.pod_name")
+                .set_index("kubernetes.pod_name")["receiver_peer_id"]
+            )
+            df.loc[df["receiver_peer_id"] == unknown_key, "receiver_peer_id"] = df.loc[
+                df["receiver_peer_id"] == unknown_key, "kubernetes.pod_name"
+            ].map(pod_to_peer_map)
 
     def _dump_dfs(self, dfs: List[pd.DataFrame]) -> Result:
         received = dfs[0].reset_index()
@@ -222,66 +247,66 @@ class Nimlibp2pAnalyzer:
 
         return Ok(None)
 
-    def _dump_mix_dfs(self, dfs: List[pd.DataFrame]) -> Result:
-        received = dfs[0].reset_index()
-        received = received.astype(str)
-        logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(
-            received, self._dump_analysis_path / "summary" / "received.csv", False
+    def _merge_dfs(self, dfs: List[List[pd.DataFrame]], has_shard: bool) -> List[pd.DataFrame]:
+        logger.info("Merging and sorting information")
+
+        received_df = pd.concat(
+            [pd.concat(group["received"], ignore_index=True) for group in dfs],
+            ignore_index=True,
         )
-        if result.is_err():
-            logger.warning(result.err_value)
-            return Err(result.err_value)
+        if has_shard:
+            received_df = received_df.assign(
+                shard=received_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
+            )
+        columns = [self.msg_hash_key, "timestamp"]
+        if has_shard:
+            columns = ["shard"] + columns
+        received_df.set_index(columns, inplace=True)
+        received_df.sort_index(inplace=True)
 
-        sent = dfs[1].reset_index()
-        sent = sent.astype(str)
-        logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(
-            sent, self._dump_analysis_path / "summary" / "sent.csv", False
+        sent_df = pd.concat(
+            [pd.concat(group["sent"], ignore_index=True) for group in dfs],
+            ignore_index=True,
         )
-        if result.is_err():
-            logger.warning(result.err_value)
-            return Err(result.err_value)
+        if has_shard:
+            sent_df = sent_df.assign(
+                shard=sent_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
+            )
+        sent_df.set_index(columns, inplace=True)
+        sent_df.sort_index(inplace=True)
 
-        mix = dfs[2].reset_index()
-        mix = mix.astype(str)
-        logger.info("Dumping sent information")
-        result = file_utils.dump_df_as_csv(
-            mix, self._dump_analysis_path / "summary" / "mix.csv", False
-        )
-        if result.is_err():
-            logger.warning(result.err_value)
-            return Err(result.err_value)
-
-        return Ok(None)
-
-    def _dump_latency_df(self, df: pd.DataFrame) -> Result:
-        received = df.reset_index()
-        received = received.astype(str)
-        logger.info("Dumping received information")
-        result = file_utils.dump_df_as_csv(
-            received, self._dump_analysis_path / "summary" / "latencies.csv", False
-        )
-        if result.is_err():
-            logger.warning(result.err_value)
-            return Err(result.err_value)
-
-        return Ok(None)
+        return [received_df, sent_df]
 
     def _has_message_reliability_issues(
         self,
+        shard_identifier: Optional[str],
         msg_identifier: str,
         peer_identifier: str,
         received_df: pd.DataFrame,
         sent_df: pd.DataFrame,
         issue_dump_location: Path,
-    ) -> Optional[List[str]]:
-        logger.info(f'Nº of Peers: {len(received_df["kubernetes.pod_name"].unique())}')
-        logger.info(f"Nº of unique messages: {len(received_df.index.get_level_values(0).unique())}")
+    ) -> MessageReliabilityResult:
+        num_peers = len(received_df[peer_identifier].unique())
+        logger.info(f"Nº of Peers: {num_peers}")
+        unique_messages = len(received_df.index.get_level_values(self.msg_hash_key).unique())
+        logger.info(f"Nº of unique messages: {unique_messages}")
 
         peers_missed_messages, missed_messages = self._get_peers_missed_messages(
-            msg_identifier, peer_identifier, received_df
+            shard_identifier, msg_identifier, peer_identifier, received_df
         )
+
+        received_df = received_df.reset_index()
+        has_shard_violations = False
+        if shard_identifier is not None:
+            shard_groups = received_df.groupby(self.msg_hash_key)[shard_identifier].nunique()
+            shard_violations = shard_groups[shard_groups > 1]
+            has_shard_violations = not shard_violations.empty
+
+            if shard_violations.empty:
+                logger.info(f"All {self.msg_hash_key} values appear in only one shard.")
+            else:
+                logger.warning(f"These {self.msg_hash_key} values appear in multiple shards:")
+                logger.warning(shard_violations)
 
         if peers_missed_messages:
             msg_sent_data = self._check_if_msg_has_been_sent(
@@ -298,12 +323,43 @@ class Nimlibp2pAnalyzer:
                     case Err(err):
                         logger.error(err)
                         exit(1)
-            return peers_missed_messages
 
-        return None
+        return MessageReliabilityResult(
+            all_in_same_shard=not has_shard_violations,
+            num_unique_messages=unique_messages,
+            num_peers=num_peers,
+            nodes_missing_messages=peers_missed_messages,
+        )
 
     def _get_peers_missed_messages(
-        self, msg_identifier: str, peer_identifier: str, df: pd.DataFrame
+        self,
+        shard_identifier: Optional[str],
+        msg_identifier: str,
+        peer_identifier: str,
+        df: pd.DataFrame,
+    ) -> Tuple[List, List]:
+
+        if shard_identifier is not None:
+            all_peers_missed_messages = []
+            all_missing_messages = []
+            for shard, df_shard in df.groupby(level=shard_identifier):
+                peers, missing = self._get_peers_missed_messages_for_shard(
+                    shard, msg_identifier, peer_identifier, df_shard
+                )
+                all_peers_missed_messages.extend(peers)
+                all_missing_messages.extend(missing)
+            return all_peers_missed_messages, all_missing_messages
+        else:
+            return self._get_peers_missed_messages_for_shard(
+                shard_identifier, msg_identifier, peer_identifier, df
+            )
+
+    def _get_peers_missed_messages_for_shard(
+        self,
+        shard: Optional[str],
+        msg_identifier: str,
+        peer_identifier: str,
+        df: pd.DataFrame,
     ) -> Tuple[List, List]:
         all_peers_missed_messages = []
         all_missing_messages = []
@@ -312,16 +368,19 @@ class Nimlibp2pAnalyzer:
 
         grouped = df.groupby([msg_identifier, peer_identifier]).size().reset_index(name="count")
         pivot_df = grouped.pivot_table(
-            index=msg_identifier, columns=peer_identifier, values="count", fill_value=0
+            index=msg_identifier,
+            columns=peer_identifier,
+            values="count",
+            fill_value=0,
         )
 
         peers_missed_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
         missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
 
         if not peers_missed_msg:
-            logger.info(f"All peers received all messages")
+            logger.info(f"All peers received all messages for shard {shard}")
         else:
-            logger.warning(f"Nodes missed messages")
+            logger.warning(f"Nodes missed messages on shard {shard}")
             logger.warning(f"Nodes who missed messages: {peers_missed_msg}")
             logger.warning(f"Missing messages: {missing_messages}")
 
@@ -343,17 +402,11 @@ class Nimlibp2pAnalyzer:
             missing_hashes = df[df[pod_name] == 0].index.tolist()
             missing_hashes.extend(df[df[pod_name].isna()].index.tolist())
             pod_name = complete_df[complete_df["kubernetes.pod_name"] == result[0]][
-                "kubernetes.pod_name"
+                "receiver_peer_id"
             ].iloc[0][0]
             logger.warning(
                 f"Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}"
             )
-
-    def _dump_logs(self, nodes_with_issues: List[str]):
-        tracer = Nimlibp2pTracer().with_wildcard_pattern()
-        vreader = VictoriaReaderBuilder(tracer, "*", **self._kwargs)
-        stack = VaclabStackAnalysis(vreader, **self._kwargs)
-        stack.dump_node_logs(8, nodes_with_issues, self._dump_analysis_path)
 
     def _check_if_msg_has_been_sent(
         self, peers: List, missed_messages: List, sent_df: pd.DataFrame
@@ -366,7 +419,7 @@ class Nimlibp2pAnalyzer:
                 messages_sent_to_peer.append((peer, filtered_df))
             except KeyError as _:
                 logger.warning(
-                    f"Message {missed_messages} has not ben sent to {peer} by any other node."
+                    f"Message {missed_messages} has not been sent to {peer} by any other node."
                 )
 
         return messages_sent_to_peer

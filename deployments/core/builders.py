@@ -1,7 +1,8 @@
 from typing import List, Optional, Self, Tuple
 
 from core.configs.command import Command, CommandConfig, build_command
-from core.configs.container import ContainerConfig, build_container
+from core.configs.container import ContainerConfig, Image, build_container
+from core.configs.helpers import with_image_for_container
 from core.configs.pod import (
     PodConfig,
     PodSpecConfig,
@@ -26,6 +27,12 @@ from pydantic import BaseModel, Field
 
 class StatefulSetBuilder(BaseModel):
     config: StatefulSetConfig = Field(default_factory=StatefulSetConfig)
+
+    def with_image_in_container(
+        self, image: Image, container_name: str, *, overwrite: bool = False
+    ) -> Self:
+        with_image_for_container(self.config, container_name, image, overwrite=overwrite)
+        return self
 
     def with_replicas(self, replicas: int) -> Self:
         self.config.replicas = replicas

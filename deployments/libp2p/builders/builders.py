@@ -1,8 +1,9 @@
 from typing import Self
 
 from core.builders import StatefulSetBuilder
+from core.configs.container import Image
 from kubernetes.client import V1EnvVar, V1StatefulSet
-from libp2p.builders.helpers import find_libp2p_container_config
+from libp2p.builders.helpers import LIBP2P_CONTAINER_NAME, find_libp2p_container_config
 from libp2p.builders.nodes import Nodes
 from pydantic import PositiveInt
 
@@ -43,4 +44,8 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
     def with_option(self, key, value) -> Self:
         container = find_libp2p_container_config(self.config)
         container.with_env_var(V1EnvVar(name=key, value=str(value)))
+        return self
+
+    def with_image(self, image: Image) -> Self:
+        self.with_image_in_container(LIBP2P_CONTAINER_NAME, image, overwrite=True)
         return self

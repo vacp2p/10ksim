@@ -9,7 +9,7 @@ from pydantic import PositiveInt
 from waku.builders import bootstrap as WakuBootstrapNode
 from waku.builders import store as Store
 from waku.builders.enr_or_addr import Addrs, Enr
-from waku.builders.helpers import WAKU_COMMAND_STR, find_waku_container_config
+from waku.builders.helpers import WAKU_COMMAND_STR, WAKU_CONTAINER_NAME, find_waku_container_config
 from waku.builders.nodes import Nodes
 from waku.builders.regression import RegressionNodes
 
@@ -146,4 +146,8 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
             service_names=service_names,
             init_container_image=init_container_image,
         )
+        return self
+
+    def with_image(self, image: Image) -> Self:
+        self.with_image_in_container(WAKU_CONTAINER_NAME, image, overwrite=True)
         return self

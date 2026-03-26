@@ -2,34 +2,27 @@
 import json
 import logging
 import re
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import pandas as pd
 import requests
 from httpx import Response
 from result import Err, Ok, Result
+from src.mesh_analysis.readers.reader import Reader
 
 # Project Imports
-from src.mesh_analysis.readers.reader import Reader
 from src.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
 
 
 class VictoriaReader(Reader):
-    """
-    Note: Queries should follow the same order as the patterns in the Tracer.
-    ie:
-    tracer = Tracer.with_SENT_pattern_group().with_RECEIVED_pattern_group()
-    builder = VictoriaReaderBuilder(tracer, ['SENT QUERY', 'RECEIVED QUERY'])
-
-    or
-
-    tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
-    builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
-    """
-
-    def __init__(self, tracer: Optional[MessageTracer], victoria_config_query: Dict):
+    def __init__(
+        self,
+        tracer: Optional[MessageTracer],
+        victoria_config_query: Dict,
+        extra_fields: Optional[List[str]] = None,
+    ):
         """
         :param tracer: MessageTracer instance to retrieve raw message patterns from Victoria.
         :param victoria_config_query: Configuration for the Victoria query. This allows to do a first filtering by the
@@ -38,7 +31,7 @@ class VictoriaReader(Reader):
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
 
-    def _fetch_data(self, url: str, headers: Dict, params: Dict):
+    def _fetch_data(self, url: str, headers: Dict, params: Dict, extra_fields: List[str]):
         logs = []
         logger.debug(f"Fetching {params}")
         with requests.post(url=url, headers=headers, params=params, stream=True) as response:
@@ -50,14 +43,13 @@ class VictoriaReader(Reader):
                         logger.info(line)
                         exit()
                     logs.append(
-                        (parsed_object["_msg"],)
-                        + tuple(parsed_object[k] for k in self._tracer.get_extra_fields() or [])
+                        (parsed_object["_msg"],) + tuple(parsed_object[k] for k in extra_fields)
                     )
         logger.debug(f"Fetched {len(logs)} log lines")
 
         return logs
 
-    def make_queries(self) -> List:
+    def make_queries(self) -> List[List[Tuple]]:
         """
         This function returns a list of lists, structured hierarchically as follows:
         - The outer list corresponds to the pattern groups.
@@ -73,14 +65,20 @@ class VictoriaReader(Reader):
         if isinstance(params, Dict):
             params = [params]
 
-        results = [[] for _ in range(self._tracer.get_num_patterns_group())]
-        for i, patterns in enumerate(self._tracer.patterns):
-            query_results = [[] for _ in patterns]
+        results = [[] for _ in self._tracer.patterns]
+        for i, pattern_group in enumerate(self._tracer.patterns):
             logs = self._fetch_data(
-                self._config_query["url"], self._config_query["headers"], params[i]
+                self._config_query["url"],
+                self._config_query["headers"],
+                params[i],
+                self._tracer.extra_fields,
             )
+            with open("./query.log", "w") as f:
+                f.write(f"params: `{params}`")
+            query_results = [[] for _ in pattern_group.trace_pairs]
             for log_line in logs:
-                for j, pattern in enumerate(patterns):
+                for j, trace_pair in enumerate(pattern_group.trace_pairs):
+                    pattern = trace_pair.regex
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())
@@ -91,7 +89,7 @@ class VictoriaReader(Reader):
 
         return results
 
-    def get_dataframes(self) -> List[pd.DataFrame]:
+    def get_dataframes(self) -> Dict[str, List[pd.DataFrame]]:
         results = self.make_queries()
         dfs = self._tracer.trace(results)
 

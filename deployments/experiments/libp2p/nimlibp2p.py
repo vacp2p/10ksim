@@ -16,7 +16,8 @@ from libp2p.builders.builders import Libp2pStatefulSetBuilder
 from libp2p.builders.builders import Option as NimLibp2p
 from pod_api_requester.builder import PodApiRequesterBuilder
 from pod_api_requester.configs import Target
-from pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError, request
+from pod_api_requester.nimlibp2p import libp2p_dst_node_publish
+from pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 from registry import experiment
 
@@ -30,7 +31,7 @@ def build_nodes(
     return (
         Libp2pStatefulSetBuilder()
         .with_libp2p_config(name="pod", namespace=namespace, num_nodes=num_nodes)
-        .with_option(NimLibp2p.peers, 100)
+        .with_option(NimLibp2p.peers, num_nodes)
         .with_option(NimLibp2p.muxer, "yamux")
         .with_option(NimLibp2p.connect_to, 10)
         .build()
@@ -52,8 +53,9 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
     class ExpConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
 
-        num_nodes: NonNegativeInt = 10
+        num_nodes: NonNegativeInt = 20
         num_messages: NonNegativeInt = 20
+        message_size_kb: NonNegativeInt = 1
         delay_cold_start: NonNegativeFloat = 60
         delay_after_publish: NonNegativeFloat = 1
 
@@ -111,8 +113,8 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
                     service="nimp2p-service",
                     port=8645,
                 )
-                await request(
-                    namespace=namespace, target=target, endpoint="libp2p-dst-node-publish"
+                await libp2p_dst_node_publish(
+                    namespace=namespace, target=target, msg_size_kbytes=config.message_size_kb
                 )
             except PodApiApplicationError as e:
                 logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")

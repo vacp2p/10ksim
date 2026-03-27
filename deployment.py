@@ -2,11 +2,11 @@
 import argparse
 import asyncio
 import logging
-import os
 import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
 from kubernetes import config
 from kubernetes.client import ApiClient
 from ruamel import yaml
@@ -94,7 +94,7 @@ async def main():
     )
 
     # Scan for experiments.
-    experiment_registry.scan(os.path.dirname(__file__), mode="skip")
+    experiment_registry.scan(Path(__file__) / ".." / "src" / "deployments", mode="skip")
 
     # Add subparsers for all experiments.
     for info in experiment_registry.items():

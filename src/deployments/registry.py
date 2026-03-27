@@ -1,13 +1,9 @@
-# Python Imports
 import importlib
 import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
-
-# Project Imports
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +62,7 @@ class Registry:
         self._experiments.append(ExperimentInfo(name, cls, metadata))
 
     def _process_module(self, module_path: str, module_name: str) -> None:
-        base_path = Path(__file__).parent
+        base_path = Path(__file__).parent.parent.parent
         module_name = (
             Path(module_path).relative_to(base_path).parent.as_posix().replace("/", ".")
             + "."

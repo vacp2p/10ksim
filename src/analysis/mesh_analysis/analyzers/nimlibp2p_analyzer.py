@@ -1,15 +1,17 @@
 # Python Imports
 import logging
-import pandas as pd
 from pathlib import Path
-from result import Err, Ok, Result
 from typing import List, Optional, Tuple
 
+import pandas as pd
+from result import Err, Ok, Result
+
 # Project Imports
-from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
+    VictoriaReaderBuilder,
+)
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
 from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
-
 
 logger = logging.getLogger(__name__)
 

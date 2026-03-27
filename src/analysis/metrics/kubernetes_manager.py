@@ -2,8 +2,9 @@
 import logging
 import multiprocessing
 import socket
-import kubernetes
 from typing import List, Tuple
+
+import kubernetes
 from kubernetes.client import V1PodList, V1Service
 from kubernetes.stream import portforward
 

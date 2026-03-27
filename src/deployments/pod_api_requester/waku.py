@@ -1,6 +1,7 @@
 # Python Imports
 import logging
 from typing import Union
+
 from pydantic import NonNegativeInt
 
 # Project Imports

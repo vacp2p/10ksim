@@ -1,9 +1,6 @@
 # Python Imports
-from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, List, Literal, Optional, TypeVar
 
-# Project Imports
-from src.deployments.core.configs.pod import PodTemplateSpecConfig, build_pod_template_spec
 from kubernetes.client import (
     V1LabelSelector,
     V1ObjectMeta,
@@ -11,6 +8,10 @@ from kubernetes.client import (
     V1StatefulSet,
     V1StatefulSetSpec,
 )
+from pydantic import BaseModel, ConfigDict, Field
+
+# Project Imports
+from src.deployments.core.configs.pod import PodTemplateSpecConfig, build_pod_template_spec
 
 T = TypeVar("T")
 

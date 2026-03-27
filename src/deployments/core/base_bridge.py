@@ -5,9 +5,7 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import Literal, Union
-from typing import Any, Callable, Dict, Iterator, List, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Literal, Tuple, Union
 
 # Project Imports
 from kubernetes.client import (
@@ -19,7 +17,15 @@ from kubernetes.client import (
     V1PodTemplateSpec,
     V1StatefulSet,
 )
-from src.deployments.core.kube_utils import dict_apply, dict_get, dict_partial_compare, dict_set, dict_visit
+from pydantic import BaseModel, Field
+
+from src.deployments.core.kube_utils import (
+    dict_apply,
+    dict_get,
+    dict_partial_compare,
+    dict_set,
+    dict_visit,
+)
 
 V1Deployable = Union[
     V1PodTemplateSpec,

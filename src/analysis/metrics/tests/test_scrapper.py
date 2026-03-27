@@ -9,7 +9,7 @@ import pandas as pd
 from result import Err, Ok
 
 # Project Imports
-from src.metrics import scrapper
+from src.analysis.metrics import scrapper
 
 logger = logging.getLogger(__name__)
 

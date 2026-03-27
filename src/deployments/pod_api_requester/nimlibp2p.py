@@ -1,9 +1,10 @@
 import logging
 from typing import Union
 
-from pod_api_requester.configs import Endpoint, Target
-from pod_api_requester.pod_api_requester import _DEFAULTS, pod_api_request, wrap_arg
 from pydantic import NonNegativeInt
+
+from src.deployments.pod_api_requester.configs import Endpoint, Target
+from src.deployments.pod_api_requester.pod_api_requester import _DEFAULTS, pod_api_request, wrap_arg
 
 logger = logging.getLogger(__name__)
 

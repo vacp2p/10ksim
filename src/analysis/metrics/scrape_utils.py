@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from typing import Dict
+
 from result import Err, Ok, Result
 
 logger = logging.getLogger(__name__)

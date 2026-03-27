@@ -1,10 +1,11 @@
 # Python Imports
 import json
 import logging
-import pandas as pd
 import re
-import requests
 from typing import Dict, Iterator, List, Optional
+
+import pandas as pd
+import requests
 from httpx import Response
 from result import Err, Ok, Result
 

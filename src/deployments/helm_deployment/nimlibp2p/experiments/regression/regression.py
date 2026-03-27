@@ -4,7 +4,6 @@ import logging
 import os
 import re
 import shutil
-import humanfriendly
 from argparse import ArgumentParser, Namespace
 from asyncio import sleep
 from contextlib import ExitStack
@@ -13,6 +12,8 @@ from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from pathlib import Path
 from typing import Literal, Optional, Tuple
+
+import humanfriendly
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from ruamel import yaml

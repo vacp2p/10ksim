@@ -6,7 +6,7 @@ from pathlib import Path
 from result import Ok
 
 # Project Imports
-from src.utils import file_utils
+from src.analysis.utils import file_utils
 
 
 class TestFileUtils(unittest.TestCase):

@@ -1,8 +1,9 @@
 # Python Imports
 import logging
-import pandas as pd
 from pathlib import Path
 from typing import List, Optional
+
+import pandas as pd
 from result import Err, Ok, Result
 
 # Project Imports

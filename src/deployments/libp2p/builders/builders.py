@@ -1,11 +1,15 @@
 from typing import Self
 
-from core.builders import StatefulSetBuilder
-from core.configs.container import Image
 from kubernetes.client import V1EnvVar, V1StatefulSet
-from libp2p.builders.helpers import LIBP2P_CONTAINER_NAME, find_libp2p_container_config
-from libp2p.builders.nodes import Nodes
 from pydantic import PositiveInt
+
+from src.deployments.core.builders import StatefulSetBuilder
+from src.deployments.core.configs.container import Image
+from src.deployments.libp2p.builders.helpers import (
+    LIBP2P_CONTAINER_NAME,
+    find_libp2p_container_config,
+)
+from src.deployments.libp2p.builders.nodes import Nodes
 
 
 class Option:

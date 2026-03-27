@@ -2,14 +2,17 @@
 import ast
 import base64
 import logging
-import pandas as pd
-import seaborn as sns
 from pathlib import Path
-from result import Err, Ok, Result
 from typing import List, Optional, Tuple
 
+import pandas as pd
+import seaborn as sns
+from result import Err, Ok, Result
+
 # Project Imports
-from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
+    VictoriaReaderBuilder,
+)
 from src.analysis.mesh_analysis.readers.file_reader import FileReader
 from src.analysis.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
 from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis

@@ -1,10 +1,11 @@
 # Python Imports
 import logging
+from typing import Dict, List
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import Dict, List
 from matplotlib import ticker
 
 # Project Imports

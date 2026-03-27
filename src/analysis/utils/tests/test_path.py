@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Project Imports
-from src.utils import path
+from src.analysis.utils import path_utils as path
 
 
 class TestPathUtils(unittest.TestCase):

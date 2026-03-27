@@ -1,12 +1,14 @@
 # Python Imports
 import logging
-import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, List
 
+import pandas as pd
+
+from src.analysis.mesh_analysis.readers.tracers.statusgo_tracer import StatusgoTracer
+
 # Project Imports
 from src.analysis.mesh_analysis.readers.victoria_reader import VictoriaReader
-from src.analysis.mesh_analysis.readers.tracers.statusgo_tracer import StatusgoTracer
 
 logger = logging.getLogger(__name__)
 

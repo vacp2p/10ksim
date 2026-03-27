@@ -1,14 +1,14 @@
 # Python Imports
 import logging
-import pandas as pd
-import yaml
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import pandas as pd
+import yaml
 from result import Err, Ok, Result
 
 # Project Imports
 from src.analysis.utils import path_utils
-
 
 logger = logging.getLogger(__name__)
 

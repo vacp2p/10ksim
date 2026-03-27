@@ -8,18 +8,19 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Optional
 
-from core.kube_utils import get_YAML, k8s_obj_to_dict
-from experiments.base_experiment import BaseExperiment
 from kubernetes.client import ApiClient, V1StatefulSet
-from libp2p.bridge import Bridge
-from libp2p.builders.builders import Libp2pStatefulSetBuilder
-from libp2p.builders.builders import Option as NimLibp2p
-from pod_api_requester.builder import PodApiRequesterBuilder
-from pod_api_requester.configs import Target
-from pod_api_requester.nimlibp2p import libp2p_dst_node_publish
-from pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
-from registry import experiment
+
+from src.deployments.core.kube_utils import get_YAML, k8s_obj_to_dict
+from src.deployments.experiments.base_experiment import BaseExperiment
+from src.deployments.libp2p.bridge import Bridge
+from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
+from src.deployments.libp2p.builders.builders import Option as NimLibp2p
+from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
+from src.deployments.pod_api_requester.configs import Target
+from src.deployments.pod_api_requester.nimlibp2p import libp2p_dst_node_publish
+from src.deployments.pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError
+from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)
 

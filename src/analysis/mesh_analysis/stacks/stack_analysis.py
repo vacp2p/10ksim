@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import List
 
 # Project Imports
-from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
+    VictoriaReaderBuilder,
+)
 
 
 class StackAnalysis(ABC):

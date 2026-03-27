@@ -7,16 +7,19 @@ from contextlib import ExitStack
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, List, Optional
+
 from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
 
 # Project Imports
-from src.deployments.core.base_bridge import parse_events_log, get_valid_shifted_times, format_metadata_timestamps
-from src.deployments.core.kube_utils import get_flag_value, wait_for_rollout
-from src.deployments.experiments.base_experiment import (
-    BaseExperiment
+from src.deployments.core.base_bridge import (
+    format_metadata_timestamps,
+    get_valid_shifted_times,
+    parse_events_log,
 )
+from src.deployments.core.kube_utils import get_flag_value, wait_for_rollout
+from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)

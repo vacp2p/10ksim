@@ -1,9 +1,9 @@
 # Python Imports
 
 # Project Imports
-from src.metrics.scrapper import Scrapper
-from src.plotting.metrics_plotter import MetricsPlotter
-from src.utils import file_utils
+from src.analysis.metrics.scrapper import Scrapper
+from src.analysis.plotting.metrics_plotter import MetricsPlotter
+from src.analysis.utils import file_utils
 
 
 def main():

@@ -1,8 +1,10 @@
 # Python Imports
 from typing import Literal, Optional
+
 from pydantic import BaseModel, NonNegativeInt
 
 # Project Imports
+
 
 class Target(BaseModel):
     name: Optional[str] = None

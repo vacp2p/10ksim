@@ -2,10 +2,12 @@
 import logging
 from itertools import chain
 from pathlib import Path
-from result import Err, Ok, Result
 from typing import List
 
+from result import Err, Ok, Result
+
 # Project Imports
+
 
 def order_by_groups(list_to_order: List) -> List:
     # TODO: change this to a more generic function

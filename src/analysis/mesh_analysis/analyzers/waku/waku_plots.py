@@ -1,10 +1,11 @@
 # Python Imports
 import logging
+from pathlib import Path
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from pathlib import Path
-from typing import Optional
 from matplotlib import patheffects as path_effects
 from matplotlib import pyplot as plt
 from result import Err, Ok, Result

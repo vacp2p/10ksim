@@ -1,8 +1,6 @@
-# Python Imports
 import unittest
 
-# Project Imports
-from src.metrics.scrape_utils import create_promql
+from src.analysis.metrics.scrape_utils import create_promql
 
 
 class TestScrapeUtils(unittest.TestCase):

@@ -43,6 +43,18 @@ class Nimlibp2pTracer(MessageTracer):
 
         return self
 
+    def with_kad_dht_pattern(self):
+        patterns = [r'target=(?P<target>\S+)\s+duration_ms=(?P<duration_ms>\d+)\s+peers="(?P<peers>\[.*\])"$']
+
+        tracers = [
+            self._trace_kad_dht_in_logs,
+        ]
+
+        self._patterns.append(patterns)
+        self._tracings.append(tracers)
+
+        return self
+
     def with_received_pattern_group(self) -> Self:
         patterns = [
             r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)"
@@ -116,6 +128,16 @@ class Nimlibp2pTracer(MessageTracer):
 
     def _trace_latencies_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         columns = ["latency"]
+        if self._extra_fields is not None:
+            columns.extend(self._extra_fields)
+
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        df["latency"] = pd.to_numeric(df["latency"], errors="coerce").fillna(-1).astype(int)
+
+        return df
+
+    def _trace_kad_dht_in_logs(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ["target", "duration_ms", "peers"]
         if self._extra_fields is not None:
             columns.extend(self._extra_fields)
 

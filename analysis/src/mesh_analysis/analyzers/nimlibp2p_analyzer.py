@@ -1,13 +1,15 @@
 # Python Imports
+import ast
 import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
 from result import Err, Ok, Result
-from src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
-from src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
-from src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
+from analysis.src.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from analysis.src.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
+from analysis.src.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
+from analysis.src.utils import path_utils
 
 # Project Imports
 
@@ -370,3 +372,15 @@ class Nimlibp2pAnalyzer:
                 )
 
         return messages_sent_to_peer
+
+    def check_kad_dht_result(self):
+        tracer = Nimlibp2pTracer(extra_fields=self._kwargs["extra_fields"]).with_kad_dht_pattern()
+        queries = ["Lookup finished"]
+        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
+
+        data = stack_analysis.get_pod_logs("probe-0")
+
+        log_lines = data[0][0]  # We will always have 1 pattern group with 1 pattern
+
+        return log_lines

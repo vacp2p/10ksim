@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodes
+  namespace: nimlibp2p
+spec:
+  replicas: 50
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: zerotenkay
+  template:
+    metadata:
+      labels:
+        app: zerotenkay
+        role: nodes
+    spec:
+      # initContainers:
+      #   - name: slowyourroll
+      #     image: soutullostatus/tc-container:1
+      #     securityContext:
+      #       capabilities:
+      #         add: [ "NET_ADMIN" ]
+      #     command:
+      #       - sh
+      #       - -c
+      #       - tc qdisc add dev eth0 root netem delay 100ms 30ms distribution normal
+      containers:
+        - name: node
+          image: soutullostatus/dst-test-node-kad-dht:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+            - containerPort: 8008
+          readinessProbe:
+            tcpSocket:
+              port: 8008
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: NODE_ROLE
+              value: "RoleNormal"
+            - name: PORT
+              value: "5000"
+            - name: DISCOVERY
+              value: "kad-dht"
+            - name: SERVICE
+              value: "bootstrap.nimlibp2p.svc.cluster.local"

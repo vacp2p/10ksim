@@ -1,16 +1,20 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: nomos
+  name: nomos-a
   namespace: nomos-testnet
 spec:
   serviceName: nomos-service
-  replicas: 10
+  replicas: 5
   selector:
-    matchLabels: { app: nomos }
+    matchLabels:
+      app: nomos
+      pool: a
   template:
     metadata:
-      labels: { app: nomos }
+      labels:
+        app: nomos
+        pool: a
     spec:
       topologySpreadConstraints:
         - maxSkew: 1
@@ -24,7 +28,8 @@ spec:
           # image: soutullostatus/logos-blockchain-node
           # image: soutullostatus/blockchain-mem-fix
           # image: soutullostatus/blockchain-mem-fix-2372
-          image: soutullostatus/blockchain-metrics
+          # image: soutullostatus/blockchain-metrics
+          image: soutullostatus/logos-blockchain-mem-debug:c0371d02
           imagePullPolicy: Always
           resources:
             requests:
@@ -38,17 +43,17 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-          readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":"Online"'
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 12
+          #readinessProbe:
+          #  exec:
+          #    command:
+          #      - /bin/sh
+          #      - -c
+          #      - |
+          #        curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":"Online"'
+          #  initialDelaySeconds: 10
+          #  periodSeconds: 5
+          #  timeoutSeconds: 3
+          #  failureThreshold: 12
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -71,6 +76,5 @@ spec:
                 metrics: !Otlp\\
                   endpoint: \"http://otel-opentelemetry-collector.opentelemetry:4317/\"\\
                   host_identifier: \"${HOSTNAME}\"" user_config.yaml
-              sed -i 's/^  level: DEBUG$/  level: INFO/' user_config.yaml
             
               exec logos-blockchain-node user_config.yaml

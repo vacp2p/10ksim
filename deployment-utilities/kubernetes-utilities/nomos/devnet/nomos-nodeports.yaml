@@ -6,7 +6,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-0
+    statefulset.kubernetes.io/pod-name: nomos-a-0
   ports:
     - name: swarm
       protocol: UDP
@@ -27,7 +27,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-1
+    statefulset.kubernetes.io/pod-name: nomos-a-1
   ports:
     - name: swarm
       protocol: UDP
@@ -48,7 +48,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-2
+    statefulset.kubernetes.io/pod-name: nomos-a-2
   ports:
     - name: swarm
       protocol: UDP
@@ -69,7 +69,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-3
+    statefulset.kubernetes.io/pod-name: nomos-a-3
   ports:
     - name: swarm
       protocol: UDP
@@ -90,7 +90,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-4
+    statefulset.kubernetes.io/pod-name: nomos-a-4
   ports:
     - name: swarm
       protocol: UDP
@@ -111,7 +111,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-5
+    statefulset.kubernetes.io/pod-name: nomos-b-5
   ports:
     - name: swarm
       protocol: UDP
@@ -132,7 +132,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-6
+    statefulset.kubernetes.io/pod-name: nomos-b-6
   ports:
     - name: swarm
       protocol: UDP
@@ -153,7 +153,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-7
+    statefulset.kubernetes.io/pod-name: nomos-b-7
   ports:
     - name: swarm
       protocol: UDP
@@ -174,7 +174,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-8
+    statefulset.kubernetes.io/pod-name: nomos-b-8
   ports:
     - name: swarm
       protocol: UDP
@@ -195,7 +195,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-9
+    statefulset.kubernetes.io/pod-name: nomos-b-9
   ports:
     - name: swarm
       protocol: UDP
@@ -216,7 +216,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-10
+    statefulset.kubernetes.io/pod-name: nomos-c-10
   ports:
     - name: swarm
       protocol: UDP
@@ -237,7 +237,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-11
+    statefulset.kubernetes.io/pod-name: nomos-c-11
   ports:
     - name: swarm
       protocol: UDP
@@ -258,7 +258,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-12
+    statefulset.kubernetes.io/pod-name: nomos-c-12
   ports:
     - name: swarm
       protocol: UDP
@@ -279,7 +279,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-13
+    statefulset.kubernetes.io/pod-name: nomos-c-13
   ports:
     - name: swarm
       protocol: UDP
@@ -300,7 +300,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-14
+    statefulset.kubernetes.io/pod-name: nomos-c-14
   ports:
     - name: swarm
       protocol: UDP
@@ -321,7 +321,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-15
+    statefulset.kubernetes.io/pod-name: nomos-otlp-15
   ports:
     - name: swarm
       protocol: UDP
@@ -342,7 +342,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-16
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-ibd-16
   ports:
     - name: swarm
       protocol: UDP
@@ -363,7 +363,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-17
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-ibd-17
   ports:
     - name: swarm
       protocol: UDP
@@ -384,7 +384,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-18
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-ibd-18
   ports:
     - name: swarm
       protocol: UDP
@@ -405,7 +405,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-19
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-ibd-19
   ports:
     - name: swarm
       protocol: UDP
@@ -426,7 +426,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-20
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-ibd-20
   ports:
     - name: swarm
       protocol: UDP
@@ -447,7 +447,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-21
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-no-ibd-21
   ports:
     - name: swarm
       protocol: UDP
@@ -468,7 +468,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-22
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-no-ibd-22
   ports:
     - name: swarm
       protocol: UDP
@@ -489,7 +489,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-23
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-no-ibd-23
   ports:
     - name: swarm
       protocol: UDP
@@ -510,7 +510,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-24
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-no-ibd-24
   ports:
     - name: swarm
       protocol: UDP
@@ -531,7 +531,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-25
+    statefulset.kubernetes.io/pod-name: nomos-jemalloc-no-ibd-25
   ports:
     - name: swarm
       protocol: UDP
@@ -1056,7 +1056,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-50
+    statefulset.kubernetes.io/pod-name: nomos-prof-ibd
   ports:
     - name: swarm
       protocol: UDP
@@ -1077,7 +1077,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    statefulset.kubernetes.io/pod-name: nomos-51
+    statefulset.kubernetes.io/pod-name: nomos-prof-no-ibd
   ports:
     - name: swarm
       protocol: UDP

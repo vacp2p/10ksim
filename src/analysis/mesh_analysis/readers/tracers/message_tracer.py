@@ -1,41 +1,57 @@
 # Python Imports
-from abc import ABC, abstractmethod
-from typing import List, Optional
+import logging
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Self, Tuple
 
-# Project Imports
+import pandas as pd
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
-class MessageTracer(ABC):
-    """Abstract class for working with raw message patterns from Victoria.
-    Note: Patterns should follow the same order as the queries in the Victoria Reader.
-    ie:
-    tracer = Tracer.with_SENT_pattern_group().with_RECEIVED_pattern_group()
-    builder = VictoriaReaderBuilder(tracer, ['SENT QUERY', 'RECEIVED QUERY'])
+@dataclass
+class TracePair:
+    regex: str
+    convert: Callable[[List[str]], pd.DataFrame]
 
-    or
 
-    tracer = Tracer.with_RECEIVED_pattern_group().with_SENT_pattern_group()
-    builder = VictoriaReaderBuilder(tracer, ['RECEIVED QUERY', 'SENT QUERY'])
-    """
+@dataclass
+class PatternGroup:
+    name: str
+    trace_pairs: List[TracePair]
+    query: str
 
-    def __init__(self, extra_fields: List[str]):
-        self._patterns: Optional[List] = None
-        self._tracings: Optional[List] = None
-        self._extra_fields = extra_fields
 
-    @property
-    @abstractmethod
-    def patterns(self) -> List:
-        pass
+class MessageTracer(BaseModel):
+    patterns: List[PatternGroup] = Field(default_factory=list)
+    extra_fields: List[str] = Field(default_factory=list)
 
-    @abstractmethod
-    def trace(self, parsed_logs: List) -> List:
-        pass
+    def _trace_all_logs(self, parsed_logs: List) -> List:
+        return parsed_logs
 
-    @abstractmethod
-    def get_num_patterns_group(self) -> int:
-        pass
+    def with_wildcard_pattern(self) -> Self:
+        self.patterns.append(
+            PatternGroup(
+                "wildcard",
+                [TracePair(regex="(.*)", convert=self._trace_all_logs)],
+                query="*",
+            )
+        )
+        return self
 
-    @abstractmethod
-    def get_extra_fields(self) -> List[str]:
-        pass
+    def trace(self, parsed_logs: List[List[Tuple]]) -> Dict[str, List[pd.DataFrame]]:
+        """
+        :type parsed_logs: List[List[List]]
+        :param parsed_logs: List of groups of matched patterns.
+        For example, for Waku logs, you might have 2 groups (received, sent),
+        each having 3 trace_pairs, each containing lists representing matched regexs.
+        """
+
+        def convert_logs(pattern_group, log_group):
+            return [pattern_group.trace_pairs[i].convert(log) for i, log in enumerate(log_group)]
+
+        result = {
+            pattern_group.name: convert_logs(pattern_group, log_group)
+            for pattern_group, log_group in zip(self.patterns, parsed_logs)
+        }
+        return result

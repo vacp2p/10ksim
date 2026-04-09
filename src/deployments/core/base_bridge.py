@@ -157,7 +157,8 @@ def add_links(metadata, links_map):
         try:
             for link_type, base in links_map.items():
                 metadata[interval_type][link_type] = base.format(
-                    start=metadata[interval_type]["start"], end=metadata[interval_type]["end"]
+                    start=metadata[interval_type]["start"],
+                    end=metadata[interval_type]["end"],
                 )
         except KeyError:
             pass
@@ -196,19 +197,35 @@ class BaseBridge(BaseModel):
         # Extract from all metadata and put into the following structure.
         map = {
             "stack": [self.statefulsets_key, self.nodes_key, "namespace"],
-            "experiment": ["experiment_name", "experiment_class"],
+            "experiment": [("experiment_name", "name"), ("experiment_class", "class")],
             "metadata": ["command", "kube_config", "namespace", "namespaces", "args"],
         }
         metadata = defaultdict(dict)
         for main_key, sub_keys in map.items():
             for sub_key in sub_keys:
-                try:
-                    metadata[main_key][sub_key] = all_metadata[sub_key]
-                except KeyError:
-                    pass
+                if isinstance(sub_key, tuple):
+                    try:
+                        metadata[main_key][sub_key[1]] = all_metadata[sub_key[0]]
+                    except KeyError:
+                        pass
+                else:
+                    try:
+                        metadata[main_key][sub_key] = all_metadata[sub_key]
+                    except KeyError:
+                        pass
 
-        metadata["stack"]["extra_fields"] = ["kubernetes.pod_name", "kubernetes.pod_node_name"]
-        metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+        metadata["experiment"]["bridge_class"] = {
+            "__type__": f"{self.__class__.__module__}.{self.__class__.__name__}",
+            **self.model_dump(),
+        }
+        metadata["stack"]["extra_fields"] = [
+            "kubernetes.pod_name",
+            "kubernetes.pod_node_name",
+        ]
+        try:
+            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+        except ValueError as e:
+            logger.info(e)
         metadata["stack"]["name"] = self._get_name(metadata)
         try:
             metadata["params"] = all_metadata["params"]
@@ -220,7 +237,7 @@ class BaseBridge(BaseModel):
         counts = metadata["stack"][self.nodes_key]
         sets = metadata["stack"][self.statefulsets_key]
         nodes_str = "__".join(f"{set}_{count}" for set, count in zip(sets, counts))
-        return f"{metadata['experiment']['experiment_name']}__{nodes_str}"
+        return f"{metadata['experiment']['name']}__{nodes_str}"
 
     def _aggregate_metadata_events(self, events_log: Path) -> dict:
         """Collect all metadata from events log, and gather StatefulSet deployments."""

@@ -258,16 +258,6 @@ class BaseExperiment(ABC, BaseModel):
         with open(out_path, "a") as out_file:
             out_file.write(json.dumps(metadata, default=str))
 
-    def log_metadata(self, metadata: dict):
-        self.log_event({**{"event": "metadata"}, **metadata})
-
-    def _dump_metadata(self):
-        metadata = self._get_metadata()
-        self.log_metadata(metadata)
-        out_path = Path(self.metadata_log_path)
-        with open(out_path, "a") as out_file:
-            out_file.write(json.dumps(metadata, default=str))
-
     async def run(
         self,
         api_client: ApiClient,

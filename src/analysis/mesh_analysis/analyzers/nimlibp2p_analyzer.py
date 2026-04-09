@@ -1,4 +1,5 @@
 import logging
+import traceback
 from pathlib import Path
 from typing import List, Optional, Self, Tuple
 
@@ -172,7 +173,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         tracer: MessageTracer,
         has_shards: bool,
     ) -> MessageReliabilityResult:
-        dfs = self.data_puller.get_all_node_dataframes_new(tracer, stateful_sets, nodes_per_ss)
+        dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_ss)
         # Strip suffix for local read.
         for dfs_dicts in dfs:
             for _key, df_list in dfs_dicts.items():
@@ -199,6 +200,14 @@ class Nimlibp2pAnalyzer(Analyzer):
             self._dump_logs(reliability_results.nodes_missing_messages)
 
         return reliability_results
+
+    def _dump_logs(self, nodes_with_issues: List[str]):
+        try:
+            self.data_puller._dump_logs(nodes_with_issues, self.dump_analysis_dir)
+        except Exception as e:
+            logger.error(f"Error dumping nodes: {e}")
+            full_trace = traceback.format_exc()
+            logger.error(f"exception: {full_trace}")
 
     def adjust_dfs(self, dfs: List[pd.DataFrame]):
         # We either had legacy lightpush requests xor lightpush requests.

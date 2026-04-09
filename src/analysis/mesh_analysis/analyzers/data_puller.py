@@ -1,5 +1,6 @@
 # Python Imports
 import logging
+from pathlib import Path
 from typing import ClassVar, Dict, List, Literal, Optional, Self, Type
 
 import pandas as pd
@@ -50,6 +51,8 @@ class DataPuller(BaseModel):
         return self
 
     def _make_stack_new(self, tracer: MessageTracer) -> StackAnalysis:
+        if self._source_type != "victoria":
+            raise NotImplementedError(f"Cannot build stakc for type: `{self._source_type}`")
         queries = [pattern.query for pattern in tracer.patterns]
         # TODO: Change to only pass tracer and make VictoriaReaderBuilder use tracer.pattern queries itself.
         reader_builder = VictoriaReaderBuilder(
@@ -68,7 +71,7 @@ class DataPuller(BaseModel):
         reader_builder = _reader_builder_cls(tracer=tracer, queries=queries, kwargs=self.kwargs)
         return _stack_cls(reader_builder)
 
-    def get_all_node_dataframes_new(
+    def get_all_node_dataframes(
         self,
         tracer: MessageTracer,
         # TODO: put in DataPuller as var, but exclude from ss_check (has pull settings that clash with that check)
@@ -82,15 +85,6 @@ class DataPuller(BaseModel):
             reader = FileReader(self._local_folder, tracer, self._jobs)
             dfs = reader.get_dataframes()
             return dfs
-        raise NotImplementedError()
-
-    def get_all_node_dataframes(self, tracer: MessageTracer, queries: Optional[str] = None):
-        if self._source_type == "victoria":
-            stack = self._make_stack(tracer, queries)
-            return stack.get_all_node_dataframes(self._jobs)
-        elif self._source_type == "local":
-            puller = FileReader(self._local_folder, tracer, self._jobs)
-            return puller.get_dataframes()
         raise NotImplementedError()
 
     def get_pod_logs(self, tracer, pod_identifier: str, query: str):
@@ -110,3 +104,8 @@ class DataPuller(BaseModel):
             stack = FileStackAnalysis(reader=puller)
             return stack.get_number_nodes(stateful_sets)
         raise NotImplementedError()
+
+    def _dump_logs(self, nodes: List[str], dump_analysis_dir: Path):
+        tracer = MessageTracer().with_wildcard_pattern()
+        stack = self._make_stack_new(tracer)
+        stack.dump_node_logs(8, nodes, dump_analysis_dir)

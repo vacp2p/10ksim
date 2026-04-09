@@ -61,14 +61,14 @@ class AnalysisStep(BaseModel):
 class Analyzer(BaseModel):
     _analysis_steps: List[AnalysisStep] = []
     data_puller: Optional[DataPuller] = None
-    dump_analysis_dir: Optional[str] = None
+    dump_analysis_dir: Optional[Path] = None
 
     def run(self) -> List[AnalysisResult]:
         self._set_up_paths()
         results = []
         for analysis in self._analysis_steps:
             result = analysis.run()
-            if result.status in ["error", "fail"] and analysis.on_fail != "continue":
+            if result.status in ["error", "failed"] and analysis.on_fail != "continue":
                 dump = json.dumps(result.model_dump(indent=False), indent=2)
                 raise ValueError(f"Analysis failed. {dump}")
             results.append(result)
@@ -92,7 +92,7 @@ class Analyzer(BaseModel):
         return self
 
     def with_dump_analysis_dir(self, dump_analysis_dir: str = None) -> Self:
-        self.dump_analysis_dir = dump_analysis_dir
+        self.dump_analysis_dir = Path(dump_analysis_dir)
         return self
 
     def with_kwargs(self, kwargs: dict) -> Self:

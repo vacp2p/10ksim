@@ -87,10 +87,12 @@ class DataPuller(BaseModel):
             return dfs
         raise NotImplementedError()
 
-    def get_pod_logs(self, tracer, pod_identifier: str, query: str):
+    def get_pod_logs(
+        self, tracer, pod_identifier: str, query: str, *, order_by: Optional[str] = None
+    ):
         if self._source_type == "victoria":
             stack = self._make_stack(tracer, query)
-            return stack.get_all_node_dataframes(self._jobs)
+            return stack.get_pod_logs(pod_identifier, order_by=order_by)
         raise NotImplementedError()
 
     def get_number_nodes(self, stateful_sets: List[str]) -> List[int]:

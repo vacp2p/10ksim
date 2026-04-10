@@ -26,6 +26,18 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
 
     msg_hash_key: str = "msg_hash"
 
+    def with_filter_check(self, *, on_fail: OnFail = "continue") -> Self:
+        return self._with_parameterized_check(
+            self.check_filter_messages,
+            on_fail=on_fail,
+        )
+
+    def with_store_check(self, *, on_fail: OnFail = "continue") -> Self:
+        return self._with_parameterized_check(
+            self.check_store_messages,
+            on_fail=on_fail,
+        )
+
     def with_reliability_check(
         self,
         stateful_sets: List[str],
@@ -62,15 +74,12 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         :return:
         """
         waku_tracer = WakuTracer().with_wildcard_pattern()
-
-        self.stack.get_pod_logs(pod_identifier="get-store-messages", query="*")
-
-        reader = VictoriaReaderBuilder(waku_tracer, "*", **self._kwargs)
-        stack = VaclabStackAnalysis(reader, **self._kwargs)
-        data = stack.get_pod_logs("get-store-messages")
+        data = self.data_puller.get_pod_logs(
+            waku_tracer, pod_identifier="get-store-messages", query="*", order_by="(_time)"
+        )
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        messages_list = ast.literal_eval(log_list[-1])  # Last line in get-store-messages
+        messages_list = ast.literal_eval(log_list[-1][-1])  # Last line in get-store-messages
         messages_list = ["0x" + base64.b64decode(msg).hex() for msg in messages_list]
         logger.debug(f"Messages from store: {messages_list}")
 
@@ -98,12 +107,12 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         :return:
         """
         waku_tracer = WakuTracer().with_wildcard_pattern()
-        reader = VictoriaReaderBuilder(waku_tracer, "*", **self._kwargs)
-        stack = VaclabStackAnalysis(reader, **self._kwargs)
-        data = stack.get_pod_logs("get-filter-messages")
+        data = self.data_puller.get_pod_logs(
+            waku_tracer, pod_identifier="get-filter-messages", query="*", order_by="(_time)"
+        )
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
-        all_ok_boolean = ast.literal_eval(log_list[-1])  # Last line in get-filter-messages
+        all_ok_boolean = ast.literal_eval(log_list[-1][-1])  # Last line in get-filter-messages
 
         all_ok = ast.literal_eval(all_ok_boolean)
         if all_ok:

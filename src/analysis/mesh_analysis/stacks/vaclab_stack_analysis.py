@@ -3,7 +3,7 @@ import logging
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from pydantic import NonNegativeInt
@@ -112,8 +112,8 @@ class VaclabStackAnalysis(StackAnalysis):
                 except Exception as e:
                     logger.error(f"Error retrieving logs for node {identifier}: {e}")
 
-    def get_pod_logs(self, identifier: str) -> List[str]:
-        reader = self._reader_builder.build_with_pod_identifier(identifier)
+    def get_pod_logs(self, identifier: str, *, order_by: Optional[str] = None) -> List[str]:
+        reader = self._reader_builder.build_with_pod_identifier(identifier, order_by=order_by)
         data = reader.make_queries()
 
         return data

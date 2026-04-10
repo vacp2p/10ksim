@@ -20,6 +20,7 @@ The results, including response times and success rates, are logged.
 - `-d`  `--delay-seconds`: Delay between messages
 - `-m`  `--messages`: Number of messages to send
 - `-ps` `--protocols`: Protocols to use (relay, lightpush or both)
+- `-sn` `--service-name`: Service name to resolve
 - `-p`  `--port`: Waku REST API port
 
 ### Example in Kubernetes yaml
@@ -38,15 +39,14 @@ containers:
         --delay-seconds=1 \
         --pubsub-topic="/waku/2/rs/2/" \
         --protocols relay \
-        --service-names zerotesting-service \
+        --service-name zerotesting-service \
         --log-level=info
 ```
 
 ### How It Works
-1. **DNS Resolution**:
+1. **Service Resolution**:
 Determines the IP address of the Waku service (`zerotesting-service` or `zerotesting-lightpush-client`).
-Logs how long DNS resolution takes.
-Extracts the shard number from the resolved hostname.
+Logs how long Service resolution takes.
 
 2. **Message Preparation**:
 Generates a random payload.
@@ -55,13 +55,20 @@ Prepares the HTTP request body.
 
 3. **Sending Messages**:
 Selects a protocol (relay, lightpush or both).
-Sends the message to the respective Waku endpoint.
+Sends the message to the respective Waku endpoint. 
+NOTE: Assumes a hardcoded shard zero '0'.
 Logs the response status, elapsed time, and success/failure rates.
 
 4. **Concurrency Handling**:
 Uses `asyncio.create_task` to make sure messages are sent at a constant rate.
 
 ### Changelog
+- `v1.1.0`:
+  - Rollback to service resolution instead of DNS, as the behavior was non deterministic and failing sometimes.
+    - In Kubernetes, knowing a Pod IP does not reliably let you get a hostname. This was used to retrieve
+    the shard used. Hardcoded to zero instead.
+  - Removed multiple service selection to just one.
+  - Working for (nwaku) logos-delivery:v0.38.0-rc.0
 - `v1.0.4`:
   - Add service selection to arguments
 - `v1.0.3`:

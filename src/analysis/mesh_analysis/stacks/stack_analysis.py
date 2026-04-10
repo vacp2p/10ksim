@@ -1,7 +1,10 @@
 # Python Imports
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
+from typing import Dict, List
+
+import pandas as pd
+from pydantic import NonNegativeInt
 
 # Project Imports
 from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
@@ -16,7 +19,9 @@ class StackAnalysis(ABC):
         self._kwargs = kwargs
 
     @abstractmethod
-    def get_all_node_dataframes(self, n_jobs: int):
+    def get_all_node_dataframes(
+        self, stateful_sets: List[str], nodes_per_stateful_set: List[NonNegativeInt], n_jobs: int
+    ) -> List[Dict[str, List[pd.DataFrame]]]:
         pass
 
     @abstractmethod

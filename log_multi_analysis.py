@@ -144,7 +144,7 @@ class StackGen:
 
 async def process_experiment(exp: dict) -> dict:
     exp_name = exp["stack"]["name"]
-    base_data_path = Path(f"local_data/simulations_data/{exp_name}")
+    base_data_path = Path("local_data/simulations_data/")
     log_path = base_data_path / exp_name / "out.log"
 
     results_dict = {"exp": exp}

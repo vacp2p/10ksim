@@ -8,7 +8,7 @@ class Libp2pMetrics:
     def peers(namespace: str) -> MetricToScrape:
         return MetricToScrape(
             name="libp2p_peers",
-            query="libp2p_peers",  # TODO: namespace
+            query=f"libp2p_peers{{namespace='{namespace}'}}",
             extract_field="instance",
             folder_name="libp2p-peers/",
         )
@@ -17,7 +17,7 @@ class Libp2pMetrics:
     def open_streams(namespace: str) -> MetricToScrape:
         return MetricToScrape(
             name="libp2p_open_streams",
-            query="libp2p_open_streams",  # TODO: namespace
+            query=f"libp2p_open_streams{{namespace='{namespace}'}}",
             extract_field="instance-type-dir",
             folder_name="libp2p-open-streams/",
         )
@@ -62,7 +62,7 @@ class Libp2pMetrics:
     def low_peers(namespace: str) -> MetricToScrape:
         return MetricToScrape(
             name="libp2p_low_peers",
-            query="sum by(job) (libp2p_gossipsub_low_peers_topics)",  # TODO: namespace
+            query=f"sum by(job) (libp2p_gossipsub_low_peers_topics{{namespace='{namespace}'}})",
             extract_field="job",
             folder_name="low-peers/",
         )
@@ -71,7 +71,7 @@ class Libp2pMetrics:
     def high_peers(namespace: str) -> MetricToScrape:
         return MetricToScrape(
             name="libp2p_high_peers",  # TODO: failing. libp2p_gossipsub_low_peers_topics exists but I don't see libp2p_gossipsub_healthy_peers_topics
-            query="sum by(job) (libp2p_gossipsub_healthy_peers_topics)",  # TODO: namespace
+            query=f"sum by(job) (libp2p_gossipsub_healthy_peers_topics{{namespace='{namespace}'}})",
             extract_field="job",
             folder_name="high-peers/",
         )

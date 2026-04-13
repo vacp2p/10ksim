@@ -25,7 +25,9 @@ def setup_logger():
     logging.getLogger().addHandler(stream_handler)
 
 
-def extract_exps(folders: List, filters: List[Callable[[dict], bool]]) -> Iterable[dict]:
+def extract_exps(
+    folders: List[str | Path], filters: List[Callable[[dict], bool]]
+) -> Iterable[dict]:
     for folder in folders:
         try:
             metadata_log_path = Path(folder) / "metadata.json"
@@ -57,10 +59,8 @@ def get_nimlibp2p_exps(folder: Union[str, Path]) -> Iterable[dict]:
         filters.append(filter_by_class)
 
     paths = [folder / path for path in get_folders(Path(folder), "metadata.json")]
-    for d in paths:
-        logger.info(d)
-        for exp in extract_exps(paths, filters):
-            yield exp
+    for exp in extract_exps(paths, filters):
+        yield exp
 
 
 def nimlibp2p_regression_scrape_and_plots(k8s_config: str):

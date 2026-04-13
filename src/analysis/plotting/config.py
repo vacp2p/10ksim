@@ -45,6 +45,9 @@ class PlotConfigBuilder(BaseModel):
         return self
 
     def with_folders(self, folders: List[str | Path] | str | Path) -> Self:
+        if isinstance(folders, str) or isinstance(folders, Path):
+            folders = [folders]
+
         # TODO [plotter config]: This hack will be removed.
         def ensure_trailing_slash(folder: str | Path) -> str:
             if isinstance(folder, Path):

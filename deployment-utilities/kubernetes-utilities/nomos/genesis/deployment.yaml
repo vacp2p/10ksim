@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nomos-genesis
+  namespace: nomos-genesis
+spec:
+  serviceName: node-genesis
+  replicas: 4
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: nomos
+      pool: a
+  template:
+    metadata:
+      labels:
+        app: nomos
+        pool: a
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: node-04.ih-eu-mda1.misc.vaclab
+      volumes:
+        - name: nomos-data-volume
+          hostPath:
+            path: /data/volumes/nomos
+            type: DirectoryOrCreate
+      containers:
+        - name: nomos
+          image: ghcr.io/logos-blockchain/logos-blockchain:dst
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: nomos-data-volume
+              mountPath: /data/volumes/nomos
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "1000m"
+            limits:
+              memory: "4096Mi"
+              cpu: "2000m"
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          #readinessProbe:
+          #  exec:
+          #    command:
+          #      - /bin/sh
+          #      - -c
+          #      - |
+          #        curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":"Online"'
+          #  initialDelaySeconds: 10
+          #  periodSeconds: 5
+          #  timeoutSeconds: 3
+          #  failureThreshold: 12
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo
+              ls -l /data/volumes/nomos/
+              ORD="${HOSTNAME##*-}"
+              echo "$HOSTNAME"
+              echo "${HOSTNAME##*-}"
+
+              exec logos-blockchain-node --deployment /data/volumes/nomos/deployment-settings.yaml "/data/volumes/nomos/user_config_${ORD}.yaml"

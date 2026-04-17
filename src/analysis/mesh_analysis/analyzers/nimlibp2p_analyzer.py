@@ -80,6 +80,7 @@ class Nimlibp2pAnalyzer(Analyzer):
             expected_num_peers=expected_num_peers,
             expected_num_messages=expected_num_messages,
             has_shards=False,
+            peer_identifier="kubernetes.pod_name",
         )
 
     def check_ss_nodes(
@@ -139,7 +140,15 @@ class Nimlibp2pAnalyzer(Analyzer):
         expected_num_peers: NonNegativeInt,
         expected_num_messages: NonNegativeInt,
         has_shards: bool,
+        peer_identifier: str,
     ) -> AnalysisResult:
+        """:param peer_identifier: The identifier used for nodes. For example: Nimlibp2p uses kubernetes.pod_name.
+        Waku uses receiver_peer_id because log lines for received messages include receiver_peer_id. Nimlibp2p does not.
+
+        :param has_shards: If True, nodes will be expected to have the format "{pod_name}-{shard}-{pod_index}".
+
+        """
+
         # For local data puller, use "kubernetes.pod_name" as the header for file name.
         # For Victoria use "kubernetes.pod_name" and "kubernetes.pod_node_name".
         extra_fields = (
@@ -150,7 +159,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         tracer = self.reliability_tracer(extra_fields)
 
         reliability_result = self._analyze_reliability_cluster(
-            stateful_sets, nodes_per_ss, tracer, has_shards
+            stateful_sets, nodes_per_ss, tracer, has_shards, peer_identifier
         )
         passed = (
             reliability_result.all_in_same_shard
@@ -158,6 +167,12 @@ class Nimlibp2pAnalyzer(Analyzer):
             and reliability_result.num_unique_messages == expected_num_messages
         )
         results_dict = reliability_result.model_dump()
+        results_dict.update(
+            {
+                "expected_num_peers": expected_num_peers,
+                "expected_num_messages": expected_num_messages,
+            }
+        )
         if not has_shards:
             del results_dict["all_in_same_shard"]
         return AnalysisResult(
@@ -172,6 +187,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         nodes_per_ss: List[NonNegativeInt],
         tracer: MessageTracer,
         has_shards: bool,
+        peer_identifier: str,
     ) -> MessageReliabilityResult:
         dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_ss)
         # Strip suffix for local read.
@@ -179,7 +195,6 @@ class Nimlibp2pAnalyzer(Analyzer):
             for _key, df_list in dfs_dicts.items():
                 for df in df_list:
                     df["kubernetes.pod_name"] = df["kubernetes.pod_name"].str.removesuffix(".log")
-
         dfs = self._merge_dfs(dfs, has_shards)
         self.adjust_dfs(dfs)
         result = self._dump_dfs(dfs)
@@ -189,7 +204,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         reliability_results = self._has_message_reliability_issues(
             "shard" if has_shards else None,
             self.msg_hash_key,
-            "kubernetes.pod_name",
+            peer_identifier,
             dfs[0],
             dfs[1],
             self._dump_analysis_path,
@@ -314,7 +329,7 @@ class Nimlibp2pAnalyzer(Analyzer):
 
         if peers_missed_messages:
             msg_sent_data = self._check_if_msg_has_been_sent(
-                peers_missed_messages, missed_messages, sent_df
+                peers_missed_messages, missed_messages, sent_df, peer_identifier
             )
             for data in msg_sent_data:
                 peer_id = data[0].split("*")[-1]
@@ -369,7 +384,6 @@ class Nimlibp2pAnalyzer(Analyzer):
         all_missing_messages = []
 
         unique_messages = len(df.index.get_level_values(msg_identifier).unique())
-
         grouped = df.groupby([msg_identifier, peer_identifier]).size().reset_index(name="count")
         pivot_df = grouped.pivot_table(
             index=msg_identifier,
@@ -391,12 +405,16 @@ class Nimlibp2pAnalyzer(Analyzer):
             all_peers_missed_messages.extend(peers_missed_msg)
             all_missing_messages.extend(missing_messages)
 
-            self._log_received_messages(pivot_df, unique_messages, df)
+            self._log_received_messages(pivot_df, unique_messages, df, peer_identifier)
 
         return all_peers_missed_messages, all_missing_messages
 
     def _log_received_messages(
-        self, df: pd.DataFrame, unique_messages: int, complete_df: pd.DataFrame
+        self,
+        df: pd.DataFrame,
+        unique_messages: int,
+        complete_df: pd.DataFrame,
+        peer_identifier: str,
     ):
         column_sums = df.sum()
         filtered_sums = column_sums[column_sums != unique_messages]
@@ -405,21 +423,25 @@ class Nimlibp2pAnalyzer(Analyzer):
             pod_name, count = result
             missing_hashes = df[df[pod_name] == 0].index.tolist()
             missing_hashes.extend(df[df[pod_name].isna()].index.tolist())
-            pod_name = complete_df[complete_df["kubernetes.pod_name"] == result[0]][
-                "receiver_peer_id"
-            ].iloc[0][0]
+            pod_name = complete_df[complete_df[peer_identifier] == result[0]][
+                "kubernetes.pod_name"
+            ].iloc[0]
             logger.warning(
                 f"Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}"
             )
 
     def _check_if_msg_has_been_sent(
-        self, peers: List, missed_messages: List, sent_df: pd.DataFrame
+        self,
+        peers: List,
+        missed_messages: List,
+        sent_df: pd.DataFrame,
+        peer_identifier: str,
     ) -> List:
         messages_sent_to_peer = []
         for peer in peers:
             try:
                 filtered_df = sent_df.loc[(slice(None), missed_messages), :]
-                filtered_df = filtered_df[filtered_df["receiver_peer_id"] == peer]
+                filtered_df = filtered_df[filtered_df[peer_identifier] == peer]
                 messages_sent_to_peer.append((peer, filtered_df))
             except KeyError as _:
                 logger.warning(

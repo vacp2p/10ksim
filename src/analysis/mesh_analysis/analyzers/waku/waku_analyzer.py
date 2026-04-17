@@ -10,12 +10,8 @@ from pydantic import NonNegativeInt
 # Project Imports
 from src.analysis.mesh_analysis.analyzers.analyzer import OnFail
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
-from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
-    VictoriaReaderBuilder,
-)
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
-from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.analysis.utils import list_utils
 
 logger = logging.getLogger(__name__)
@@ -55,6 +51,7 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
             expected_num_peers=expected_num_peers,
             expected_num_messages=expected_num_messages,
             has_shards=True,
+            peer_identifier="receiver_peer_id",
         )
 
     def reliability_tracer(self, extra_fields) -> MessageTracer:
@@ -119,11 +116,3 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
             logger.info("Messages from filter match in length.")
         else:
             logger.error("Messages from filter do not match.")
-
-    def _dump_logs(self, nodes_with_issues: List[str]):
-        tracer = (
-            WakuTracer().with_wildcard_pattern()
-        )  # TODO use generic tracer (part of overlap for libp2p&waku)
-        vreader = VictoriaReaderBuilder(tracer, "*", **self._kwargs)
-        stack = VaclabStackAnalysis(vreader, **self._kwargs)
-        stack.dump_node_logs(8, nodes_with_issues, self._dump_analysis_path)

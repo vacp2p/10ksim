@@ -1,7 +1,10 @@
 # Python Imports
+import json
 import logging
+import os
+import traceback
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, Iterable, Iterator, List, Optional
 
 import pandas as pd
 import yaml
@@ -52,3 +55,31 @@ def dump_df_as_csv(
         return Ok(df)
 
     return Err(f"{file_location} failed to dump.")
+
+
+def get_folders(base_dir: Path, file_name: str) -> Iterator[str]:
+    """Yield folders under `base_dir` containing files with the given `file_name`"""
+    for dirpath, _dirnames, filenames in os.walk(base_dir):
+        if file_name in filenames:
+            yield os.path.relpath(dirpath, base_dir)
+
+
+def extract_exps(
+    folders: List[str | Path], filters: List[Callable[[dict], bool]]
+) -> Iterable[dict]:
+    for folder in folders:
+        try:
+            metadata_log_path = Path(folder) / "metadata.json"
+            logger.info(f"Events log path: {metadata_log_path}")
+            with open(metadata_log_path, "r", encoding="utf-8") as f:
+                exp = json.load(f)
+            if any(filter(exp) == False for filter in filters):
+                logger.warning(
+                    f"Experiment filtered out. path: `{metadata_log_path}` metadata: `{exp}`"
+                )
+                continue
+            yield exp
+        except Exception as e:
+            full_trace = traceback.format_exc()
+            logger.error(f"exception: {e}\n{full_trace}")
+            raise

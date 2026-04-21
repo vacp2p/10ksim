@@ -33,8 +33,7 @@ if __name__ == "__main__":
 
     log_analyzer = Nimlibp2pAnalyzer(
         dump_analysis_dir="local_data/simulations_data/kad-dht/",
-        **stack,
-    )
+    ).with_kwargs(stack)
 
     # t=0 is when bootstrap-0 logs "Node started" — the most recent occurrence
     # within the time window, so historical experiments don't pollute the result.

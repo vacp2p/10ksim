@@ -273,8 +273,8 @@ if __name__ == "__main__":
     stack = {
         "type": "vaclab",
         "url": "https://vlselect.lab.vac.dev/select/logsql/query",
-        "start_time": "2026-04-21T17:30:00Z",
-        "end_time": "2026-04-21T18:00:00Z",
+        "start_time": "2026-04-21T19:00:00Z",
+        "end_time": "2026-04-21T19:30:00Z",
         "reader": "victoria",
         "stateful_sets": ["nodes", "bootstrap", "probe"],
         "nodes_per_statefulset": [120, 1, 1],
@@ -285,8 +285,7 @@ if __name__ == "__main__":
 
     log_analyzer = Nimlibp2pAnalyzer(
         dump_analysis_dir="local_data/simulations_data/kad-dht/",
-        **stack,
-    )
+    ).with_kwargs(stack)
     log_lines = log_analyzer.check_kad_dht_result()
     all_pids = log_analyzer.extract_all_pids()
 

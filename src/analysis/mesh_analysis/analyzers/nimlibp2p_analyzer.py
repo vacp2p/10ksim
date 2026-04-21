@@ -12,6 +12,8 @@ from result import Err, Ok, Result
 from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyzer, OnFail
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
+from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import VictoriaReaderBuilder
+from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.analysis.utils import file_utils, path_utils
 
 logger = logging.getLogger(__name__)
@@ -475,7 +477,7 @@ class Nimlibp2pAnalyzer(Analyzer):
     def get_bootstrap_start_time(self, bootstrap_pod: str = "bootstrap-0") -> pd.Timestamp:
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs.get("extra_fields")).with_node_started_pattern()
         queries = ['"Node started"']
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        reader_builder = VictoriaReaderBuilder(tracer=tracer, queries=queries, kwargs=self._kwargs)
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
         data = stack_analysis.get_pod_logs(bootstrap_pod)
@@ -491,13 +493,17 @@ class Nimlibp2pAnalyzer(Analyzer):
     def check_warmup_times(self, n_jobs: int = 4) -> tuple:
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs.get("extra_fields")).with_warmup_pattern()
         queries = ['"Connected to bootstrap" OR "Warmup complete"']
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        reader_builder = VictoriaReaderBuilder(tracer=tracer, queries=queries, kwargs=self._kwargs)
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
-        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
+        dfs = stack_analysis.get_all_node_dataframes(
+            self._kwargs.get("stateful_sets", []),
+            self._kwargs.get("nodes_per_statefulset", []),
+            n_jobs
+        )
 
-        bootstrap_dfs = [node_data[0][0] for node_data in dfs]
-        warmup_dfs = [node_data[0][1] for node_data in dfs]
+        bootstrap_dfs = [node_data["warmup"][0] for node_data in dfs]
+        warmup_dfs = [node_data["warmup"][1] for node_data in dfs]
 
         bootstrap_df = pd.concat(bootstrap_dfs, ignore_index=True)
         warmup_df = pd.concat(warmup_dfs, ignore_index=True)
@@ -507,7 +513,7 @@ class Nimlibp2pAnalyzer(Analyzer):
     def check_kad_dht_result(self):
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs.get("extra_fields")).with_kad_dht_pattern()
         queries = ["Lookup finished"]
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        reader_builder = VictoriaReaderBuilder(tracer=tracer, queries=queries, kwargs=self._kwargs)
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
         data = stack_analysis.get_pod_logs("probe-0")
@@ -519,14 +525,18 @@ class Nimlibp2pAnalyzer(Analyzer):
     def extract_all_pids(self, n_jobs: int = 4) -> List[str]:
         tracer = Nimlibp2pTracer(extra_fields=self._kwargs.get("extra_fields")).with_peer_id_pattern()
         queries = ['"Node started"']
-        reader_builder = VictoriaReaderBuilder(tracer, queries, **self._kwargs)
+        reader_builder = VictoriaReaderBuilder(tracer=tracer, queries=queries, kwargs=self._kwargs)
         stack_analysis = VaclabStackAnalysis(reader_builder, **self._kwargs)
 
-        dfs = stack_analysis.get_all_node_dataframes(n_jobs)
+        dfs = stack_analysis.get_all_node_dataframes(
+            self._kwargs.get("stateful_sets", []),
+            self._kwargs.get("nodes_per_statefulset", []),
+            n_jobs
+        )
         
         all_pids = []
         for node_data in dfs:
-            df = node_data[0][0]
+            df = node_data["peer_id"][0]
             if not df.empty and "peerId" in df.columns:
                 all_pids.extend(df["peerId"].dropna().tolist())
                 

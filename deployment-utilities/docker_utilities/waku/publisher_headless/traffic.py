@@ -7,7 +7,8 @@ import random
 import socket
 import time
 import urllib.parse
-from typing import Tuple, Dict
+from typing import Dict, Tuple
+
 import aiohttp
 
 
@@ -16,34 +17,39 @@ async def check_dns_time(service: str) -> str:
     try:
         ip_address = socket.gethostbyname(service)
         elapsed = (time.time() - start_time) * 1000
-        logging.info(f'{service} service response took {elapsed} ms. Resolved to {ip_address}.')
-        return f'{ip_address}'
+        logging.info(f"{service} service response took {elapsed} ms. Resolved to {ip_address}.")
+        return f"{ip_address}"
     except (IndexError, ValueError) as e:
         logging.error(f"Failed. Service: `{service}`: `{e}`")
         raise RuntimeError("Failed check_dns_time") from e
 
 
-async def send_to_relay(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, str | int]]:
+async def send_to_relay(
+    args: argparse.Namespace,
+) -> Tuple[str, Dict[str, str], Dict[str, str | int]]:
     node_address = await check_dns_time(args.service_name)
-    topic = urllib.parse.quote(args.pubsub_topic + '0', safe='')
-    url = f'http://{node_address}:{args.port}/relay/v1/messages/{topic}'
+    topic = urllib.parse.quote(args.pubsub_topic + "0", safe="")
+    url = f"http://{node_address}:{args.port}/relay/v1/messages/{topic}"
 
-    payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode('ascii').rstrip("=")
-    headers = {'Content-Type': 'application/json'}
-    body = {'payload': payload, 'contentTopic': args.content_topic, 'version': 1}
+    payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode("ascii").rstrip("=")
+    headers = {"Content-Type": "application/json"}
+    body = {"payload": payload, "contentTopic": args.content_topic, "version": 1}
 
     return url, headers, body
 
 
-async def send_to_lightpush(args: argparse.Namespace) -> Tuple[str, Dict[str, str], Dict[str, dict[str, str | int]]]:
+async def send_to_lightpush(
+    args: argparse.Namespace,
+) -> Tuple[str, Dict[str, str], Dict[str, dict[str, str | int]]]:
     node_address = await check_dns_time(args.service_name)
-    url = f'http://{node_address}:{args.port}/lightpush/v3/message'
+    url = f"http://{node_address}:{args.port}/lightpush/v3/message"
 
-    payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode('ascii').rstrip("=")
-    headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-    body = {'pubsubTopic': args.pubsub_topic + '0',
-            'message': {'payload': payload, 'contentTopic': args.content_topic,
-                        'version': 1}}
+    payload = base64.b64encode(os.urandom(args.msg_size_kbytes * 1000)).decode("ascii").rstrip("=")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    body = {
+        "pubsubTopic": args.pubsub_topic + "0",
+        "message": {"payload": payload, "contentTopic": args.content_topic, "version": 1},
+    }
 
     return url, headers, body
 
@@ -131,7 +137,7 @@ def parse_args() -> argparse.Namespace:
         "-ps", "--protocols", nargs="+", default=["relay"], help="Protocols used inject messages"
     )
     parser.add_argument(
-        "-sn", "--service-name", help="K8s service used to inject messages",default="zerotesting"
+        "-sn", "--service-name", help="K8s service used to inject messages", default="zerotesting"
     )
     parser.add_argument("-p", "--port", help="Waku REST port", type=int, default=8645)
     parser.add_argument("--log-level", default="info")

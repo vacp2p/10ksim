@@ -4,7 +4,7 @@ metadata:
   name: nodes
   namespace: nimlibp2p
 spec:
-  replicas: 120
+  replicas: 160
   podManagementPolicy: "Parallel"
   selector:
     matchLabels:

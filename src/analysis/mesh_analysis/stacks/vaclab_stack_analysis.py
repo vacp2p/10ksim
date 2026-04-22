@@ -62,7 +62,7 @@ class VaclabStackAnalysis(StackAnalysis):
         return statefulset_name, node_index, data
 
     def _dump_logs_for_single_node(self, node: str, dump_path: Path) -> Result[Path, None]:
-        reader = self._reader_builder.build_with_single_query(node)
+        reader = self._reader_builder.build_with_single_query(node, sort_by="(_time)")
         data = reader.make_queries()
 
         log_name_path = dump_path / f"{node}.log"

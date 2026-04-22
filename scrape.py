@@ -1,18 +1,16 @@
 import argparse
-import json
 import logging
 import os
 import sys
-import traceback
 from pathlib import Path
-from typing import Callable, Iterable, List, Union
+from typing import Iterable, Union
 
-from log_multi_analysis import get_folders
 from src.analysis.metrics.config import ScrapeConfig
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
 from src.analysis.plotting.metrics_plotter import MetricsPlotter
+from src.analysis.utils.file_utils import extract_exps, get_folders
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +21,6 @@ def setup_logger():
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(level)
     logging.getLogger().addHandler(stream_handler)
-
-
-def extract_exps(
-    folders: List[str | Path], filters: List[Callable[[dict], bool]]
-) -> Iterable[dict]:
-    for folder in folders:
-        try:
-            metadata_log_path = Path(folder) / "metadata.json"
-            logger.info(f"Events log path: {metadata_log_path}")
-            with open(metadata_log_path, "r", encoding="utf-8") as f:
-                exp = json.load(f)
-            if any(filter(exp) == False for filter in filters):
-                logger.warning(
-                    f"Experiment filtered out. path: `{metadata_log_path}` metadata: `{exp}`"
-                )
-                continue
-            yield exp
-        except Exception as e:
-            full_trace = traceback.format_exc()
-            logger.error(f"exception: {e}\n{full_trace}")
-            raise
 
 
 def get_nimlibp2p_exps(folder: Union[str, Path]) -> Iterable[dict]:

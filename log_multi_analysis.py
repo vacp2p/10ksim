@@ -11,13 +11,15 @@ from typing import Any, Iterator, Optional, Self
 
 from pydantic import BaseModel
 
+from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
+from src.analysis.utils.file_utils import extract_exps, get_folders
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "deployments")))
 
 from src.analysis.mesh_analysis.analyzers.analyzer import Analyzer
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
-from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -64,14 +66,7 @@ def setup_logger():
     logging.getLogger().addHandler(stream_handler)
 
 
-def get_folders(base_dir: Path, file_name: str) -> Iterator[str]:
-    """Yield folders under `base_dir` containing files with the given `file_name`"""
-    for dirpath, _dirnames, filenames in os.walk(base_dir):
-        if file_name in filenames:
-            yield os.path.relpath(dirpath, base_dir)
-
-
-def get_experiments(*, experiment_name: Optional[str] = None) -> Iterator[dict]:
+def get_experiments(*, experiment_class: Optional[str] = None) -> Iterator[dict]:
     start_dir = Path("../deployments/")
     subdirs = []
 
@@ -91,12 +86,16 @@ def get_experiments(*, experiment_name: Optional[str] = None) -> Iterator[dict]:
     for path in subdirs:
         logger.info(f"path: {path}")
 
-    for subdir in subdirs:
+    def filter_by_class(exp) -> bool:
+        if exp["experiment"]["class"] != experiment_class:
+            return False
+        return True
+
+    filters = []
+    if experiment_class:
+        filters.append(filter_by_class)
+    for exp in extract_exps(subdirs, filters):
         try:
-            metadata_log_path = start_dir / subdir / "metadata.json"
-            logger.info(f"Events log path: {metadata_log_path}")
-            with open(metadata_log_path, "r", encoding="utf-8") as f:
-                exp = json.load(f)
             yield exp
         except Exception as e:
             full_trace = traceback.format_exc()

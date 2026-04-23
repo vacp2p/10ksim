@@ -2,19 +2,116 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
+import argparse
 import re
 import hashlib
 from collections import Counter
+from datetime import datetime, timezone
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Project Imports
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 
 sns.set_theme()
 
+# -------------
+# WARMUP HELPERS
+# -------------
+def extract_node_index(pod_name: str) -> int:
+    """Extract numeric index from a pod name like 'nodes-47'."""
+    return int(pod_name.split("-")[-1])
+
+def analyze_warmup(log_analyzer: Nimlibp2pAnalyzer):
+    print("=== Analyzing Warmup ===")
+    t0 = log_analyzer.get_bootstrap_start_time(bootstrap_pod="bootstrap-0")
+    print(f"Experiment start (bootstrap 'Node started'): {t0}")
+
+    bootstrap_df, warmup_df = log_analyzer.check_warmup_times(n_jobs=4)
+
+    if bootstrap_df.empty and warmup_df.empty:
+        print("No warmup events found in the given time range.")
+        return
+
+    # Discard events from previous experiments (anything before this run's t=0)
+    if not bootstrap_df.empty:
+        bootstrap_df = bootstrap_df[bootstrap_df["timestamp"] >= t0].copy()
+    if not warmup_df.empty:
+        warmup_df = warmup_df[warmup_df["timestamp"] >= t0].copy()
+
+    if bootstrap_df.empty and warmup_df.empty:
+        print("No warmup events found after the bootstrap start time.")
+        return
+
+    # Keep only the latest event per pod
+    if not bootstrap_df.empty:
+        bootstrap_df = (
+            bootstrap_df.sort_values("timestamp")
+            .groupby("kubernetes.pod_name", as_index=False)
+            .last()
+        )
+    if not warmup_df.empty:
+        warmup_df = (
+            warmup_df.sort_values("timestamp")
+            .groupby("kubernetes.pod_name", as_index=False)
+            .last()
+        )
+
+    # Compute elapsed seconds relative to t0
+    if not bootstrap_df.empty:
+        bootstrap_df["elapsed_s"] = (bootstrap_df["timestamp"] - t0).dt.total_seconds()
+        bootstrap_df["node_index"] = bootstrap_df["kubernetes.pod_name"].apply(extract_node_index)
+        bootstrap_df.sort_values("node_index", inplace=True)
+
+    if not warmup_df.empty:
+        warmup_df["elapsed_s"] = (warmup_df["timestamp"] - t0).dt.total_seconds()
+        warmup_df["node_index"] = warmup_df["kubernetes.pod_name"].apply(extract_node_index)
+        warmup_df.sort_values("node_index", inplace=True)
+
+    # Summary statistics
+    if not bootstrap_df.empty:
+        b = bootstrap_df["elapsed_s"]
+        print(f"Connected to bootstrap — min: {b.min():.1f}s  median: {b.median():.1f}s  max: {b.max():.1f}s  ({len(b)} nodes)")
+    if not warmup_df.empty:
+        w = warmup_df["elapsed_s"]
+        print(f"Warmup complete       — min: {w.min():.1f}s  median: {w.median():.1f}s  max: {w.max():.1f}s  ({len(w)} nodes)")
+
+    # Scatter plot
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    if not bootstrap_df.empty:
+        ax.scatter(
+            bootstrap_df["node_index"],
+            bootstrap_df["elapsed_s"],
+            label="Connected to bootstrap",
+            alpha=0.8,
+            s=80,
+            marker="o",
+        )
+
+    if not warmup_df.empty:
+        ax.scatter(
+            warmup_df["node_index"],
+            warmup_df["elapsed_s"],
+            label="Warmup complete",
+            alpha=0.8,
+            s=80,
+            marker="^",
+        )
+
+    ax.set_xlabel("Node index")
+    ax.set_ylabel("Time since bootstrap started (s)")
+    ax.set_title("Bootstrap connection and warmup completion times per node")
+    ax.legend()
+    plt.tight_layout()
+    plt.show(block=False)
+
+
+# -------------
+# LOOKUP HELPERS
+# -------------
 def normalize_status(status: str) -> str:
     value = (status or "").strip().lower()
     if value == "success":
@@ -82,25 +179,19 @@ def parse_peer(peer_str):
         "attempts": attempts,
     }
 
-
 def rank_best_returned_peer(peers):
-    # Rank peers by XOR distance (dist). Best returned peer rank is this lookup's score.
     peers_with_dist = [p for p in peers if p["dist"] is not None]
     if not peers_with_dist:
         return None
 
     sorted_by_dist = sorted(peers_with_dist, key=lambda p: p["dist"])
-
     for i, peer in enumerate(sorted_by_dist, start=1):
         if peer["responded"] != "missing":
             return i
-
     return None
-
 
 def classify_lookup(peers):
     statuses = [p["responded"] for p in peers]
-
     if "success" in statuses:
         return "success"
     if "timeout" in statuses:
@@ -109,22 +200,17 @@ def classify_lookup(peers):
     has_other_error = any(s not in {"success", "timeout", "missing", "unknown"} for s in statuses)
     if has_other_error:
         return "other_error"
-
     return "other_error" if "unknown" in statuses else "timeout"
-
 
 def infer_lookup_error_type(peers):
     statuses = [p["responded"] for p in peers]
     if "success" in statuses:
         return None
-
     non_missing = [s for s in statuses if s != "missing"]
     if not non_missing:
         return "missing"
-
     counts = Counter(non_missing)
     return counts.most_common(1)[0][0]
-
 
 def parse_row(row, all_pids):
     target = row[0]
@@ -176,18 +262,15 @@ def parse_row(row, all_pids):
         "peer_statuses": [p["responded"] for p in peers],
     }
 
-
 def percentile_str(values, percentiles):
     if not values:
         return "N/A"
     return np.percentile(values, percentiles)
 
-
 def pct(count, total):
     return 0.0 if total == 0 else (100.0 * count / total)
 
-
-def analyze_lookups(parsed):
+def calculate_lookups_metrics(parsed):
     total_lookups = len(parsed)
     durations = [x["duration_ms"] for x in parsed]
     attempted = [x["attempted_peers"] for x in parsed]
@@ -228,21 +311,20 @@ def analyze_lookups(parsed):
 
     return durations, attempted, success_rank, lookup_scores, closeness_scores
 
-
-def plot_metrics(durations, attempted, success_rank, lookup_scores, closeness_scores):
+def plot_lookup_metrics(durations, attempted, success_rank, lookup_scores, closeness_scores):
     plt.figure()
     sns.histplot(durations, bins=40)
     plt.title("Lookup duration (ms)")
     plt.xlabel("Duration (ms)")
     plt.ylabel("Count")
-    plt.show()
+    plt.show(block=False)
 
     plt.figure()
     sns.histplot(attempted, bins=20)
     plt.title("Attempted peers per lookup")
     plt.xlabel("Attempted peers")
     plt.ylabel("Count")
-    plt.show()
+    plt.show(block=False)
 
     if success_rank:
         plt.figure()
@@ -250,7 +332,7 @@ def plot_metrics(durations, attempted, success_rank, lookup_scores, closeness_sc
         plt.title("Local success rank")
         plt.xlabel("Rank")
         plt.ylabel("Count")
-        plt.show()
+        plt.show(block=False)
 
     if lookup_scores:
         plt.figure()
@@ -258,7 +340,7 @@ def plot_metrics(durations, attempted, success_rank, lookup_scores, closeness_sc
         plt.title("Lookup score (best returned rank)")
         plt.xlabel("Rank score")
         plt.ylabel("Count")
-        plt.show()
+        plt.show(block=False)
 
     if closeness_scores:
         plt.figure()
@@ -266,31 +348,58 @@ def plot_metrics(durations, attempted, success_rank, lookup_scores, closeness_sc
         plt.title("Closeness Score")
         plt.xlabel("Global Rank")
         plt.ylabel("Count")
-        plt.show()
+        plt.show(block=False)
 
+def analyze_lookups(log_analyzer: Nimlibp2pAnalyzer):
+    print("\n=== Analyzing Lookups ===")
+    log_lines = log_analyzer.check_kad_dht_result()
+    if not log_lines:
+        print("No lookup events found.")
+        return
 
+    all_pids = log_analyzer.extract_all_pids()
+    parsed = [parse_row(row, all_pids) for row in log_lines]
+    metrics = calculate_lookups_metrics(parsed)
+    plot_lookup_metrics(*metrics)
+
+# -------------
+# MAIN
+# -------------
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Analyze KAD DHT Experiment logs.")
+    parser.add_argument("--start-time", type=str, required=True, help="Start time in ISO format (e.g., 2026-04-21T19:00:00Z)")
+    parser.add_argument("--end-time", type=str, default=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), help="End time in ISO format. Defaults to now.")
+    parser.add_argument("--nodes", type=int, default=160, help="Number of nodes deployed. Default: 160.")
+    parser.add_argument("--namespace", type=str, default="nimlibp2p", help="Kubernetes namespace. Default: nimlibp2p")
+    parser.add_argument("--url", type=str, default="https://vlselect.lab.vac.dev/select/logsql/query", help="VictoriaLogs URL.")
+    args = parser.parse_args()
+
     stack = {
         "type": "vaclab",
-        "url": "https://vlselect.lab.vac.dev/select/logsql/query",
-        "start_time": "2026-04-21T19:00:00Z",
-        "end_time": "2026-04-21T19:30:00Z",
+        "url": args.url,
+        "start_time": args.start_time,
+        "end_time": end_time,
         "reader": "victoria",
         "stateful_sets": ["nodes", "bootstrap", "probe"],
-        "nodes_per_statefulset": [120, 1, 1],
+        "nodes_per_statefulset": [args.nodes, 1, 1],
         "container_name": "node",
-        "namespace": "nimlibp2p",
+        "namespace": args.namespace,
         "extra_fields": ["kubernetes.pod_name", "kubernetes.pod_node_name"],
     }
+
+    print(f"Initializing analyzer for namespace '{args.namespace}' ({args.nodes} nodes)")
+    print(f"Time range: {args.start_time} to {end_time}")
 
     log_analyzer = Nimlibp2pAnalyzer(
         dump_analysis_dir="local_data/simulations_data/kad-dht/",
     ).with_kwargs(stack)
-    log_lines = log_analyzer.check_kad_dht_result()
-    all_pids = log_analyzer.extract_all_pids()
 
-    parsed = [parse_row(row, all_pids) for row in log_lines]
+    # 1. Analyze and plot Warmup times
+    analyze_warmup(log_analyzer)
     
-    # 3. Analyze and plot the metrics
-    metrics = analyze_lookups(parsed)
-    plot_metrics(*metrics)
+    # 2. Analyze and plot DHT Lookup Metrics
+    analyze_lookups(log_analyzer)
+    
+    # Finally, show all figures together
+    plt.show()
+

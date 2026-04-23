@@ -8,6 +8,8 @@ from kubernetes.client import (
     V1PodTemplateSpec,
     V1Probe,
     V1ResourceRequirements,
+    V1Service,
+    V1ServicePort,
     V1StatefulSet,
 )
 from pydantic import BaseModel, Field
@@ -23,6 +25,7 @@ from src.deployments.core.configs.pod import (
     build_pod_spec,
     build_pod_template_spec,
 )
+from src.deployments.core.configs.service import ServiceConfig, build_service
 from src.deployments.core.configs.statefulset import StatefulSetConfig, build_stateful_set
 
 
@@ -64,6 +67,35 @@ class PodBuilder(BaseModel):
 
     def build(self) -> V1Pod:
         return build_pod(self.config)
+
+
+class ServiceBuilder(BaseModel):
+    config: ServiceConfig = Field(default_factory=ServiceConfig)
+
+    def with_name(self, name: str) -> Self:
+        self.config.name = name
+        return self
+
+    def with_namespace(self, namespace: str) -> Self:
+        self.config.namespace = namespace
+        return self
+
+    def with_cluster_ip(self, cluster_ip: str) -> Self:
+        self.config.service_spec.cluster_ip = cluster_ip
+        return self
+
+    def with_selector(self, key: str, value: str) -> Self:
+        self.config.service_spec.with_selector(key, value)
+        return self
+
+    def with_port(self, port: V1ServicePort) -> Self:
+        if self.config.service_spec.ports is None:
+            self.config.service_spec.ports = []
+        self.config.service_spec.ports.append(port)
+        return self
+
+    def build(self) -> V1Service:
+        return build_service(self.config)
 
 
 class ContainerBuilder:

@@ -30,6 +30,8 @@ from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.kube_utils import (
     dict_get,
     get_cleanup,
+    get_YAML,
+    k8s_obj_to_dict,
     kubectl_apply,
     poll_namespace_has_objects,
     wait_for_no_objs_in_namespace,
@@ -244,6 +246,14 @@ class BaseExperiment(ABC, BaseModel):
                     f"Out paths are required to be absolute paths or have a non-None out path. Path: `{path}` out_dir: `{out_dir}` experiment type: `{type(self)}`"
                 )
             return Path(out_dir) / path
+
+    def dump_yaml(self, obj, workdir: str, name: str):
+        out_path = Path(workdir) / name / f"{name}.yaml"
+        os.makedirs(out_path.parent, exist_ok=True)
+        logger.info(f"dumping deployment `{name}` to `{out_path}`")
+        with open(out_path, "w") as out_file:
+            yaml = get_YAML()
+            yaml.dump(k8s_obj_to_dict(obj), out_file)
 
     def _get_metadata(self) -> dict:
         return BaseBridge().get_metadata(self.events_log_path)

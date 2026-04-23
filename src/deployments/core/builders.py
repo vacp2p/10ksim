@@ -43,9 +43,17 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_label(self, key: str, value: str) -> Self:
+        if self.config.labels is None:
+            self.config.labels = {}
         self.config.labels[key] = value
-        self.config.selector_labels[key] = value
-        self.config.pod_template_spec_config.labels[key] = value
+
+        if self.config.stateful_set_spec.selector_labels is None:
+            self.config.stateful_set_spec.selector_labels = {}
+        self.config.stateful_set_spec.selector_labels[key] = value
+
+        if self.config.stateful_set_spec.pod_template_spec_config.labels is None:
+            self.config.stateful_set_spec.pod_template_spec_config.labels = {}
+        self.config.stateful_set_spec.pod_template_spec_config.labels[key] = value
         return self
 
     def with_volume_claim_template(self, pvc: V1PersistentVolumeClaim) -> Self:

@@ -19,6 +19,7 @@ from kubernetes.client import (
     V1Job,
     V1Pod,
     V1PodTemplateSpec,
+    V1Service,
     V1StatefulSet,
 )
 from pydantic import BaseModel, Field
@@ -43,6 +44,7 @@ V1Deployable = Union[
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
+    V1Service,
     V1StatefulSet,
     V1DaemonSet,
     V1Job,
@@ -298,7 +300,8 @@ class BaseExperiment(ABC, BaseModel):
                     "args": vars(args),
                 }
             )
-            shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
+            if args.values_path:
+                shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
             await self._run(
                 api_client=api_client,
                 workdir=workdir,

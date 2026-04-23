@@ -326,7 +326,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Service": [],
     }
     types = (
-        types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job"]
+        types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job", "Service"]
     )
     for yaml in yamls:
         try:
@@ -598,6 +598,10 @@ def poll_rollout_status(
                     return True
 
         return False
+
+    elif kind == "service":
+        # Services don't have a rollout status, they are immediately available
+        return True
 
     else:
         raise ValueError(f"Unsupported kind: `{kind}`")

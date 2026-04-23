@@ -26,11 +26,12 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="KAD DHT experiment")
         BaseExperiment.add_args(subparser)
+        subparser.set_defaults(namespace="nimlibp2p")
 
     class ExpConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
 
-        num_nodes: NonNegativeInt = 160
+        num_nodes: NonNegativeInt = 190
         warmup_delay: NonNegativeFloat = 0
         probe_delay: NonNegativeFloat = 60
         image_repo: str = "radiken/dst-test-node-kad-dht"
@@ -46,6 +47,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
     ):
         self.log_event("run_start")
 
+        values_yaml = values_yaml or {}
         config = self.ExpConfig(**values_yaml)
         self.log_metadata({"params": vars(config)})
         namespace = args.namespace
@@ -111,7 +113,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("SERVICE", f"bootstrap.{namespace}.svc.cluster.local")
             .build()
         )
-        self._dump_yaml(probe, workdir, "probe")
+        self.dump_yaml(probe, workdir, "probe")
         await self.deploy(api_client, stack, args, values_yaml, deployment=probe, wait_for_ready=True)
 
         # 6. Wait for Probe Execution

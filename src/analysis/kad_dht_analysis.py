@@ -103,7 +103,7 @@ if __name__ == "__main__":
         "reader": "victoria",
         "stateful_sets": ["nodes", "bootstrap", "probe"],
         "nodes_per_statefulset": [args.nodes, 1, 1],
-        "container_name": "node",
+        "container_name": "pod-0",
         "namespace": args.namespace,
         "extra_fields": ["kubernetes.pod_name", "kubernetes.pod_node_name"],
     }

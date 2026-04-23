@@ -2,7 +2,7 @@ import hashlib
 import logging
 import re
 from collections import Counter
-from typing import List, Self, Optional
+from typing import List, Self, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,7 @@ def get_kad_id(peer_id_b58: str) -> bytes:
 def xor_distance(id1: bytes, id2: bytes) -> int:
     return int.from_bytes(id1, "big") ^ int.from_bytes(id2, "big")
 
-def compute_closeness_score(target: str, returned_peers: list, all_pids: list):
+def compute_closeness_score(target: str, returned_peers: List[Dict[str, Any]], all_pids: List[str]) -> Optional[int]:
     try:
         target_kad_id = get_kad_id(target)
     except Exception:
@@ -67,7 +67,7 @@ def compute_closeness_score(target: str, returned_peers: list, all_pids: list):
         
     return min(returned_ranks)
 
-def parse_peer(peer_str):
+def parse_peer(peer_str: str) -> Dict[str, Any]:
     pid_match = re.search(r"pid: ([^,]+)", peer_str)
     dist_match = re.search(r"dist: ([0-9a-fA-F]+)", peer_str)
     responded_match = re.search(r"responded: ([^,\)]+)", peer_str)
@@ -86,7 +86,7 @@ def parse_peer(peer_str):
         "attempts": attempts,
     }
 
-def rank_best_returned_peer(peers):
+def rank_best_returned_peer(peers: List[Dict[str, Any]]) -> Optional[int]:
     peers_with_dist = [p for p in peers if p["dist"] is not None]
     if not peers_with_dist:
         return None
@@ -97,7 +97,7 @@ def rank_best_returned_peer(peers):
             return i
     return None
 
-def classify_lookup(peers):
+def classify_lookup(peers: List[Dict[str, Any]]) -> str:
     statuses = [p["responded"] for p in peers]
     if "success" in statuses:
         return "success"
@@ -109,7 +109,7 @@ def classify_lookup(peers):
         return "other_error"
     return "other_error" if "unknown" in statuses else "timeout"
 
-def infer_lookup_error_type(peers):
+def infer_lookup_error_type(peers: List[Dict[str, Any]]) -> Optional[str]:
     statuses = [p["responded"] for p in peers]
     if "success" in statuses:
         return None
@@ -119,7 +119,7 @@ def infer_lookup_error_type(peers):
     counts = Counter(non_missing)
     return counts.most_common(1)[0][0]
 
-def parse_row(row, all_pids):
+def parse_row(row: list, all_pids: List[str]) -> Dict[str, Any]:
     target = row[0]
     duration_ms = int(row[1])
     peers_raw = row[2]
@@ -169,15 +169,16 @@ def parse_row(row, all_pids):
         "peer_statuses": [p["responded"] for p in peers],
     }
 
-def percentile_str(values, percentiles):
-    if not values:
+def percentile_str(values: List[Any], percentiles: List[int]) -> Any:
+    clean_values = [v for v in values if v is not None]
+    if not clean_values:
         return "N/A"
-    return np.percentile(values, percentiles)
+    return np.percentile(clean_values, percentiles)
 
-def pct(count, total):
+def pct(count: int, total: int) -> float:
     return 0.0 if total == 0 else (100.0 * count / total)
 
-def calculate_lookups_metrics(parsed):
+def calculate_lookups_metrics(parsed: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_lookups = len(parsed)
     durations = [x["duration_ms"] for x in parsed]
     attempted = [x["attempted_peers"] for x in parsed]
@@ -250,7 +251,7 @@ class KadDHTAnalyzer(Analyzer):
         tracer = KadDHTTracer().with_extra_fields(extra_fields).with_node_started_pattern()
         
         data = self.data_puller.get_pod_logs(tracer, bootstrap_pod)
-        df = tracer.patterns[0].trace(data)[0]
+        df = tracer.trace(data)["node_started"][0]
 
         if df.empty:
             raise RuntimeError(

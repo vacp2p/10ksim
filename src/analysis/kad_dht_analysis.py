@@ -13,7 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
+from src.analysis.mesh_analysis.analyzers.kad_dht_analyzer import KadDHTAnalyzer
 
 sns.set_theme()
 
@@ -24,7 +24,7 @@ def extract_node_index(pod_name: str) -> int:
     """Extract numeric index from a pod name like 'nodes-47'."""
     return int(pod_name.split("-")[-1])
 
-def analyze_warmup(log_analyzer: Nimlibp2pAnalyzer):
+def analyze_warmup(log_analyzer: KadDHTAnalyzer):
     print("=== Analyzing Warmup ===")
     t0 = log_analyzer.get_bootstrap_start_time(bootstrap_pod="bootstrap-0")
     print(f"Experiment start (bootstrap 'Node started'): {t0}")
@@ -350,7 +350,7 @@ def plot_lookup_metrics(durations, attempted, success_rank, lookup_scores, close
         plt.ylabel("Count")
         plt.show(block=False)
 
-def analyze_lookups(log_analyzer: Nimlibp2pAnalyzer):
+def analyze_lookups(log_analyzer: KadDHTAnalyzer):
     print("\n=== Analyzing Lookups ===")
     log_lines = log_analyzer.check_kad_dht_result()
     if not log_lines:
@@ -390,7 +390,7 @@ if __name__ == "__main__":
     print(f"Initializing analyzer for namespace '{args.namespace}' ({args.nodes} nodes)")
     print(f"Time range: {args.start_time} to {end_time}")
 
-    log_analyzer = Nimlibp2pAnalyzer(
+    log_analyzer = KadDHTAnalyzer(
         dump_analysis_dir="local_data/simulations_data/kad-dht/",
     ).with_kwargs(stack)
 

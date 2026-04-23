@@ -93,7 +93,7 @@ class KadDHTTracer(MessageTracer):
                         convert=self._trace_warmup_event_in_logs,
                     )
                 ],
-                query="Connected to bootstrap OR Warmup complete"
+                query="(\"Connected to bootstrap\" OR \"Warmup complete\")"
             )
         )
         return self

@@ -60,7 +60,6 @@ class AnalysisStep(BaseModel):
 
 class Analyzer(BaseModel):
     _analysis_steps: List[AnalysisStep] = []
-    _kwargs: dict = {}
     data_puller: Optional[DataPuller] = None
     dump_analysis_dir: Optional[Path] = None
 
@@ -94,10 +93,6 @@ class Analyzer(BaseModel):
 
     def with_dump_analysis_dir(self, dump_analysis_dir: str = None) -> Self:
         self.dump_analysis_dir = Path(dump_analysis_dir)
-        return self
-
-    def with_kwargs(self, kwargs: dict) -> Self:
-        self._kwargs = kwargs
         return self
 
     def with_data_puller(self, data_puller: DataPuller) -> Self:

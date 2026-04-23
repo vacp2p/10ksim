@@ -50,13 +50,21 @@ class DataPuller(BaseModel):
         self._source_type = source
         return self
 
-    def _make_stack(self, tracer: MessageTracer) -> StackAnalysis:
+    def _make_stack(self, tracer: MessageTracer, query: Optional[str] = None) -> StackAnalysis:
         if self._source_type != "victoria":
             raise NotImplementedError(f"Cannot build stack for type: `{self._source_type}`")
+            
+        queries = []
+        if query is not None:
+            queries = [query]
+        elif hasattr(tracer, 'patterns') and tracer.patterns and hasattr(tracer.patterns[0], 'query'):
+            queries = [pattern.query for pattern in tracer.patterns]
+
         reader_builder = VictoriaReaderBuilder(
             tracer=tracer,
+            queries=queries,
             kwargs=self.kwargs,
-            extra_fields=self.kwargs["extra_fields"],
+            extra_fields=self.kwargs.get("extra_fields"),
         )
         return VaclabStackAnalysis(reader_builder)
 
@@ -75,9 +83,11 @@ class DataPuller(BaseModel):
             return dfs
         raise NotImplementedError()
 
-    def get_pod_logs(self, tracer, pod_identifier: str, *, order_by: Optional[str] = None):
+    def get_pod_logs(
+        self, tracer, pod_identifier: str, query: Optional[str] = None, *, order_by: Optional[str] = None
+    ):
         if self._source_type == "victoria":
-            stack = self._make_stack(tracer)
+            stack = self._make_stack(tracer, query)
             return stack.get_pod_logs(pod_identifier, order_by=order_by)
         raise NotImplementedError()
 

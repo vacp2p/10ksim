@@ -60,7 +60,6 @@ class AnalysisStep(BaseModel):
 
 class Analyzer(BaseModel):
     _analysis_steps: List[AnalysisStep] = []
-    _kwargs: dict = {}
     data_puller: Optional[DataPuller] = None
     dump_analysis_dir: Optional[Path] = None
 

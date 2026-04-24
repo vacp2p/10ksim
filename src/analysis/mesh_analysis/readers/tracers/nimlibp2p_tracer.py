@@ -94,5 +94,3 @@ class Nimlibp2pTracer(MessageTracer):
             ) from e
 
         return df
-
-

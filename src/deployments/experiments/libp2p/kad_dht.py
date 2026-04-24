@@ -31,11 +31,11 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
     class ExpConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
 
-        num_nodes: NonNegativeInt = 190
+        num_nodes: NonNegativeInt = 80
         warmup_delay: NonNegativeFloat = 0
-        probe_delay: NonNegativeFloat = 60
+        probe_delay: NonNegativeFloat = 600
         image_repo: str = "radiken/dst-test-node-kad-dht"
-        image_tag: str = "pruned-routing-table"
+        image_tag: str = "long-logs"
 
     async def _run(
         self,
@@ -76,6 +76,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("NODE_ROLE", "RoleBootstrap")
             .with_option("PORT", "5000")
             .with_option("DISCOVERY", "kad-dht")
+            .with_readiness_probe(path="/ready", port=8008)
             .build()
         )
         self.dump_yaml(bootstrap_nodes, workdir, "bootstrap")
@@ -91,6 +92,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("PORT", "5000")
             .with_option("DISCOVERY", "kad-dht")
             .with_option("SERVICE", f"bootstrap.{namespace}.svc.cluster.local")
+            .with_readiness_probe(path="/ready", port=8008)
             .build()
         )
         self.dump_yaml(nodes, workdir, "nodes")

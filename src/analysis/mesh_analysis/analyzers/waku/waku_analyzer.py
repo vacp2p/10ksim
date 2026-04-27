@@ -72,7 +72,7 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         """
         waku_tracer = WakuTracer().with_wildcard_pattern()
         data = self.data_puller.get_pod_logs(
-            waku_tracer, pod_identifier="get-store-messages", query="*", order_by="(_time)"
+            waku_tracer, pod_identifier="get-store-messages", order_by="(_time)"
         )
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern
@@ -105,7 +105,7 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         """
         waku_tracer = WakuTracer().with_wildcard_pattern()
         data = self.data_puller.get_pod_logs(
-            waku_tracer, pod_identifier="get-filter-messages", query="*", order_by="(_time)"
+            waku_tracer, pod_identifier="get-filter-messages", order_by="(_time)"
         )
 
         log_list = data[0][0]  # We will always have 1 pattern group with 1 pattern

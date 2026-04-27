@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Iterable, Union
 
@@ -11,16 +10,9 @@ from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
 from src.analysis.plotting.metrics_plotter import MetricsPlotter
 from src.analysis.utils.file_utils import extract_exps, get_folders
+from src.analysis.utils.log_utils import init_logger
 
 logger = logging.getLogger(__name__)
-
-
-def setup_logger():
-    level = logging.INFO
-    logging.getLogger().setLevel(level)
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(level)
-    logging.getLogger().addHandler(stream_handler)
 
 
 def get_nimlibp2p_exps(folder: Union[str, Path]) -> Iterable[dict]:
@@ -109,11 +101,23 @@ def parse_args() -> argparse.Namespace:
         default=default_kubeconfig_path(),
         help="Path to kubeconfig file",
     )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        dest="verbosity",
+        default=0,
+        help="Set the log level: -v (warnings), -vv (info), -vvv (debug) -vvvv (most verbose)",
+    )
+
     return parser.parse_args()
 
 
 def main():
-    setup_logger()
+    args = parse_args()
+    verbosity = args.verbosity or 2
+    init_logger(logging.getLogger(), verbosity, None)
     params = parse_args()
     nimlibp2p_regression_scrape_and_plots(params.config)
 

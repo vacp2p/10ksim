@@ -47,13 +47,13 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
     for i, exp in enumerate(exps):
         config = (
             Nimlibp2pScrapeBuilder()
-            .with_exp(exp, extract_name=True)
+            .with_metadata(exp, extract_name=True)
             .with_dump_location(dump_fmt.format(i=i))
             .with_libp2p_metrics()
             .build()
         )
         scrapes.append(config)
-        scrapper = Scrapper(k8s_config, config)
+        scrapper = Scrapper(config, k8s_config)
         scrapper.query_and_dump_metrics()
 
     # Data from previous reports.

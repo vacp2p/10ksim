@@ -39,7 +39,7 @@ class DataPuller(BaseModel):
         return self._source_type == "local"
 
     def with_kwargs(self, kwargs: dict) -> Self:
-        self.kwargs = kwargs
+        self.kwargs.update(kwargs)
         if "url" in kwargs.keys():
             self._source_type = "victoria"
         elif "local_folder" in kwargs.keys():

@@ -1,4 +1,5 @@
 import logging
+from contextlib import nullcontext
 from typing import Dict, Optional
 
 from pydantic import BaseModel
@@ -7,6 +8,8 @@ from result import Err, Ok
 from src.analysis.data.data_request_handler import DataRequestHandler
 from src.analysis.metrics import kubernetes_manager, scrape_utils
 from src.analysis.metrics.config import ScrapeConfig
+from src.analysis.utils import path_utils
+from src.analysis.utils.log_utils import log_to_path
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +17,38 @@ logger = logging.getLogger(__name__)
 class Scrapper(BaseModel):
     url: str
     _config: ScrapeConfig
-    _k8s: object
+    _k8s: Optional[object] = None
 
     def __init__(self, kube_config: Optional[str] = None, config: ScrapeConfig = None):
         self._url = config.url
         self._config = config
         self._k8s = kubernetes_manager.KubernetesManager(kube_config) if kube_config else None
 
+    def _set_up_paths(self):
+        result = path_utils.prepare_path_for_folder(self._config.dump_location)
+        if result.is_err():
+            logger.error(result.err_value)
+            raise ValueError(f"{result.err_value}")
+
+    def _set_up_paths(self):
+        result = path_utils.prepare_path_for_folder(self._config.dump_location)
+        if result.is_err():
+            logger.error(result.err_value)
+            raise ValueError(f"{result.err_value}")
+
     def query_and_dump_metrics(self):
+        self._set_up_paths()
+
+        try:
+            log_path = self._config.dump_location / "scrape.log"
+            context = log_to_path(log_path)
+        except TypeError:
+            context = nullcontext()
+        with context:
+            logger.info(f"log_path: {log_path}")
+            self._query_and_dump_metrics()
+
+    def _query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py
         # socket.create_connection = self._k8s.create_connection
         # Not needed anymore as we have a public address in the lab

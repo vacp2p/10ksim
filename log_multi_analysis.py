@@ -1,11 +1,9 @@
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
 import traceback
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterator, Optional, Self
 
@@ -13,6 +11,7 @@ from pydantic import BaseModel
 
 from src.analysis.mesh_analysis.analyzers.connmanager_analyzer import ConnManagerAnalyzer
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
+from src.analysis.mesh_analysis.core import analyze_exps
 from src.analysis.utils.file_utils import extract_exps, get_folders
 from src.analysis.utils.log_utils import init_logger, log_to_path
 
@@ -207,37 +206,7 @@ async def main():
     verbosity = args.verbosity or 2
     init_logger(logging.getLogger(), verbosity, None)
 
-    all_statuses = defaultdict(int)
-    summary = defaultdict(int)
-
-    all_results = []
-    for exp in get_experiments():
-        try:
-            results = await process_experiment(exp)
-            all_results.append(results)
-            passed = True
-            for item in results["results"]:
-                all_statuses[item.status] += 1
-                if item.status != "passed":
-                    passed = False
-
-            if passed:
-                summary["passed"] += 1
-        except Exception as e:
-            # Catch all exceptions so we can still print results table
-            # even if an experiment had a problem.
-            logger.error(f"exception: {e}")
-            full_trace = traceback.format_exc()
-            logger.error(f"exception: {full_trace}")
-
-    logger.info(f"=== All Results ===\n{json.dumps(unravel(all_results), indent=2, default=str)}")
-    not_passed = len(all_results) - summary["passed"]
-    logger.info(f"Passed: {summary['passed']}\nNot Passed: {not_passed}\nTotal: {len(all_results)}")
-    status_str = "\n".join([f"{key}: {value}" for key, value in all_statuses.items()])
-    logger.info(f"=== Statuses === \n{status_str}")
-
-    if not_passed:
-        logger.error("At least one check failed!")
+    analyze_exps(get_experiments, process_experiment)
 
 
 if __name__ == "__main__":

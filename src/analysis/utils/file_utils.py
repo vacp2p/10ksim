@@ -70,7 +70,7 @@ def extract_exps(
     for folder in folders:
         try:
             metadata_log_path = Path(folder) / "metadata.json"
-            logger.info(f"Events log path: {metadata_log_path}")
+            logger.info(f"Metadata path: {metadata_log_path}")
             with open(metadata_log_path, "r", encoding="utf-8") as f:
                 exp = json.load(f)
             if any(filter(exp) == False for filter in filters):

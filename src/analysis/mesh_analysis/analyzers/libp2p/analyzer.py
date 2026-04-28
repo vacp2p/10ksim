@@ -2,16 +2,18 @@
 import json
 import logging
 import traceback
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Self
 
 import seaborn as sns
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Project Imports
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.analysis.utils import path_utils
+from src.analysis.utils.log_utils import log_to_path
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -60,20 +62,29 @@ class AnalysisStep(BaseModel):
 
 class Analyzer(BaseModel):
     _analysis_steps: List[AnalysisStep] = []
-    data_puller: Optional[DataPuller] = None
+    data_puller: DataPuller = Field(default_factory=DataPuller)
     dump_analysis_dir: Optional[Path] = None
 
     def run(self) -> List[AnalysisResult]:
         self._set_up_paths()
-        results = []
-        for analysis in self._analysis_steps:
-            result = analysis.run()
-            if result.status in ["error", "failed"] and analysis.on_fail != "continue":
-                dump = json.dumps(result.model_dump(indent=False), indent=2)
-                raise ValueError(f"Analysis failed. {dump}")
-            results.append(result)
 
-        return results
+        try:
+            log_path = self.dump_analysis_dir / "analysis.log"
+            context = log_to_path(log_path)
+        except TypeError:
+            context = nullcontext()
+        with context:
+            logger.info(f"log_path: {log_path}")
+
+            results = []
+            for analysis in self._analysis_steps:
+                result = analysis.run()
+                if result.status in ["error", "failed"] and analysis.on_fail != "continue":
+                    dump = json.dumps(result.model_dump(indent=False), indent=2)
+                    raise ValueError(f"Analysis failed. {dump}")
+                results.append(result)
+
+            return results
 
     def _with_parameterized_check(
         self,
@@ -107,7 +118,7 @@ class Analyzer(BaseModel):
             result = path_utils.prepare_path_for_folder(self._dump_analysis_path)
             if result.is_err():
                 logger.error(result.err_value)
-                exit(1)
+                raise ValueError(f"{result.err_value}")
         except Exception as e:
             full_trace = traceback.format_exc()
             logger.error(f"Failure setting up paths. exception: {e}\n{full_trace}")

@@ -1,7 +1,7 @@
 import logging
 import traceback
 from pathlib import Path
-from typing import List, Optional, Self, Tuple
+from typing import Iterable, List, Optional, Self
 
 import pandas as pd
 import seaborn as sns
@@ -18,11 +18,22 @@ logger = logging.getLogger(__name__)
 sns.set_theme()
 
 
+class Node(BaseModel):
+    name: str
+    id: Optional[str]
+
+
+class MissingMessages(BaseModel):
+    shard: Optional[NonNegativeInt]
+    messages: List[str]
+    nodes: List[Node]
+
+
 class MessageReliabilityResult(BaseModel):
     num_unique_messages: NonNegativeInt
     num_peers: NonNegativeInt
     all_in_same_shard: bool
-    nodes_missing_messages: List[str]
+    missing_messages: List[MissingMessages]
 
 
 class StatefulSetNodes(BaseModel):
@@ -42,7 +53,7 @@ class Nimlibp2pAnalyzer(Analyzer):
 
     The class ensures that every Nimlibp2p node received every expected message. It facilitates both local
     and online analysis of message reliability, merging and processing dataframes, and dumping results.
-    In cases of missed messages, the class logs details and optionally dumps relevant node logs. It
+    In cases of missing messages, the class logs details and optionally dumps relevant node logs. It
     supports parallel processing to improve analysis efficiency.
 
     """
@@ -210,13 +221,16 @@ class Nimlibp2pAnalyzer(Analyzer):
             self._dump_analysis_path,
         )
 
-        if reliability_results.nodes_missing_messages:
+        if reliability_results.missing_messages:
             logger.info("Dumping logs from nodes with issues")
-            self._dump_logs(reliability_results.nodes_missing_messages)
+            pod_names = {
+                node.name for msg in reliability_results.missing_messages for node in msg.nodes
+            }
+            self._dump_logs(pod_names)
 
         return reliability_results
 
-    def _dump_logs(self, nodes_with_issues: List[str]):
+    def _dump_logs(self, nodes_with_issues: Iterable[str]):
         try:
             self.data_puller._dump_logs(nodes_with_issues, self.dump_analysis_dir)
         except Exception as e:
@@ -310,7 +324,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         unique_messages = len(received_df.index.get_level_values(self.msg_hash_key).unique())
         logger.info(f"Nº of unique messages: {unique_messages}")
 
-        peers_missed_messages, missed_messages = self._get_peers_missed_messages(
+        missing_messages = self._get_peers_missing_messages(
             shard_identifier, msg_identifier, peer_identifier, received_df
         )
 
@@ -327,10 +341,8 @@ class Nimlibp2pAnalyzer(Analyzer):
                 logger.warning(f"These {self.msg_hash_key} values appear in multiple shards:")
                 logger.warning(shard_violations)
 
-        if peers_missed_messages:
-            msg_sent_data = self._check_if_msg_has_been_sent(
-                peers_missed_messages, missed_messages, sent_df, peer_identifier
-            )
+        for missing in missing_messages:
+            msg_sent_data = self._check_if_msg_has_been_sent(missing, sent_df, peer_identifier)
             for data in msg_sent_data:
                 peer_id = data[0].split("*")[-1]
                 logger.info(f"Peer {peer_id} message information dumped in {issue_dump_location}")
@@ -347,42 +359,38 @@ class Nimlibp2pAnalyzer(Analyzer):
             all_in_same_shard=not has_shard_violations,
             num_unique_messages=unique_messages,
             num_peers=num_peers,
-            nodes_missing_messages=peers_missed_messages,
+            missing_messages=missing_messages,
         )
 
-    def _get_peers_missed_messages(
+    def _get_peers_missing_messages(
         self,
         shard_identifier: Optional[str],
         msg_identifier: str,
         peer_identifier: str,
         df: pd.DataFrame,
-    ) -> Tuple[List, List]:
-
+    ) -> List[MissingMessages]:
         if shard_identifier is not None:
-            all_peers_missed_messages = []
-            all_missing_messages = []
+            all_missing = []
             for shard, df_shard in df.groupby(level=shard_identifier):
-                peers, missing = self._get_peers_missed_messages_for_shard(
+                missing = self._get_peers_missing_messages_for_shard(
                     shard, msg_identifier, peer_identifier, df_shard
                 )
-                all_peers_missed_messages.extend(peers)
-                all_missing_messages.extend(missing)
-            return all_peers_missed_messages, all_missing_messages
+                all_missing.append(missing)
+            return all_missing
         else:
-            return self._get_peers_missed_messages_for_shard(
-                shard_identifier, msg_identifier, peer_identifier, df
-            )
+            return [
+                self._get_peers_missing_messages_for_shard(
+                    shard_identifier, msg_identifier, peer_identifier, df
+                )
+            ]
 
-    def _get_peers_missed_messages_for_shard(
+    def _get_peers_missing_messages_for_shard(
         self,
         shard: Optional[str],
         msg_identifier: str,
         peer_identifier: str,
         df: pd.DataFrame,
-    ) -> Tuple[List, List]:
-        all_peers_missed_messages = []
-        all_missing_messages = []
-
+    ) -> Optional[MissingMessages]:
         unique_messages = len(df.index.get_level_values(msg_identifier).unique())
         grouped = df.groupby([msg_identifier, peer_identifier]).size().reset_index(name="count")
         pivot_df = grouped.pivot_table(
@@ -392,22 +400,31 @@ class Nimlibp2pAnalyzer(Analyzer):
             fill_value=0,
         )
 
-        peers_missed_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
+        peers_missing_msg = pivot_df.columns[pivot_df.sum() != unique_messages].to_list()
         missing_messages = pivot_df.index[pivot_df.eq(0).any(axis=1)].tolist()
 
-        if not peers_missed_msg:
+        if not peers_missing_msg:
             logger.info(f"All peers received all messages for shard {shard}")
-        else:
-            logger.warning(f"Nodes missed messages on shard {shard}")
-            logger.warning(f"Nodes who missed messages: {peers_missed_msg}")
-            logger.warning(f"Missing messages: {missing_messages}")
+            return None
 
-            all_peers_missed_messages.extend(peers_missed_msg)
-            all_missing_messages.extend(missing_messages)
+        logger.warning(f"Nodes missed messages on shard {shard}")
+        logger.warning(f"Nodes who missed messages: {peers_missing_msg}")
+        logger.warning(f"Missing messages: {missing_messages}")
 
-            self._log_received_messages(pivot_df, unique_messages, df, peer_identifier)
-
-        return all_peers_missed_messages, all_missing_messages
+        column_sums = pivot_df.sum()
+        filtered_sums = column_sums[column_sums != unique_messages]
+        nodes: List[Node] = []
+        for item in list(filtered_sums.items()):
+            pod, count = item
+            missing_hashes = pivot_df[pivot_df[pod] == 0].index.tolist()
+            missing_hashes.extend(pivot_df[pivot_df[pod].isna()].index.tolist())
+            pod_name = df[df[peer_identifier] == item[0]]["kubernetes.pod_name"].iloc[0]
+            node_id = None if peer_identifier == "kubernetes.pod_name" else item[0]
+            nodes.append(Node(name=pod_name, id=node_id))
+            logger.warning(
+                f"Node {item[0]} ({pod_name}) {item[1]}/{unique_messages}: {missing_hashes}"
+            )
+        return MissingMessages(shard=shard, messages=missing_messages, nodes=nodes)
 
     def _log_received_messages(
         self,
@@ -415,37 +432,42 @@ class Nimlibp2pAnalyzer(Analyzer):
         unique_messages: int,
         complete_df: pd.DataFrame,
         peer_identifier: str,
-    ):
+    ) -> List[Node]:
+        """:return: List of pod names."""
         column_sums = df.sum()
         filtered_sums = column_sums[column_sums != unique_messages]
-        result_list = list(filtered_sums.items())
-        for result in result_list:
-            pod_name, count = result
+        results: List[Node] = []
+        for item in list(filtered_sums.items()):
+            pod_name, count = item
             missing_hashes = df[df[pod_name] == 0].index.tolist()
             missing_hashes.extend(df[df[pod_name].isna()].index.tolist())
-            pod_name = complete_df[complete_df[peer_identifier] == result[0]][
+            pod_name = complete_df[complete_df[peer_identifier] == item[0]][
                 "kubernetes.pod_name"
             ].iloc[0]
+            node_id = None if peer_identifier == "kubernetes.pod_name" else item[0]
+            results.append(Node(name=pod_name, id=node_id))
             logger.warning(
-                f"Node {result[0]} ({pod_name}) {result[1]}/{unique_messages}: {missing_hashes}"
+                f"Node {item[0]} ({pod_name}) {item[1]}/{unique_messages}: {missing_hashes}"
             )
+
+        return results
 
     def _check_if_msg_has_been_sent(
         self,
-        peers: List,
-        missed_messages: List,
+        missing: MissingMessages,
         sent_df: pd.DataFrame,
         peer_identifier: str,
     ) -> List:
         messages_sent_to_peer = []
-        for peer in peers:
+        for node in missing.nodes:
+            peer = node.id or node.name
             try:
-                filtered_df = sent_df.loc[(slice(None), missed_messages), :]
+                filtered_df = sent_df.loc[(slice(None), missing.messages), :]
                 filtered_df = filtered_df[filtered_df[peer_identifier] == peer]
                 messages_sent_to_peer.append((peer, filtered_df))
             except KeyError as _:
                 logger.warning(
-                    f"Message {missed_messages} has not been sent to {peer} by any other node."
+                    f"Message {missing.messages} has not been sent to {peer} by any other node on shard {missing.shard}."
                 )
 
         return messages_sent_to_peer

@@ -1,7 +1,7 @@
 # Python Imports
 import logging
 from pathlib import Path
-from typing import ClassVar, Dict, List, Literal, Optional, Self, Type
+from typing import ClassVar, Dict, Iterable, List, Literal, Optional, Self, Type
 
 import pandas as pd
 import seaborn as sns
@@ -50,36 +50,24 @@ class DataPuller(BaseModel):
         self._source_type = source
         return self
 
-    def _make_stack_new(self, tracer: MessageTracer) -> StackAnalysis:
+    def _make_stack(self, tracer: MessageTracer) -> StackAnalysis:
         if self._source_type != "victoria":
-            raise NotImplementedError(f"Cannot build stakc for type: `{self._source_type}`")
-        queries = [pattern.query for pattern in tracer.patterns]
-        # TODO: Change to only pass tracer and make VictoriaReaderBuilder use tracer.pattern queries itself.
+            raise NotImplementedError(f"Cannot build stack for type: `{self._source_type}`")
         reader_builder = VictoriaReaderBuilder(
             tracer=tracer,
-            queries=queries,
             kwargs=self.kwargs,
             extra_fields=self.kwargs["extra_fields"],
         )
         return VaclabStackAnalysis(reader_builder)
 
-    def _make_stack(self, tracer: MessageTracer, queries) -> StackAnalysis:
-        _reader_builder_cls = VictoriaReaderBuilder
-        _stack_cls = VaclabStackAnalysis
-        if isinstance(queries, str):
-            queries = [queries]
-        reader_builder = _reader_builder_cls(tracer=tracer, queries=queries, kwargs=self.kwargs)
-        return _stack_cls(reader_builder)
-
     def get_all_node_dataframes(
         self,
         tracer: MessageTracer,
-        # TODO: put in DataPuller as var, but exclude from ss_check (has pull settings that clash with that check)
         stateful_sets: List[str],
         nodes_per_ss: List[NonNegativeInt],
     ) -> List[Dict[str, List[pd.DataFrame]]]:
         if self._source_type == "victoria":
-            stack = self._make_stack_new(tracer)
+            stack = self._make_stack(tracer)
             return stack.get_all_node_dataframes(stateful_sets, nodes_per_ss, self._jobs)
         elif self._source_type == "local":
             reader = FileReader(self._local_folder, tracer, self._jobs)
@@ -87,18 +75,16 @@ class DataPuller(BaseModel):
             return dfs
         raise NotImplementedError()
 
-    def get_pod_logs(
-        self, tracer, pod_identifier: str, query: str, *, order_by: Optional[str] = None
-    ):
+    def get_pod_logs(self, tracer, pod_identifier: str, *, order_by: Optional[str] = None):
         if self._source_type == "victoria":
-            stack = self._make_stack(tracer, query)
+            stack = self._make_stack(tracer)
             return stack.get_pod_logs(pod_identifier, order_by=order_by)
         raise NotImplementedError()
 
     def get_number_nodes(self, stateful_sets: List[str]) -> List[int]:
         if self._source_type == "victoria":
             tracer = MessageTracer().with_wildcard_pattern()
-            stack = self._make_stack(tracer, "*")
+            stack = self._make_stack(tracer)
             return stack.get_number_nodes(stateful_sets)
         elif self._source_type == "local":
             tracer = MessageTracer().with_wildcard_pattern()
@@ -107,7 +93,7 @@ class DataPuller(BaseModel):
             return stack.get_number_nodes(stateful_sets)
         raise NotImplementedError()
 
-    def _dump_logs(self, nodes: List[str], dump_analysis_dir: Path):
+    def _dump_logs(self, nodes: Iterable[str], dump_analysis_dir: Path):
         tracer = MessageTracer().with_wildcard_pattern()
-        stack = self._make_stack_new(tracer)
+        stack = self._make_stack(tracer)
         stack.dump_node_logs(8, nodes, dump_analysis_dir)

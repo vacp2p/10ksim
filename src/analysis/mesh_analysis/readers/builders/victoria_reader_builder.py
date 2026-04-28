@@ -4,6 +4,7 @@ from typing import List, Optional, Self
 from pydantic import BaseModel, Field
 
 # Project Imports
+from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.victoria_reader import VictoriaReader
 
 
@@ -80,8 +81,7 @@ class VictoriaQueryBuilder(BaseModel):
 
 class VictoriaReaderBuilder(BaseModel):
     kwargs: dict
-    tracer: object
-    queries: List[str] = Field(default_factory=list)
+    tracer: MessageTracer
     extra_fields: Optional[List[str]] = None
 
     def _query_builder(
@@ -94,7 +94,7 @@ class VictoriaReaderBuilder(BaseModel):
             query_builder.with_unique_by(uniq_by)
         if order_by:
             query_builder.with_order_by(order_by)
-        for query in self.queries:
+        for query in [pattern.query for pattern in self.tracer.patterns]:
             query_builder.with_query(query)
         return query_builder
 
@@ -111,27 +111,26 @@ class VictoriaReaderBuilder(BaseModel):
         query = query_builder.build_query_config()
         return VictoriaReader(self.tracer, query, extra_fields=self.extra_fields)
 
-    # TODO: Rename this
-    def build_with_queries(
+    def build_with_statefulset(
         self,
         stateful_set_name: str,
         node_index: Optional[int] = None,
         uniq_by: Optional[str] = None,
         sort_by: Optional[str] = None,
     ) -> VictoriaReader:
-        query_builder = self._query_builder(uniq_by=uniq_by, order_by=sort_by).with_stateful_set(
-            stateful_set_name, node_index
+        query_config = (
+            self._query_builder(uniq_by=uniq_by, order_by=sort_by)
+            .with_stateful_set(stateful_set_name, node_index)
+            .build_query_config()
         )
-        return VictoriaReader(
-            self.tracer, query_builder.build_query_config(), extra_fields=self.extra_fields
-        )
+        return VictoriaReader(self.tracer, query_config, extra_fields=self.extra_fields)
 
-    def build_with_single_query(
+    def build_with_pod_name(
         self, pod_name: str, uniq_by: Optional[str] = None, sort_by: Optional[str] = None
     ) -> VictoriaReader:
-        query_builder = self._query_builder(uniq_by=uniq_by, order_by=sort_by).with_pod_identifier(
-            pod_name
+        query_params = (
+            self._query_builder(uniq_by=uniq_by, order_by=sort_by)
+            .with_pod_identifier(pod_name)
+            .build_query_config()
         )
-        return VictoriaReader(
-            self.tracer, query_builder.build_query_config(), extra_fields=self.extra_fields
-        )
+        return VictoriaReader(self.tracer, query_params, extra_fields=self.extra_fields)

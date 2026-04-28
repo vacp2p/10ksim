@@ -57,12 +57,12 @@ class VaclabStackAnalysis(StackAnalysis):
     def _extract_dataframe_single_node(
         self, statefulset_name: str, node_index: int
     ) -> Tuple[str, int, Dict[str, List[pd.DataFrame]]]:
-        reader = self._reader_builder.build_with_queries(statefulset_name, node_index)
+        reader = self._reader_builder.build_with_statefulset(statefulset_name, node_index)
         data = reader.get_dataframes()
         return statefulset_name, node_index, data
 
     def _dump_logs_for_single_node(self, node: str, dump_path: Path) -> Result[Path, None]:
-        reader = self._reader_builder.build_with_single_query(node, sort_by="(_time)")
+        reader = self._reader_builder.build_with_pod_name(node, sort_by="(_time)")
         data = reader.make_queries()
 
         log_name_path = dump_path / f"{node}.log"
@@ -70,7 +70,7 @@ class VaclabStackAnalysis(StackAnalysis):
         if result.is_ok():
             with open(log_name_path, "w") as file:
                 for element in data[0][0]:  # We will always have 1 pattern group with 1 pattern
-                    file.write(f"{element}\n")
+                    file.write(f"{element[0]}\n")
 
             return Ok(log_name_path)
         else:
@@ -79,7 +79,7 @@ class VaclabStackAnalysis(StackAnalysis):
     def get_number_nodes(self, stateful_sets: List[str]) -> List[int]:
         num_nodes_per_stateful_set = []
         for stateful_set_prefix in stateful_sets:
-            reader = self._reader_builder.build_with_single_query(
+            reader = self._reader_builder.build_with_pod_name(
                 stateful_set_prefix, uniq_by="|uniq by (kubernetes.pod_name)"
             )
             result = reader.multiline_query_info()
@@ -87,7 +87,7 @@ class VaclabStackAnalysis(StackAnalysis):
                 num_nodes_per_stateful_set.append(len(list(result.ok_value)))
             else:
                 logger.error(result.err_value)
-                exit(1)
+                raise ValueError(result.err_value)
 
         return num_nodes_per_stateful_set
 

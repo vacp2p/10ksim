@@ -25,16 +25,16 @@ class Nimlibp2pScrapeBuilder(BaseModel):
         self.dump_location = folder
         return self
 
-    def with_exp(self, exp: dict, *, extract_name: Optional[bool] = True) -> Self:
+    def with_metadata(self, metadata: dict, *, extract_name: Optional[bool] = True) -> Self:
         if extract_name:
-            self.name = exp["params"]["muxer"]
-        self.interval.start = exp["results"]["stable"]["start"]
-        self.interval.end = exp["results"]["stable"]["end"]
-        self.exp = exp
+            self.name = metadata["experiment"]["dump"]["config"]["muxer"]
+        self.interval.start = metadata["results"]["stable"]["start"]
+        self.interval.end = metadata["results"]["stable"]["end"]
+        self.exp = metadata
         if not self.namespace:
-            self.namespace = exp["stack"]["namespace"]
+            self.namespace = metadata["stack"]["namespace"]
         else:
-            new_namespace = exp["stack"]["namespace"]
+            new_namespace = metadata["stack"]["namespace"]
             assert (
                 self.namespace == new_namespace
             ), f"Multiple namespace in same scrape config: previous: `{self.namespace}` current: `{new_namespace}`"

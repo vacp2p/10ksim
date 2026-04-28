@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Dict, List
 
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import ticker
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.analysis.data.data_file_handler import DataFileHandler
 from src.analysis.data.data_handler import DataHandler
@@ -19,6 +20,7 @@ sns.set_theme()
 
 class MetricsPlotter(BaseModel):
     configs: List[PlotConfig]
+    out_folder: Path = Field(default_factory=lambda: Path("."))
 
     def create_plots(self):
         for plot_config in self.configs:
@@ -59,8 +61,8 @@ class MetricsPlotter(BaseModel):
 
     def _save_plot(self, plot_name: str):
         plt.tight_layout()
-        plt.savefig(plot_name)
-        # plt.show()
+        self.out_folder.mkdir(parents=True, exist_ok=True)
+        plt.savefig(self.out_folder / plot_name)
 
     def _add_subplot_df_to_axs(
         self, df: pd.DataFrame, index: int, axs: np.ndarray, plot_specs: Dict

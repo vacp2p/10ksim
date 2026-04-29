@@ -52,7 +52,7 @@ class PodSpecConfig(BaseModel):
     def add_init_container(
         self, init_container: ContainerConfig | V1Container | dict, *, overwrite: bool = False
     ):
-        from core.configs.helpers import convert_to_container_config
+        from src.deployments.core.configs.helpers import convert_to_container_config
 
         container_config = convert_to_container_config(init_container)
         if self.init_containers is None:
@@ -73,7 +73,7 @@ class PodSpecConfig(BaseModel):
         order: Literal["prepend", "append"] = "append",
         overwrite: bool = False,
     ):
-        from core.configs.helpers import convert_to_container_config
+        from src.deployments.core.configs.helpers import convert_to_container_config
 
         container_config = convert_to_container_config(container)
 

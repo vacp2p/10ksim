@@ -1,8 +1,9 @@
 # Python Imports
 from copy import deepcopy
-from typing import Dict, List, Literal, Tuple, Type, TypeVar, get_args
+from typing import Dict, List, Literal, Tuple, Type, TypeVar, Union, get_args
 
-from kubernetes.client import V1Container
+from kubernetes.client import V1Container, V1SecurityContext, V1Capabilities
+from pydantic import NonNegativeInt
 
 # Project Imports
 from src.deployments.core.configs.command import CommandConfig
@@ -142,7 +143,9 @@ def dict_to_container_config(container_dict: dict) -> ContainerConfig:
     return v1container_to_container_config(v1container)
 
 
-def convert_to_container_config(container: ContainerConfig | V1Container | dict) -> ContainerConfig:
+def convert_to_container_config(
+    container: ContainerConfig | V1Container | dict,
+) -> ContainerConfig:
     if isinstance(container, ContainerConfig):
         container_config = container
     elif isinstance(container, V1Container):
@@ -152,3 +155,18 @@ def convert_to_container_config(container: ContainerConfig | V1Container | dict)
     else:
         raise TypeError("Unsupported container type")
     return container_config
+
+
+def init_container_delay(
+    delay: Union[str, NonNegativeInt],
+    jitter: Union[str, NonNegativeInt],
+):
+    return V1Container(
+        name="slowyourroll",
+        image="soutullostatus/tc-container:1",
+        image_pull_policy="IfNotPresent",
+        security_context=V1SecurityContext(capabilities=V1Capabilities(add=["NET_ADMIN"])),
+        command=[
+            f"tc qdisc add dev eth0 root netem delay {str(delay)}ms {str(jitter)}ms distribution normal",
+        ],
+    )

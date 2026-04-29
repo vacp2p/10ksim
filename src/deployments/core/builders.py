@@ -1,4 +1,5 @@
-from typing import List, Optional, Self, Tuple
+import logging
+from typing import List, Optional, Self, Tuple, Union
 
 from kubernetes.client import (
     V1Container,
@@ -10,11 +11,11 @@ from kubernetes.client import (
     V1ResourceRequirements,
     V1StatefulSet,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
-from src.deployments.core.configs.helpers import with_image_for_container
+from src.deployments.core.configs.helpers import init_container_delay, with_image_for_container
 from src.deployments.core.configs.pod import (
     PodConfig,
     PodSpecConfig,
@@ -24,6 +25,8 @@ from src.deployments.core.configs.pod import (
     build_pod_template_spec,
 )
 from src.deployments.core.configs.statefulset import StatefulSetConfig, build_stateful_set
+
+logger = logging.getLogger(__name__)
 
 
 class StatefulSetBuilder(BaseModel):
@@ -49,6 +52,19 @@ class StatefulSetBuilder(BaseModel):
         if self.config.volume_claim_templates is None:
             self.config.volume_claim_templates = []
         self.config.volume_claim_templates.append(pvc)
+        return self
+
+    def with_network_delay(
+        self,
+        delay: Union[str, NonNegativeInt],
+        jitter: Union[str, NonNegativeInt],
+        *,
+        overwrite: bool = False,
+    ) -> Self:
+        delay_container = init_container_delay(delay, jitter)
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
+            delay_container, overwrite=overwrite
+        )
         return self
 
     def build(self) -> V1StatefulSet:

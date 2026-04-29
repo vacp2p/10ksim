@@ -18,15 +18,16 @@ from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Protocol, Tuple, Union
 
 import dateparser
 import ruamel.yaml
 from kubernetes import client, utils
-from kubernetes.client import ApiClient, V1Probe
+from kubernetes.client import ApiClient, ApiException, V1ObjectMeta, V1Pod, V1Probe
 from kubernetes.client.models import V1Node
 from kubernetes.client.rest import ApiException
 from kubernetes.utils import FailToCreateError
+from pydantic import NonNegativeInt
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
@@ -160,7 +161,7 @@ def _extract_kind_and_name(kube_yaml: dict) -> Tuple[str, str]:
 def _kind_api_map(operation: str) -> Dict[str, Tuple[str, str]]:
     kind_map = {
         "Deployment": ("apps", "deployment"),
-        "StatefulSet": ("apps", "statefulset"),
+        "StatefulSet": ("apps", "stateful_set"),
         "DaemonSet": ("apps", "daemonset"),
         "ReplicaSet": ("apps", "replicaset"),
         "Job": ("batch", "job"),
@@ -228,7 +229,12 @@ def _kubectl_replace(kube_yaml: dict, namespace: str):
 
 
 def kubectl_apply(
-    kube_yaml: yaml.YAMLObject, namespace: str, *, config_file=None, dry_run=False, exist_ok=False
+    kube_yaml: yaml.YAMLObject,
+    namespace: str,
+    *,
+    config_file=None,
+    dry_run=False,
+    exist_ok=False,
 ):
     """Attempts to apply a yaml, similar to the command `kubectl apply`.
 
@@ -389,7 +395,9 @@ def cleanup_resources(
             api_client
         ).delete_namespaced_replication_controller(name, namespace),
         "Job": lambda name: client.BatchV1Api(api_client).delete_namespaced_job(
-            name, namespace, body=client.V1DeleteOptions(propagation_policy="Foreground")
+            name,
+            namespace,
+            body=client.V1DeleteOptions(propagation_policy="Foreground"),
         ),
         "CronJob": lambda name: client.BatchV1beta1Api(api_client).delete_namespaced_cron_job(
             name, namespace
@@ -530,23 +538,33 @@ def get_cleanup(
     return cleanup
 
 
+class K8sObject(Protocol):
+    metadata: V1ObjectMeta
+    kind: str
+
+
 def poll_rollout_status(
-    kind: str,
-    name: str,
-    namespace: str,
+    deployment: dict | K8sObject,
     api_client,
-    # TODO [extend condition checks]: union lambda
-    pod_status_condition: Optional[Tuple[str, str]] = None,
-    # TODO [extend condition checks]: lambda
-) -> bool:
+    *,
+    pod_status_condition: Optional[Tuple[str, str] | Callable[[V1Pod], bool]] = None,
+) -> Tuple[int, int]:
     """
     Poll the rollout status for the given resource.
 
-    Returns: True if the resource is ready, False otherwise.
+    :pod_ready_condition: Logic for checking if a pod is ready.
+    If given a Callable checks `pod_ready_condition(pod : V1Pod)`.
+    If given a Tuple, checks the `pod.status.conditions` for `key == value`.
+    If None and  `kind == StatefulSet` checks `available_replicas`.
+    If None and `kind == Pod` uses `("Ready", "True")`.
 
-    For pod, returns True if a pod status can be found such that
-    kind == pod_ready_condition[0] and status == pod_ready_condition[1].
+    For deployments/statefulsets/daemonsets: returns (available_replicas, desired_replicas)
+    For pods: returns (1, 1) if condition matches, (0, 1) otherwise.
     """
+    deployment = k8s_obj_to_dict(deployment)
+    namespace = deployment["metadata"]["namespace"]
+    name = deployment["metadata"]["name"]
+    kind = deployment["kind"]
 
     kind = kind.lower()
 
@@ -554,52 +572,32 @@ def poll_rollout_status(
         obj = client.AppsV1Api(api_client).read_namespaced_deployment(name, namespace)
         desired = obj.spec.replicas or 0
         available = obj.status.available_replicas or 0
-        return available == desired
+        return available, desired
 
     elif kind == "statefulset":
-        obj = client.AppsV1Api(api_client).read_namespaced_stateful_set(name, namespace)
-        desired = obj.spec.replicas or 0
-        available = getattr(obj.status, "available_replicas", None)
-        if available is None:
-            available = getattr(obj.status, "ready_replicas", 0)
-        return available == desired
+        if pod_status_condition is None:
+            # By default, just check if pods are ready according to statefulset's available_replicas.
+            obj = client.AppsV1Api(api_client).read_namespaced_stateful_set(name, namespace)
+            desired = obj.spec.replicas or 0
+            available = getattr(obj.status, "available_replicas", None)
+            if available is None:
+                available = getattr(obj.status, "ready_replicas", 0)
+            return available, desired
+        pods = get_pods_for_statefulset(name, namespace, api_client)
+        available = [check_pod_condition(pod, pod_status_condition) for pod in pods]
+        return (sum(available), len(pods))
 
     elif kind == "daemonset":
         obj = client.AppsV1Api(api_client).read_namespaced_daemon_set(name, namespace)
         desired = obj.status.desired_number_scheduled or 0
         available = obj.status.number_available or 0
-        return available == desired
-
-    # TODO [extend condition checks]: example lambda:
-    # def container_cond(status):
-    #     try:
-    #         if status.name == "publisher-container" and status.state.terminated.reason == "Completed":
-    #             return True
-    #     except AttributeError:
-    #         pass
-    #     return False
+        return available, desired
 
     elif kind == "pod":
-        if pod_status_condition is None:
-            # TODO [extend condition checks]: add to comment: or container
-            # status check.
-            raise ValueError("Polling a pod requires a status condition.")
-        key, value = pod_status_condition
         v1 = client.CoreV1Api(api_client)
         pod = v1.read_namespaced_pod(name, namespace)
-
-        # for status in pod.status.container_statuses:
-        #     # TODO [extend condition checks]: use lambda here
-        #     container_cond(status)
-
-        conditions = pod.status.conditions or []
-        for cond in conditions:
-            # TODO [extend condition checks]: use lambda here
-            if cond.type == key:
-                if cond.status == value:
-                    return True
-
-        return False
+        available = check_pod_condition(pod, pod_status_condition)
+        return int(available), 1
 
     elif kind == "service":
         # Services don't have a rollout status, they are immediately available
@@ -609,25 +607,40 @@ def poll_rollout_status(
         raise ValueError(f"Unsupported kind: `{kind}`")
 
 
-# TODO: Make kind, name, namespace optional and derive from deployment.yaml.
 async def wait_for_rollout(
-    kind: str,
-    name: str,
-    namespace: str,
+    deployment: dict | K8sObject,
+    api_client,
+    *,
     timeout: int = 300,
-    api_client=None,
-    pod_ready_condition: Optional[Tuple[str, str]] = None,
     polling_interval: int = 8,
+    pod_ready_condition: Optional[Tuple[str, str] | Callable[[V1Pod], bool]] = None,
+    condition: Optional[Callable[[NonNegativeInt, NonNegativeInt], bool]] = None,
 ):
     """
     Wait for a rollout of a Kubernetes workload, or a pod ready condition.
 
     :timeout: Timeout in seconds.
 
-    :pod_ready_condition: If set, wait for pod's Ready condition to match ('True' or 'False').
+    :condition: Used to determine if the rollout is done.
+    `condition(ready, total) -> bool`, should return `True` for ready and `False` for not ready.
+    If None, uses `ready == total` by default.
+
+    :pod_ready_condition: Logic for checking if a pod is ready.
+    If `Callable`, checks `pod_ready_condition(pod : V1Pod)`.
+    If `Tuple`, checks the `pod.status.conditions` for `key == value`.
+    If `None` and  `kind == StatefulSet`, checks `available_replicas`.
+    If `None` and `kind == Pod`, uses `("Ready", "True")`.
 
     Raises TimeoutError if timeout is exceeded.
     """
+    deployment = k8s_obj_to_dict(deployment)
+    namespace = deployment["metadata"]["namespace"]
+    name = deployment["metadata"]["name"]
+    kind = deployment["kind"]
+
+    if condition is None:
+        condition = lambda ready, total: ready == total
+
     start_time = time.time()
     target_desc = (
         f"pod `{name}` Ready=`{pod_ready_condition}`"
@@ -638,10 +651,8 @@ async def wait_for_rollout(
 
     while True:
         try:
-            ready = poll_rollout_status(
-                kind,
-                name,
-                namespace,
+            ready, total = poll_rollout_status(
+                deployment,
                 api_client,
                 pod_status_condition=pod_ready_condition,
             )
@@ -650,17 +661,53 @@ async def wait_for_rollout(
             await asyncio.sleep(polling_interval)
             continue
 
-        logger.info(f"Waiting: {target_desc} ready=`{ready}`...")
+        logger.info(f"Waiting: {target_desc} ready=`{ready}` total=`{total}`...")
 
-        if ready:
+        if condition(ready, total):
             logger.info(f"{target_desc} is ready.")
-            return
+            return ready, total
 
         elapsed = time.time() - start_time
         if elapsed > timeout:
             raise TimeoutError(f"Timeout waiting for: `{target_desc}`.")
 
         await asyncio.sleep(polling_interval)
+
+
+def get_pods_for_statefulset(name: str, namespace: str, api_client=None):
+    api_client = api_client or client.ApiClient()
+    apps_api = client.AppsV1Api(api_client)
+    core_api = client.CoreV1Api(api_client)
+
+    sts = apps_api.read_namespaced_stateful_set(name=name, namespace=namespace)
+
+    selector = []
+    if sts.spec.selector and sts.spec.selector.match_labels:
+        selector.extend(f"{key}={value}" for key, value in sts.spec.selector.match_labels.items())
+
+    label_selector = ",".join(selector)
+
+    return core_api.list_namespaced_pod(
+        namespace=namespace,
+        label_selector=label_selector,
+    ).items
+
+
+def check_pod_condition(
+    pod: List[V1Pod], condition: Optional[Tuple[str, str] | Callable[[V1Pod], bool]] = None
+):
+    if condition is None:
+        condition = ("Ready", "True")
+
+    if isinstance(condition, tuple):
+        conditions = pod.status.conditions or []
+        key, value = condition
+        if any(cond.type == key and cond.status == value for cond in conditions):
+            return 1
+        else:
+            return 0
+    else:
+        return condition(pod)
 
 
 def poll_namespace_has_objects(
@@ -790,7 +837,7 @@ def dict_to_v1probe(probe_dict: dict) -> V1Probe:
     return dict_to_k8s_object(probe_dict, "V1Probe")
 
 
-def k8s_obj_to_dict(deployment: K8sModelStr) -> dict:
+def k8s_obj_to_dict(deployment: Any) -> dict:
     api_client = client.ApiClient()
     return api_client.sanitize_for_serialization(deployment)
 

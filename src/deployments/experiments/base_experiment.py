@@ -228,12 +228,10 @@ class BaseExperiment(ABC, BaseModel):
         if not dry_run:
             if wait_for_ready:
                 await wait_for_rollout(
-                    yaml_obj["kind"],
-                    yaml_obj["metadata"]["name"],
-                    namespace,
-                    timeout,
+                    yaml_obj,
                     api_client,
-                    ("Ready", "True"),
+                    timeout=timeout,
+                    pod_ready_condition=("Ready", "True"),
                 )
         self.log_event({"phase": "finished", **deployment_metadata})
 

@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 @patch("src.metrics.scrape_utils.get_query_data")
 class TestScrapper(unittest.TestCase):
-
     def setUp(self):
         self.current_directory = os.path.dirname(os.path.abspath(__file__))
 

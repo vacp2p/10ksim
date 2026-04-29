@@ -4,7 +4,6 @@ from src.analysis.metrics.scrape_utils import create_promql
 
 
 class TestScrapeUtils(unittest.TestCase):
-
     def test_create_promql(self):
         address = "0.0.0.0:9090/api/"
         query = "bandwidth"

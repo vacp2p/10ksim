@@ -147,7 +147,6 @@ class NimMixNodes(BaseExperiment, BaseModel):
     def _build_all(
         self, workdir: str, cli_values: yaml.YAMLObject, delay: Optional[str]
     ) -> Tuple[yaml.YAMLObject, PositiveInt]:
-
         num_gossip = dict_get(cli_values, "nimlibp2p.nodes.numGossip", sep=".")
         num_mix_nodes = dict_get(cli_values, "nimlibp2p.nodes.numMix", sep=".")
         total_nodes = num_gossip + num_mix_nodes

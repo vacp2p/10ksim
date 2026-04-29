@@ -326,7 +326,9 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Service": [],
     }
     types = (
-        types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job", "Service"]
+        types
+        if types
+        else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job", "Service"]
     )
     for yaml in yamls:
         try:

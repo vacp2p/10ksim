@@ -10,7 +10,6 @@ from src.analysis.utils import path_utils as path
 
 
 class TestPathUtils(unittest.TestCase):
-
     def test_prepare_path(self):
         test_path = "test_folder/test_file"
         result_path = Path(test_path)

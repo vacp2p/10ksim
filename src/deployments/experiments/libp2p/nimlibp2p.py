@@ -1,11 +1,9 @@
 import asyncio
 import logging
-import os
 import random
 import traceback
 from argparse import Namespace
 from contextlib import ExitStack
-from pathlib import Path
 from typing import Optional
 
 from kubernetes.client import ApiClient, V1StatefulSet

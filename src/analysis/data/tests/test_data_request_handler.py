@@ -8,7 +8,6 @@ from src.data.data_request_handler import DataRequestHandler
 
 
 class TestDataRequestHandler(unittest.TestCase):
-
     def test_create_dataframe_from_request(self):
         raw_data = {
             "data": {

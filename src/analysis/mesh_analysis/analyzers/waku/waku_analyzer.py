@@ -19,7 +19,6 @@ sns.set_theme()
 
 
 class WakuAnalyzer(Nimlibp2pAnalyzer):
-
     msg_hash_key: str = "msg_hash"
 
     def with_filter_check(self, *, on_fail: OnFail = "continue") -> Self:

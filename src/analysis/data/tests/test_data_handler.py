@@ -12,7 +12,6 @@ from src.data.data_handler import DataHandler
 
 
 class TestDataHandler(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.current_directory = os.path.dirname(os.path.abspath(__file__))

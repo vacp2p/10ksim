@@ -77,7 +77,6 @@ class WakuPodSpecBuilder(PodSpecBuilder):
 
 
 class WakuStatefulSetBuilder(StatefulSetBuilder):
-
     def build(self):
         if not self.config.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")

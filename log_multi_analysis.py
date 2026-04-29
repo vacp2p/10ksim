@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import logging
@@ -5,7 +6,6 @@ import os
 import sys
 import traceback
 from collections import defaultdict
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional, Self
 
@@ -13,6 +13,10 @@ from pydantic import BaseModel
 
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 from src.analysis.utils.file_utils import extract_exps, get_folders
+from src.analysis.utils.log_utils import (
+    init_logger,
+    log_to_path,
+)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -22,48 +26,6 @@ from src.analysis.mesh_analysis.analyzers.analyzer import Analyzer
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def extra_log_handler(logger, handler, level=logging.INFO):
-    logging.getLogger().setLevel(level)
-    logger.addHandler(handler)
-    try:
-        yield
-    finally:
-        for handler in logger.handlers:
-            handler.flush()
-        logger.removeHandler(handler)
-        handler.close()
-
-
-@contextmanager
-def log_to_path(log_path):
-    """
-    Warning: Removes previous log.
-    """
-    try:
-        os.makedirs(log_path.parent, exist_ok=True)
-        os.remove(log_path)
-    except Exception:
-        pass
-
-    file_handler = logging.FileHandler(log_path)
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
-
-    current_level = logger.getEffectiveLevel()
-    with extra_log_handler(logging.getLogger(), file_handler, current_level):
-        yield
-
-
-def setup_logger():
-    level = logging.DEBUG
-    logging.getLogger().setLevel(level)
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(level)
-    logging.getLogger().addHandler(stream_handler)
 
 
 def get_experiments(*, experiment_class: Optional[str] = None) -> Iterator[dict]:
@@ -197,8 +159,27 @@ def unravel(obj: Any) -> Any:
         return obj
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="A tool to run analysis after experiments have been run."
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        dest="verbosity",
+        default=0,
+        help="Set the log level: -v (warnings), -vv (info), -vvv (debug) -vvvv (most verbose)",
+    )
+
+    return parser.parse_args()
+
+
 async def main():
-    setup_logger()
+    args = parse_args()
+    verbosity = args.verbosity or 2
+    init_logger(logging.getLogger(), verbosity, None)
 
     all_statuses = defaultdict(int)
     summary = defaultdict(int)

@@ -78,6 +78,7 @@ def extract_exps(
                     f"Experiment filtered out. path: `{metadata_log_path}` metadata: `{exp}`"
                 )
                 continue
+            exp["metadata"]["path"] = metadata_log_path
             yield exp
         except Exception as e:
             full_trace = traceback.format_exc()

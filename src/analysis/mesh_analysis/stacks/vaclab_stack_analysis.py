@@ -14,8 +14,13 @@ from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import 
 )
 from src.analysis.mesh_analysis.stacks.stack_analysis import StackAnalysis
 from src.analysis.utils import path_utils
+from src.analysis.utils.log_utils import apply_config, capture_current_logging, get_log_queue
 
 logger = logging.getLogger(__name__)
+
+
+import logging
+from typing import List
 
 
 class VaclabStackAnalysis(StackAnalysis):
@@ -30,7 +35,11 @@ class VaclabStackAnalysis(StackAnalysis):
         for stateful_set_name, num_nodes_in_stateful_set in zip(
             stateful_sets, nodes_per_stateful_set
         ):
-            with ProcessPoolExecutor(n_jobs) as executor:
+            with ProcessPoolExecutor(
+                n_jobs,
+                initializer=apply_config,
+                initargs=(capture_current_logging(), get_log_queue()),
+            ) as executor:
                 futures = {
                     executor.submit(
                         self._extract_dataframe_single_node, stateful_set_name, node_index
@@ -92,7 +101,9 @@ class VaclabStackAnalysis(StackAnalysis):
         return num_nodes_per_stateful_set
 
     def dump_node_logs(self, n_jobs: int, identifiers: List[str], dump_path: Path) -> None:
-        with ProcessPoolExecutor(n_jobs) as executor:
+        with ProcessPoolExecutor(
+            n_jobs, initializer=apply_config, initargs=(capture_current_logging(), get_log_queue())
+        ) as executor:
             futures_map = {
                 executor.submit(self._dump_logs_for_single_node, identifier, dump_path): identifier
                 for identifier in identifiers

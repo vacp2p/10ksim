@@ -1,6 +1,6 @@
 from typing import Self
 
-from kubernetes.client import V1EnvVar, V1StatefulSet, V1Probe, V1HTTPGetAction
+from kubernetes.client import V1EnvVar, V1StatefulSet
 from pydantic import PositiveInt
 
 from src.deployments.core.builders import StatefulSetBuilder
@@ -52,15 +52,4 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
 
     def with_image(self, image: Image) -> Self:
         self.with_image_in_container(LIBP2P_CONTAINER_NAME, image, overwrite=True)
-        return self
-
-    def with_readiness_probe(self, path: str, port: int, initial_delay_seconds: int = 2, period_seconds: int = 2) -> Self:
-        container = find_libp2p_container_config(self.config)
-        container.with_readiness_probe(
-            V1Probe(
-                http_get=V1HTTPGetAction(path=path, port=port),
-                initial_delay_seconds=initial_delay_seconds,
-                period_seconds=period_seconds,
-            )
-        )
         return self

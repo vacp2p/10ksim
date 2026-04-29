@@ -256,6 +256,8 @@ class BaseBridge(BaseModel):
 
         if len(namespaces) == 1:
             metadata["namespace"] = next(iter(namespaces))
+        elif len(namespaces) == 0:
+            logger.info(f"No namespaces used.")
         else:
             logger.warning(f"Multiple namespaces used. namespaces: `{namespaces}`")
             metadata["namespaces"] = list(namespaces)

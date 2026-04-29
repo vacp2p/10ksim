@@ -10,7 +10,8 @@ from kubernetes.client import ApiClient
 from ruamel import yaml
 
 # Project Imports
-from src.deployments.core.kube_utils import init_logger, set_config_file
+from src.analysis.utils.log_utils import init_logger
+from src.deployments.core.kube_utils import set_config_file
 from src.deployments.registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,6 @@
 import logging
-from typing import ClassVar, List, Self
+from typing import List, Self
 
-import numpy as np
 import pandas as pd
 
 # Project Imports
@@ -29,7 +28,7 @@ class KadDHTTracer(MessageTracer):
                         convert=self._trace_kad_dht_in_logs,
                     ),
                 ],
-                query="Lookup finished"
+                query="Lookup finished",
             )
         )
         return self
@@ -44,7 +43,7 @@ class KadDHTTracer(MessageTracer):
                         convert=self._trace_warmup_event_in_logs,
                     ),
                 ],
-                query="Node started"
+                query="Node started",
             )
         )
         return self
@@ -59,7 +58,7 @@ class KadDHTTracer(MessageTracer):
                         convert=self._trace_peer_id_in_logs,
                     ),
                 ],
-                query="Node started"
+                query="Node started",
             )
         )
         return self
@@ -74,7 +73,7 @@ class KadDHTTracer(MessageTracer):
                         convert=self._trace_probe_target_in_logs,
                     ),
                 ],
-                query="Probe: Finding node"
+                query="Probe: Finding node",
             )
         )
         return self
@@ -91,9 +90,9 @@ class KadDHTTracer(MessageTracer):
                     TracePair(
                         regex=r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) Warmup complete",
                         convert=self._trace_warmup_event_in_logs,
-                    )
+                    ),
                 ],
-                query="(\"Connected to bootstrap\" OR \"Warmup complete\")"
+                query='("Connected to bootstrap" OR "Warmup complete")',
             )
         )
         return self

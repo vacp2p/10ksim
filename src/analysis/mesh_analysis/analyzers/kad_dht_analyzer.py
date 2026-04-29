@@ -2,7 +2,7 @@ import hashlib
 import logging
 import re
 from collections import Counter
-from typing import List, Self, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Self
 
 import numpy as np
 import pandas as pd
@@ -12,12 +12,14 @@ from src.analysis.mesh_analysis.readers.tracers.kad_dht_tracer import KadDHTTrac
 
 logger = logging.getLogger(__name__)
 
+
 # -------------
 # HELPERS
 # -------------
 def extract_node_index(pod_name: str) -> int:
     """Extract numeric index from a pod name like 'nodes-47'."""
     return int(pod_name.split("-")[-1])
+
 
 def normalize_status(status: str) -> str:
     value = (status or "").strip().lower()
@@ -29,43 +31,51 @@ def normalize_status(status: str) -> str:
         return "missing"
     return value or "unknown"
 
+
 def get_kad_id(peer_id_b58: str) -> bytes:
-    alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     num = 0
     for char in peer_id_b58:
         num = num * 58 + alphabet.index(char)
-    raw_bytes = num.to_bytes((num.bit_length() + 7) // 8, 'big')
+    raw_bytes = num.to_bytes((num.bit_length() + 7) // 8, "big")
     pad = 0
     for char in peer_id_b58:
-        if char == '1': pad += 1
-        else: break
-    raw_bytes = b'\x00' * pad + raw_bytes
+        if char == "1":
+            pad += 1
+        else:
+            break
+    raw_bytes = b"\x00" * pad + raw_bytes
     return hashlib.sha256(raw_bytes).digest()
+
 
 def xor_distance(id1: bytes, id2: bytes) -> int:
     return int.from_bytes(id1, "big") ^ int.from_bytes(id2, "big")
 
-def compute_closeness_score(target: str, returned_peers: List[Dict[str, Any]], all_pids: List[str]) -> Optional[int]:
+
+def compute_closeness_score(
+    target: str, returned_peers: List[Dict[str, Any]], all_pids: List[str]
+) -> Optional[int]:
     try:
         target_kad_id = get_kad_id(target)
     except Exception:
         return None
-        
+
     all_pids_dists = []
     for pid in all_pids:
         try:
             all_pids_dists.append((pid, xor_distance(target_kad_id, get_kad_id(pid))))
         except Exception:
             pass
-            
+
     all_pids_dists.sort(key=lambda x: x[1])
     global_ranks = {pid: i for i, (pid, _) in enumerate(all_pids_dists, start=1)}
-    
+
     returned_ranks = [global_ranks[p["pid"]] for p in returned_peers if p["pid"] in global_ranks]
     if not returned_ranks:
         return None
-        
+
     return min(returned_ranks)
+
 
 def parse_peer(peer_str: str) -> Dict[str, Any]:
     pid_match = re.search(r"pid: ([^,]+)", peer_str)
@@ -86,6 +96,7 @@ def parse_peer(peer_str: str) -> Dict[str, Any]:
         "attempts": attempts,
     }
 
+
 def rank_best_returned_peer(peers: List[Dict[str, Any]]) -> Optional[int]:
     peers_with_dist = [p for p in peers if p["dist"] is not None]
     if not peers_with_dist:
@@ -96,6 +107,7 @@ def rank_best_returned_peer(peers: List[Dict[str, Any]]) -> Optional[int]:
         if peer["responded"] != "missing":
             return i
     return None
+
 
 def classify_lookup(peers: List[Dict[str, Any]]) -> str:
     statuses = [p["responded"] for p in peers]
@@ -109,6 +121,7 @@ def classify_lookup(peers: List[Dict[str, Any]]) -> str:
         return "other_error"
     return "other_error" if "unknown" in statuses else "timeout"
 
+
 def infer_lookup_error_type(peers: List[Dict[str, Any]]) -> Optional[str]:
     statuses = [p["responded"] for p in peers]
     if "success" in statuses:
@@ -118,6 +131,7 @@ def infer_lookup_error_type(peers: List[Dict[str, Any]]) -> Optional[str]:
         return "missing"
     counts = Counter(non_missing)
     return counts.most_common(1)[0][0]
+
 
 def parse_row(row: list, all_pids: List[str]) -> Dict[str, Any]:
     target = row[0]
@@ -160,7 +174,9 @@ def parse_row(row: list, all_pids: List[str]) -> Dict[str, Any]:
         "timeout_peers": len(timeout_peers),
         "missing_peers": len(missing_peers),
         "best_dist": min((p["dist"] for p in peers if p["dist"] is not None), default=None),
-        "best_success_dist": min((p["dist"] for p in successful_peers if p["dist"] is not None), default=None),
+        "best_success_dist": min(
+            (p["dist"] for p in successful_peers if p["dist"] is not None), default=None
+        ),
         "local_success_rank": local_success_rank,
         "lookup_score": lookup_score,
         "closeness_score": closeness_score,
@@ -169,14 +185,17 @@ def parse_row(row: list, all_pids: List[str]) -> Dict[str, Any]:
         "peer_statuses": [p["responded"] for p in peers],
     }
 
+
 def percentile_str(values: List[Any], percentiles: List[int]) -> Any:
     clean_values = [v for v in values if v is not None]
     if not clean_values:
         return "N/A"
     return np.percentile(clean_values, percentiles)
 
+
 def pct(count: int, total: int) -> float:
     return 0.0 if total == 0 else (100.0 * count / total)
+
 
 def calculate_lookups_metrics(parsed: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_lookups = len(parsed)
@@ -209,9 +228,13 @@ def calculate_lookups_metrics(parsed: List[Dict[str, Any]]) -> Dict[str, Any]:
     logger.info(f"Attempted peers P50/P95: {percentile_str(attempted, [50, 95])}")
     logger.info(f"Successful peers P50/P95: {percentile_str(successful_peers, [50, 95])}")
     logger.info(f"Local success rank P50/P95: {percentile_str(success_rank, [50, 95])}")
-    logger.info(f"Lookup score (best returned rank) P50/P95: {percentile_str(lookup_scores, [50, 95])}")
+    logger.info(
+        f"Lookup score (best returned rank) P50/P95: {percentile_str(lookup_scores, [50, 95])}"
+    )
 
-    closeness_scores = [x["closeness_score"] for x in parsed if x.get("closeness_score") is not None]
+    closeness_scores = [
+        x["closeness_score"] for x in parsed if x.get("closeness_score") is not None
+    ]
     if closeness_scores:
         logger.info("Closeness score:")
         logger.info(f"  P50 rank: {int(np.percentile(closeness_scores, 50))}")
@@ -224,32 +247,33 @@ def calculate_lookups_metrics(parsed: List[Dict[str, Any]]) -> Dict[str, Any]:
         "attempted": attempted,
         "success_rank": success_rank,
         "lookup_scores": lookup_scores,
-        "closeness_scores": closeness_scores
+        "closeness_scores": closeness_scores,
     }
+
 
 class KadDHTAnalyzer(Analyzer):
     """
     Handles the analysis of KAD DHT and warmup logs from either local files or online data.
     """
 
-    def with_warmup_check(self, bootstrap_pod: str = "bootstrap-0", *, on_fail: OnFail = "continue") -> Self:
+    def with_warmup_check(
+        self, bootstrap_pod: str = "bootstrap-0", *, on_fail: OnFail = "continue"
+    ) -> Self:
         return self._with_parameterized_check(
-            self.analyze_warmup,
-            on_fail=on_fail,
-            bootstrap_pod=bootstrap_pod
+            self.analyze_warmup, on_fail=on_fail, bootstrap_pod=bootstrap_pod
         )
 
-    def with_dht_lookup_check(self, probe_pod: str = "probe-0", *, on_fail: OnFail = "continue") -> Self:
+    def with_dht_lookup_check(
+        self, probe_pod: str = "probe-0", *, on_fail: OnFail = "continue"
+    ) -> Self:
         return self._with_parameterized_check(
-            self.analyze_lookups,
-            on_fail=on_fail,
-            probe_pod=probe_pod
+            self.analyze_lookups, on_fail=on_fail, probe_pod=probe_pod
         )
 
     def _get_bootstrap_start_time(self, bootstrap_pod: str) -> pd.Timestamp:
         extra_fields = self.data_puller.kwargs.get("extra_fields")
         tracer = KadDHTTracer().with_extra_fields(extra_fields).with_node_started_pattern()
-        
+
         data = self.data_puller.get_pod_logs(tracer, bootstrap_pod)
         df = tracer.trace(data)["node_started"][0]
 
@@ -267,7 +291,7 @@ class KadDHTAnalyzer(Analyzer):
 
         extra_fields = self.data_puller.kwargs.get("extra_fields")
         tracer = KadDHTTracer().with_extra_fields(extra_fields).with_warmup_pattern()
-        
+
         stateful_sets = self.data_puller.kwargs.get("stateful_sets", [])
         nodes_per_statefulset = self.data_puller.kwargs.get("nodes_per_statefulset", [])
 
@@ -310,7 +334,9 @@ class KadDHTAnalyzer(Analyzer):
         # Compute elapsed seconds relative to t0
         if not bootstrap_df.empty:
             bootstrap_df["elapsed_s"] = (bootstrap_df["timestamp"] - t0).dt.total_seconds()
-            bootstrap_df["node_index"] = bootstrap_df["kubernetes.pod_name"].apply(extract_node_index)
+            bootstrap_df["node_index"] = bootstrap_df["kubernetes.pod_name"].apply(
+                extract_node_index
+            )
             bootstrap_df.sort_values("node_index", inplace=True)
 
         if not warmup_df.empty:
@@ -321,44 +347,44 @@ class KadDHTAnalyzer(Analyzer):
         # Summary statistics
         if not bootstrap_df.empty:
             b = bootstrap_df["elapsed_s"]
-            logger.info(f"Connected to bootstrap — min: {b.min():.1f}s  median: {b.median():.1f}s  max: {b.max():.1f}s  ({len(b)} nodes)")
+            logger.info(
+                f"Connected to bootstrap — min: {b.min():.1f}s  median: {b.median():.1f}s  max: {b.max():.1f}s  ({len(b)} nodes)"
+            )
         if not warmup_df.empty:
             w = warmup_df["elapsed_s"]
-            logger.info(f"Warmup complete       — min: {w.min():.1f}s  median: {w.median():.1f}s  max: {w.max():.1f}s  ({len(w)} nodes)")
+            logger.info(
+                f"Warmup complete       — min: {w.min():.1f}s  median: {w.median():.1f}s  max: {w.max():.1f}s  ({len(w)} nodes)"
+            )
 
         return AnalysisResult(
             name="warmup",
-            intermediates={
-                "t0": t0,
-                "bootstrap_df": bootstrap_df,
-                "warmup_df": warmup_df
-            },
-            status="passed"
+            intermediates={"t0": t0, "bootstrap_df": bootstrap_df, "warmup_df": warmup_df},
+            status="passed",
         )
 
     def _extract_all_pids(self) -> List[str]:
         extra_fields = self.data_puller.kwargs.get("extra_fields")
         tracer = KadDHTTracer().with_extra_fields(extra_fields).with_peer_id_pattern()
-        
+
         stateful_sets = self.data_puller.kwargs.get("stateful_sets", [])
         nodes_per_statefulset = self.data_puller.kwargs.get("nodes_per_statefulset", [])
 
         dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_statefulset)
-        
+
         all_pids = []
         for node_data in dfs:
             df = node_data["peer_id"][0]
             if not df.empty and "peerId" in df.columns:
                 all_pids.extend(df["peerId"].dropna().tolist())
-                
+
         return list(set(all_pids))
 
     def analyze_lookups(self, probe_pod: str) -> AnalysisResult:
         logger.info("\n=== Analyzing Lookups ===")
-        
+
         extra_fields = self.data_puller.kwargs.get("extra_fields")
         tracer = KadDHTTracer().with_extra_fields(extra_fields).with_kad_dht_pattern()
-        
+
         data = self.data_puller.get_pod_logs(tracer, probe_pod)
         log_lines = data[0][0]
 
@@ -368,11 +394,7 @@ class KadDHTAnalyzer(Analyzer):
 
         all_pids = self._extract_all_pids()
         parsed = [parse_row(row, all_pids) for row in log_lines]
-        
+
         metrics = calculate_lookups_metrics(parsed)
-        
-        return AnalysisResult(
-            name="kad_dht_lookups",
-            intermediates=metrics,
-            status="passed"
-        )
+
+        return AnalysisResult(name="kad_dht_lookups", intermediates=metrics, status="passed")

@@ -1,6 +1,7 @@
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import argparse
 from datetime import datetime, timezone
@@ -8,10 +9,11 @@ from datetime import datetime, timezone
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from src.analysis.mesh_analysis.analyzers.kad_dht_analyzer import KadDHTAnalyzer
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
+from src.analysis.mesh_analysis.analyzers.kad_dht_analyzer import KadDHTAnalyzer
 
 sns.set_theme()
+
 
 def plot_warmup_metrics(bootstrap_df, warmup_df):
     fig, ax = plt.subplots(figsize=(14, 6))
@@ -83,16 +85,39 @@ def plot_lookup_metrics(durations, attempted, success_rank, lookup_scores, close
         plt.ylabel("Count")
         plt.show(block=False)
 
+
 # -------------
 # MAIN
 # -------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze KAD DHT Experiment logs.")
-    parser.add_argument("--start-time", type=str, required=True, help="Start time in ISO format (e.g., 2026-04-21T19:00:00Z)")
-    parser.add_argument("--end-time", type=str, default=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), help="End time in ISO format. Defaults to now.")
-    parser.add_argument("--nodes", type=int, default=160, help="Number of nodes deployed. Default: 160.")
-    parser.add_argument("--namespace", type=str, default="nimlibp2p", help="Kubernetes namespace. Default: nimlibp2p")
-    parser.add_argument("--url", type=str, default="https://vlselect.lab.vac.dev/select/logsql/query", help="VictoriaLogs URL.")
+    parser.add_argument(
+        "--start-time",
+        type=str,
+        required=True,
+        help="Start time in ISO format (e.g., 2026-04-21T19:00:00Z)",
+    )
+    parser.add_argument(
+        "--end-time",
+        type=str,
+        default=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        help="End time in ISO format. Defaults to now.",
+    )
+    parser.add_argument(
+        "--nodes", type=int, default=160, help="Number of nodes deployed. Default: 160."
+    )
+    parser.add_argument(
+        "--namespace",
+        type=str,
+        default="nimlibp2p",
+        help="Kubernetes namespace. Default: nimlibp2p",
+    )
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="https://vlselect.lab.vac.dev/select/logsql/query",
+        help="VictoriaLogs URL.",
+    )
     args = parser.parse_args()
 
     stack = {
@@ -113,21 +138,24 @@ if __name__ == "__main__":
 
     puller = DataPuller().with_kwargs(stack)
 
-    log_analyzer = (KadDHTAnalyzer(
-        dump_analysis_dir="local_data/simulations_data/kad-dht/",
-    ).with_data_puller(puller)
-     .with_warmup_check(bootstrap_pod="bootstrap-0")
-     .with_dht_lookup_check(probe_pod="probe-0"))
+    log_analyzer = (
+        KadDHTAnalyzer(
+            dump_analysis_dir="local_data/simulations_data/kad-dht/",
+        )
+        .with_data_puller(puller)
+        .with_warmup_check(bootstrap_pod="bootstrap-0")
+        .with_dht_lookup_check(probe_pod="probe-0")
+    )
 
     # Execute all checks
     results = log_analyzer.run()
-    
+
     # Plotting results
     for res in results:
         if res.name == "warmup" and res.intermediates:
             plot_warmup_metrics(
                 bootstrap_df=res.intermediates.get("bootstrap_df"),
-                warmup_df=res.intermediates.get("warmup_df")
+                warmup_df=res.intermediates.get("warmup_df"),
             )
         elif res.name == "kad_dht_lookups" and res.intermediates:
             plot_lookup_metrics(
@@ -135,8 +163,8 @@ if __name__ == "__main__":
                 attempted=res.intermediates.get("attempted"),
                 success_rank=res.intermediates.get("success_rank"),
                 lookup_scores=res.intermediates.get("lookup_scores"),
-                closeness_scores=res.intermediates.get("closeness_scores")
+                closeness_scores=res.intermediates.get("closeness_scores"),
             )
-            
+
     # Finally, show all figures together
     plt.show()

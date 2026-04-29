@@ -53,7 +53,8 @@ class VictoriaReader(Reader):
                         continue
 =======
                     logs.append(
-                        (parsed_object.get("_msg", ""),) + tuple(parsed_object.get(k, None) for k in extra_fields)
+                        (parsed_object.get("_msg", ""),)
+                        + tuple(parsed_object.get(k, None) for k in extra_fields)
                     )
 >>>>>>> 4327f5a (bug fix for the new workflow)
         logger.debug(f"Fetched {len(logs)} log lines")

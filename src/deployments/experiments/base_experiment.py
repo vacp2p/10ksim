@@ -250,7 +250,7 @@ class BaseExperiment(ABC, BaseModel):
             return Path(out_dir) / path
 
     def dump_yaml(self, obj, workdir: str, name: str):
-        out_path = Path(workdir) / name / f"{name}.yaml"
+        out_path = Path(workdir) / f"{name}.yaml"
         os.makedirs(out_path.parent, exist_ok=True)
         logger.info(f"dumping deployment `{name}` to `{out_path}`")
         with open(out_path, "w") as out_file:

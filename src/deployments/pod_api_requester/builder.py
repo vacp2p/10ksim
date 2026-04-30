@@ -120,7 +120,7 @@ def create_container_config() -> ContainerConfig:
     config = ContainerConfig(
         name=NAME,
         image=Image(
-            repo="pearsonwhite/pod-api-requester", tag="4575c70fd1efddabb7673ebe8a1f2b482473e0db"
+            repo="pearsonwhite/pod-api-requester", tag="10b85bb60895fe63aa8d3f09b24b714f2abce300"
         ),
         image_pull_policy="Always",
     )

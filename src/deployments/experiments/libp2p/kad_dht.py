@@ -6,7 +6,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Optional
 
-from kubernetes.client import ApiClient, V1ServicePort
+from kubernetes.client import ApiClient, V1ServicePort, V1Probe, V1HTTPGetAction
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.builders import ServiceBuilder
@@ -35,7 +35,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
         warmup_delay: NonNegativeFloat = 0
         probe_delay: NonNegativeFloat = 600
         image_repo: str = "radiken/dst-test-node-kad-dht"
-        image_tag: str = "long-logs"
+        image_tag: str = "melodie-fix"
 
     async def _run(
         self,
@@ -76,7 +76,13 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("NODE_ROLE", "RoleBootstrap")
             .with_option("PORT", "5000")
             .with_option("DISCOVERY", "kad-dht")
-            .with_readiness_probe(path="/ready", port=8008)
+            .with_readiness_probe(
+                V1Probe(
+                    http_get=V1HTTPGetAction(path="/ready", port=8008),
+                    initial_delay_seconds=2,
+                    period_seconds=2,
+                )
+            )
             .build()
         )
         self.dump_yaml(bootstrap_nodes, workdir, "bootstrap")
@@ -92,7 +98,13 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("PORT", "5000")
             .with_option("DISCOVERY", "kad-dht")
             .with_option("SERVICE", f"bootstrap.{namespace}.svc.cluster.local")
-            .with_readiness_probe(path="/ready", port=8008)
+            .with_readiness_probe(
+                V1Probe(
+                    http_get=V1HTTPGetAction(path="/ready", port=8008),
+                    initial_delay_seconds=2,
+                    period_seconds=2,
+                )
+            )
             .build()
         )
         self.dump_yaml(nodes, workdir, "nodes")

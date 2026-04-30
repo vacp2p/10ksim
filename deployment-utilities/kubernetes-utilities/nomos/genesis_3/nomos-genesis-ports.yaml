@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-0
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-0
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-1
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-1
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-2
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-2
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-3
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-3
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-4
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-4
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-5
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-5
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-6
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-6
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-7
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-7
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-8
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-8
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-genesis-9
+  namespace: nomos-genesis
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: nomos-genesis-9
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001

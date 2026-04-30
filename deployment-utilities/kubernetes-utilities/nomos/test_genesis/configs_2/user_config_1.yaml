@@ -1,0 +1,189 @@
+network:
+  backend:
+    swarm:
+      host: 0.0.0.0
+      port: 7000
+      node_key: ed60199035b9da8f83a9e7b735aa2dd2727fb3b8e68ac1c560623610a42cb5bd
+      gossipsub:
+        history_length: 5
+        history_gossip: 3
+        mesh_n: 6
+        mesh_n_low: 5
+        mesh_n_high: 12
+        retain_scores: 4
+        gossip_lazy: 6
+        gossip_factor: 0.25
+        heartbeat_initial_delay:
+          secs: 5
+          nanos: 0
+        heartbeat_interval:
+          secs: 1
+          nanos: 0
+        fanout_ttl:
+          secs: 60
+          nanos: 0
+        check_explicit_peers_ticks: 300
+        duplicate_cache_time:
+          secs: 60
+          nanos: 0
+        validate_messages: false
+        allow_self_origin: false
+        do_px: false
+        prune_peers: 0
+        prune_backoff:
+          secs: 60
+          nanos: 0
+        unsubscribe_backoff:
+          secs: 10
+          nanos: 0
+        backoff_slack: 1
+        flood_publish: true
+        graft_flood_threshold:
+          secs: 10
+          nanos: 0
+        mesh_outbound_min: 2
+        opportunistic_graft_ticks: 60
+        opportunistic_graft_peers: 2
+        gossip_retransimission: 3
+        max_messages_per_rpc: null
+        max_ihave_length: 5000
+        max_ihave_messages: 10
+        iwant_followup_time:
+          secs: 3
+          nanos: 0
+        published_message_ids_cache_time:
+          secs: 10
+          nanos: 0
+      kademlia:
+        query_timeout_secs: null
+        replication_factor: null
+        parallelism: null
+        disjoint_query_paths: null
+        max_packet_size: null
+        kbucket_inserts: null
+        caching: null
+        periodic_bootstrap_interval_secs: null
+      identify:
+        agent_version: null
+        interval_secs: null
+        push_listen_addr_updates: null
+        cache_size: null
+        hide_listen_addrs: true
+      chain_sync:
+        peer_response_timeout: 60000
+      nat:
+        type: static
+        external_address: /ip4/127.0.0.1/udp/7000/quic-v1
+    initial_peers:
+      - /dns4/test-0.test/udp/7000/quic-v1
+      - /dns4/test-1.test/udp/7000/quic-v1
+      - /dns4/test-2.test/udp/7000/quic-v1
+      - /dns4/test-3.test/udp/7000/quic-v1
+blend:
+  non_ephemeral_signing_key_id: 03548111a964b426874f32882d5df3bed9080219a8c88e780a1bf9fa1aee41ff
+  core:
+    backend:
+      listening_address: /ip4/0.0.0.0/udp/7001/quic-v1
+      core_peering_degree:
+        start: 2
+        end: 3
+      edge_node_connection_timeout: '1.000000000'
+      max_edge_node_incoming_connections: 300
+      max_dial_attempts_per_peer: 3
+    zk:
+      secret_key_kms_id: 73e5b5347acf42dd07a0b42242723b835bc7775bde08e50c327e137e2c04f804
+  edge:
+    backend:
+      max_dial_attempts_per_peer_per_message: 1
+      replication_factor: 1
+cryptarchia:
+  service:
+    bootstrap:
+      prolonged_bootstrap_period: '1.000000000'
+      force_bootstrap: false
+      offline_grace_period:
+        grace_period: '1200.000000000'
+        state_recording_interval: '60.000000000'
+  network:
+    bootstrap:
+      ibd:
+        peers: []
+        delay_before_new_download:
+          secs: 10
+          nanos: 0
+    sync:
+      orphan:
+        max_orphan_cache_size: 1000
+    network:
+      max_connected_peers_to_try_download: 16
+      max_discovered_peers_to_try_download: 16
+  leader:
+    wallet:
+      max_tx_fee: 18446744073709551615
+      funding_pk: 4dea183ece7b9061ad75c734f0ff0ec3d2b8ad74935a94e4f0d16b985db2032c
+time:
+  backend:
+    server: pool.ntp.org:123
+    client:
+      timeout: '5.000000000'
+      listening_interface: 0.0.0.0
+    update_interval: '16.000000000'
+sdp:
+  declaration_id: f8609a10087708b5683b231da57cf28b08a8ae807b6e48f31f6246d82ea805f3
+  wallet:
+    max_tx_fee: 18446744073709551615
+    funding_pk: 4dea183ece7b9061ad75c734f0ff0ec3d2b8ad74935a94e4f0d16b985db2032c
+api:
+  backend:
+    listen_address: 0.0.0.0:18080
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 1000
+  testing:
+    listen_address: 127.0.0.1:20003
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 1000
+storage:
+  backend:
+    folder_name: ./db
+    read_only: false
+    column_family: blocks
+kms:
+  backend:
+    keys:
+      03548111a964b426874f32882d5df3bed9080219a8c88e780a1bf9fa1aee41ff: !Ed25519 ed60199035b9da8f83a9e7b735aa2dd2727fb3b8e68ac1c560623610a42cb5bd
+      73e5b5347acf42dd07a0b42242723b835bc7775bde08e50c327e137e2c04f804: !Zk fe538161c5984ad3b01c9327c3d3eff5074f7b91176cfdde39fa0095dc654c0d
+      79b1d6e4878c1cfbf70fd8803aa49c2b1ee606cd154ecee7cf48bf7437123c1e: !Zk 626eed60199035b9da8f83a9e7b735aa00000000000000000000000000000000
+      4dea183ece7b9061ad75c734f0ff0ec3d2b8ad74935a94e4f0d16b985db2032c: !Zk 736470ed60199035b9da8f83a9e7b73500000000000000000000000000000000
+      d731e00126f55e9ecfb1d1bd47e599c2728e347f4a865449e133db5486233916: !Zk e5514f45766d105c161f2f8ad0f94e5bd12642b57c76d259df55fb77ac2fa50e
+      64d48fd8a9a29571f50a2e7410b625c6509a80ac437b332d0b19ae009af15709: !Zk 6c64ed60199035b9da8f83a9e7b735aa00000000000000000000000000000000
+wallet:
+  known_keys:
+    64d48fd8a9a29571f50a2e7410b625c6509a80ac437b332d0b19ae009af15709: 64d48fd8a9a29571f50a2e7410b625c6509a80ac437b332d0b19ae009af15709
+    4dea183ece7b9061ad75c734f0ff0ec3d2b8ad74935a94e4f0d16b985db2032c: 4dea183ece7b9061ad75c734f0ff0ec3d2b8ad74935a94e4f0d16b985db2032c
+    d731e00126f55e9ecfb1d1bd47e599c2728e347f4a865449e133db5486233916: d731e00126f55e9ecfb1d1bd47e599c2728e347f4a865449e133db5486233916
+  voucher_master_key_id: 64d48fd8a9a29571f50a2e7410b625c6509a80ac437b332d0b19ae009af15709
+tracing:
+  logger:
+    file:
+      directory: ./state/logs
+      prefix: null
+    loki: null
+    gelf: null
+    otlp:
+      endpoint: http://otel:4317/
+      service_name: test-1.test
+    stdout: true
+    stderr: false
+  tracing: None
+  filter: None
+  metrics: !Otlp
+    endpoint: "http://otel-opentelemetry-collector.opentelemetry:4317/"
+    host_identifier: "test-1"
+  console: None
+  level: DEBUG
+state:
+  base_folder: ./state

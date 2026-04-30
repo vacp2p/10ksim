@@ -33,7 +33,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
 
         num_nodes: NonNegativeInt = 80
         warmup_delay: NonNegativeFloat = 0
-        probe_delay: NonNegativeFloat = 600
+        probe_delay: NonNegativeFloat = 60
         image_repo: str = "radiken/dst-test-node-kad-dht"
         image_tag: str = "melodie-fix"
 

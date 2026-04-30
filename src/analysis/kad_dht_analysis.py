@@ -11,6 +11,8 @@ import seaborn as sns
 
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.analysis.mesh_analysis.analyzers.kad_dht_analyzer import KadDHTAnalyzer
+from src.analysis.utils.log_utils import init_logger
+import logging
 
 sns.set_theme()
 
@@ -90,6 +92,8 @@ def plot_lookup_metrics(durations, attempted, success_rank, lookup_scores, close
 # MAIN
 # -------------
 if __name__ == "__main__":
+    init_logger(logging.getLogger(), verbosity=2)
+
     parser = argparse.ArgumentParser(description="Analyze KAD DHT Experiment logs.")
     parser.add_argument(
         "--start-time",

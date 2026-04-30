@@ -42,9 +42,14 @@ class VictoriaReader(Reader):
                     except json.decoder.JSONDecodeError as e:
                         logger.info(line)
                         exit()
-                    logs.append(
-                        (parsed_object["_msg"],) + tuple(parsed_object[k] for k in extra_fields)
-                    )
+                    try:
+                        logs.append(
+                            (parsed_object["_msg"],)
+                            + tuple(parsed_object[k] for k in extra_fields)
+                        )
+                    except KeyError as e:
+                        logger.warning(f"Malformed log line skipped due to missing key {e}: {line}")
+                        continue
         logger.debug(f"Fetched {len(logs)} log lines")
 
         return logs

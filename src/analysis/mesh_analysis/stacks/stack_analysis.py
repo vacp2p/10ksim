@@ -13,7 +13,6 @@ from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import 
 
 
 class StackAnalysis(ABC):
-
     def __init__(self, reader_builder: VictoriaReaderBuilder, **kwargs):
         self._reader_builder = reader_builder
         self._kwargs = kwargs

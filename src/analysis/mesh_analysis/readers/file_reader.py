@@ -32,7 +32,6 @@ def merge_logs_per_pattern(tracer: MessageTracer, files_logs) -> List:
 
 
 class FileReader(Reader):
-
     def __init__(self, folder: Path, tracer: MessageTracer, n_jobs: int):
         self._folder_path = folder
         self._tracer = tracer

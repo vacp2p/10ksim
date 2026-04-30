@@ -1,17 +1,14 @@
 import asyncio
 import logging
-import os
 import random
 import traceback
 from argparse import Namespace
 from contextlib import ExitStack
-from pathlib import Path
 from typing import Optional
 
 from kubernetes.client import ApiClient, V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
-from src.deployments.core.kube_utils import get_YAML, k8s_obj_to_dict
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
@@ -89,12 +86,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         name = nodes.metadata.name
         namespace = nodes.metadata.namespace
 
-        out_path = Path(workdir) / name / f"{name}.yaml"
-        os.makedirs(out_path.parent, exist_ok=True)
-        logger.info(f"dumping deployment `{name}` to `{out_path}`")
-        with open(out_path, "w") as out_file:
-            yaml = get_YAML()
-            yaml.dump(k8s_obj_to_dict(nodes), out_file)
+        self.dump_yaml(nodes, workdir, name)
         await self.deploy(api_client, stack, args, values_yaml, deployment=nodes)
 
         await asyncio.sleep(config.delay_cold_start)

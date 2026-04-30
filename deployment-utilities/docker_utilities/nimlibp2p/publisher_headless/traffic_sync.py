@@ -36,7 +36,6 @@ def check_dns_time(service: str) -> tuple[str, str]:
 def get_publisher_details(
     args: argparse.Namespace, publisher: int, action: str
 ) -> Tuple[str, Dict[str, str], Dict[str, str | int], str]:
-
     if args.peer_selection == "service":  # make random publisher selection
         node_address, node_hostname = check_dns_time("nimp2p-service")
     else:

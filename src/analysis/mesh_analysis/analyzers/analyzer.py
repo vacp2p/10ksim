@@ -95,10 +95,6 @@ class Analyzer(BaseModel):
         self.dump_analysis_dir = Path(dump_analysis_dir)
         return self
 
-    def with_kwargs(self, kwargs: dict) -> Self:
-        self._kwargs = kwargs
-        return self
-
     def with_data_puller(self, data_puller: DataPuller) -> Self:
         self.data_puller = data_puller
         return self

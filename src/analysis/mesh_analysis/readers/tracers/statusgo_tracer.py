@@ -9,7 +9,6 @@ from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTra
 
 
 class StatusgoTracer(MessageTracer):
-
     def __init__(self):
         super().__init__()
         self._patterns = []

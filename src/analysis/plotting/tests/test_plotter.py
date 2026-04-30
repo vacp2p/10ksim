@@ -9,7 +9,6 @@ from src.plotting.metrics_plotter import MetricsPlotter
 
 
 class TestPlotter(unittest.TestCase):
-
     def test_create_plots(self):
         config = {"plot1": {}, "plot2": {}}
         plotter = MetricsPlotter(config)

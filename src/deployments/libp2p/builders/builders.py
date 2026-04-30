@@ -23,7 +23,6 @@ class Option:
 
 
 class Libp2pStatefulSetBuilder(StatefulSetBuilder):
-
     def build(self) -> V1StatefulSet:
         if not self.config.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")

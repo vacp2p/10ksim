@@ -19,6 +19,7 @@ from kubernetes.client import (
     V1Job,
     V1Pod,
     V1PodTemplateSpec,
+    V1Service,
     V1StatefulSet,
 )
 from pydantic import BaseModel, Field
@@ -30,6 +31,8 @@ from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.kube_utils import (
     dict_get,
     get_cleanup,
+    get_YAML,
+    k8s_obj_to_dict,
     kubectl_apply,
     poll_namespace_has_objects,
     wait_for_no_objs_in_namespace,
@@ -41,6 +44,7 @@ V1Deployable = Union[
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
+    V1Service,
     V1StatefulSet,
     V1DaemonSet,
     V1Job,
@@ -245,6 +249,14 @@ class BaseExperiment(ABC, BaseModel):
                 )
             return Path(out_dir) / path
 
+    def dump_yaml(self, obj, workdir: str, name: str):
+        out_path = Path(workdir) / f"{name}.yaml"
+        os.makedirs(out_path.parent, exist_ok=True)
+        logger.info(f"dumping deployment `{name}` to `{out_path}`")
+        with open(out_path, "w") as out_file:
+            yaml = get_YAML()
+            yaml.dump(k8s_obj_to_dict(obj), out_file)
+
     def _get_metadata(self) -> dict:
         return BaseBridge().get_metadata(self.events_log_path)
 
@@ -288,7 +300,8 @@ class BaseExperiment(ABC, BaseModel):
                     "args": vars(args),
                 }
             )
-            shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
+            if args.values_path:
+                shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
             await self._run(
                 api_client=api_client,
                 workdir=workdir,

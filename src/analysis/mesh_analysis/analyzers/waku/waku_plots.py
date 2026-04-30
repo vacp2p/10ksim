@@ -160,7 +160,6 @@ def plot_message_distribution_libp2pmix(
 def plot_message_latency_distributions(
     received_summary_paths: list[Path], plot_title: str, dump_path: Path
 ) -> Result[None, str]:
-
     # Validate input files
     for p in received_summary_paths:
         if not p.exists():

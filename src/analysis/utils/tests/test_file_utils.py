@@ -10,7 +10,6 @@ from src.analysis.utils import file_utils
 
 
 class TestFileUtils(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.current_directory = os.path.dirname(os.path.abspath(__file__))

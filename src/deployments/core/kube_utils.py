@@ -22,9 +22,8 @@ from typing import Any, Callable, Dict, Iterable, Iterator, List, Literal, Optio
 
 import dateparser
 import ruamel.yaml
-from kubernetes import client, utils
+from kubernetes import client, config, utils
 from kubernetes.client import (
-    ApiClient,
     ApiException,
     V1CronJob,
     V1DaemonSet,
@@ -126,12 +125,23 @@ def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Op
 
 logger = logging.getLogger(__name__)
 
-_kube_config = None
+_kube_config: Optional[str] = None
+_api_client: Optional[client.ApiClient] = None
 
 
-def set_config_file(config: str):
-    global _kube_config
-    _kube_config = config
+def init_config_file(kube_config: str):
+    """Set the Kubernetes config and initializes api_client.
+
+    :param config: Path to Kubernetes config file"""
+    global _kube_config, _api_client
+
+    if _api_client:
+        _api_client.close()
+        _api_client = None
+
+    _kube_config = kube_config
+    config.load_kube_config(config_file=_kube_config)
+    _api_client = client.ApiClient()
 
 
 def is_local() -> bool:
@@ -207,6 +217,7 @@ def _kubectl_operation(
     operation: str,
 ):
     """Execute kubectl operation for specific kind of Kubernetes resource."""
+    global _api_client
     logger.debug(f"{operation} the following config:\n{yaml.dump(kube_yaml)}")
     kind, _ = _extract_kind_and_name(kube_yaml)
 
@@ -217,11 +228,10 @@ def _kubectl_operation(
             f"The attempted operation is not supported for this resource. kind: `{kind}`"
         )
 
-    api_client = client.ApiClient()
     api_group_map = {
-        "apps": client.AppsV1Api(api_client),
-        "batch": client.BatchV1Api(api_client),
-        "core": client.CoreV1Api(api_client),
+        "apps": client.AppsV1Api(_api_client),
+        "batch": client.BatchV1Api(_api_client),
+        "core": client.CoreV1Api(_api_client),
     }
     api = api_group_map[group]
     method = getattr(api, method_name)
@@ -288,8 +298,6 @@ def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exist_ok=True)
             f"YAML missing nessesary attributes 'kind' and 'metadata.name'. yaml: `{kube_yaml}`"
         )
 
-    api_client = client.ApiClient()
-
     try:
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as temp:
             yaml.dump(kube_yaml, temp)
@@ -302,12 +310,12 @@ def _kubectl_apply(kube_yaml: yaml.YAMLObject, namespace: str, *, exist_ok=True)
 
 
 def _kubectl_apply_dry_run(kube_yaml: yaml.YAMLObject, namespace: str, *, config_file: str):
-    config = config_file if config_file else _kube_config
+    config_file = config_file if config_file else _kube_config
 
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as temp:
         yaml.dump(kube_yaml, temp)
         temp.flush()
-        config_segment = ["--kubeconfig", config] if config else []
+        config_segment = ["--kubeconfig", config_file] if config_file else []
         cmd = (
             ["kubectl"]
             + config_segment
@@ -387,12 +395,12 @@ def delete_pod(name, namespace, *, grace_period=0):
 def cleanup_resources(
     resources: dict,
     namespace: str,
-    api_client,
 ):
     """
     Delete resources in the recommended order: controllers first, then pods, then services.
     resources: Dict mapping kind to list of names.
     """
+    global _api_client
     logger.info(f"Cleanup resources: `{resources}`")
     deletion_order = [
         "Deployment",
@@ -407,31 +415,31 @@ def cleanup_resources(
     ]
 
     map = {
-        "Deployment": lambda name: client.AppsV1Api(api_client).delete_namespaced_deployment(
+        "Deployment": lambda name: client.AppsV1Api(_api_client).delete_namespaced_deployment(
             name, namespace
         ),
-        "StatefulSet": lambda name: client.AppsV1Api(api_client).delete_namespaced_stateful_set(
+        "StatefulSet": lambda name: client.AppsV1Api(_api_client).delete_namespaced_stateful_set(
             name, namespace
         ),
-        "DaemonSet": lambda name: client.AppsV1Api(api_client).delete_namespaced_daemon_set(
+        "DaemonSet": lambda name: client.AppsV1Api(_api_client).delete_namespaced_daemon_set(
             name, namespace
         ),
-        "ReplicaSet": lambda name: client.AppsV1Api(api_client).delete_namespaced_replica_set(
+        "ReplicaSet": lambda name: client.AppsV1Api(_api_client).delete_namespaced_replica_set(
             name, namespace
         ),
         "ReplicationController": lambda name: client.CoreV1Api(
-            api_client
+            _api_client
         ).delete_namespaced_replication_controller(name, namespace),
-        "Job": lambda name: client.BatchV1Api(api_client).delete_namespaced_job(
+        "Job": lambda name: client.BatchV1Api(_api_client).delete_namespaced_job(
             name,
             namespace,
             body=client.V1DeleteOptions(propagation_policy="Foreground"),
         ),
-        "CronJob": lambda name: client.BatchV1beta1Api(api_client).delete_namespaced_cron_job(
+        "CronJob": lambda name: client.BatchV1beta1Api(_api_client).delete_namespaced_cron_job(
             name, namespace
         ),
-        "Pod": lambda name: client.CoreV1Api(api_client).delete_namespaced_pod(name, namespace),
-        "Service": lambda name: client.CoreV1Api(api_client).delete_namespaced_service(
+        "Pod": lambda name: client.CoreV1Api(_api_client).delete_namespaced_pod(name, namespace),
+        "Service": lambda name: client.CoreV1Api(_api_client).delete_namespaced_service(
             name, namespace
         ),
     }
@@ -459,33 +467,33 @@ def cleanup_resources(
 def poll_cleanup_status(
     resources: Dict[str, List[str]],
     namespace: str,
-    api_client: ApiClient,
 ) -> bool:
     """
     Returns True if all specified resources are gone (deleted), False otherwise.
     """
+    global _api_client
     map = {
-        "Deployment": lambda name: client.AppsV1Api(api_client).read_namespaced_deployment(
+        "Deployment": lambda name: client.AppsV1Api(_api_client).read_namespaced_deployment(
             name, namespace
         ),
-        "StatefulSet": lambda name: client.AppsV1Api(api_client).read_namespaced_stateful_set(
+        "StatefulSet": lambda name: client.AppsV1Api(_api_client).read_namespaced_stateful_set(
             name, namespace
         ),
-        "DaemonSet": lambda name: client.AppsV1Api(api_client).read_namespaced_daemon_set(
+        "DaemonSet": lambda name: client.AppsV1Api(_api_client).read_namespaced_daemon_set(
             name, namespace
         ),
-        "ReplicaSet": lambda name: client.AppsV1Api(api_client).read_namespaced_replica_set(
+        "ReplicaSet": lambda name: client.AppsV1Api(_api_client).read_namespaced_replica_set(
             name, namespace
         ),
         "ReplicationController": lambda name: client.CoreV1Api(
-            api_client
+            _api_client
         ).read_namespaced_replication_controller(name, namespace),
-        "Job": lambda name: client.BatchV1Api(api_client).read_namespaced_job(name, namespace),
-        "CronJob": lambda name: client.BatchV1beta1Api(api_client).read_namespaced_cron_job(
+        "Job": lambda name: client.BatchV1Api(_api_client).read_namespaced_job(name, namespace),
+        "CronJob": lambda name: client.BatchV1beta1Api(_api_client).read_namespaced_cron_job(
             name, namespace
         ),
-        "Pod": lambda name: client.CoreV1Api(api_client).read_namespaced_pod(name, namespace),
-        "Service": lambda name: client.CoreV1Api(api_client).read_namespaced_service(
+        "Pod": lambda name: client.CoreV1Api(_api_client).read_namespaced_pod(name, namespace),
+        "Service": lambda name: client.CoreV1Api(_api_client).read_namespaced_service(
             name, namespace
         ),
     }
@@ -509,7 +517,6 @@ def poll_cleanup_status(
 def wait_for_cleanup(
     resources: Dict[str, List[str]],
     namespace: str,
-    api_client,
     timeout: int = 600,
     polling_interval: int = 8,
 ):
@@ -522,7 +529,7 @@ def wait_for_cleanup(
     )
     while True:
         try:
-            cleaned_up = poll_cleanup_status(resources, namespace, api_client)
+            cleaned_up = poll_cleanup_status(resources, namespace)
         except ApiException as e:
             logger.warning(f"Error polling cleanup status: {e}")
             time.sleep(polling_interval)
@@ -543,9 +550,7 @@ def wait_for_cleanup(
         time.sleep(polling_interval)
 
 
-def get_cleanup(
-    api_client: ApiClient, namespace: str, deployments: List[yaml.YAMLObject]
-) -> Callable[[], None]:
+def get_cleanup(namespace: str, deployments: List[yaml.YAMLObject]) -> Callable[[], None]:
     def cleanup():
         logger.debug("Cleaning up resources.")
         resources_to_cleanup = get_cleanup_resources(deployments)
@@ -553,14 +558,14 @@ def get_cleanup(
 
         logger.debug(f"Start cleanup.")
         try:
-            cleanup_resources(resources_to_cleanup, namespace, api_client)
+            cleanup_resources(resources_to_cleanup, namespace)
         except client.exceptions.ApiException as e:
             logger.error(
                 f"Exception cleaning up resources. Resources: `{resources_to_cleanup}` exception: `{e}`",
                 exc_info=True,
             )
         logger.debug(f"Waiting for cleanup. Resources: `{resources_to_cleanup}`")
-        wait_for_cleanup(resources_to_cleanup, namespace, api_client)
+        wait_for_cleanup(resources_to_cleanup, namespace)
         logger.info(f"Finished cleanup. Resources: `{resources_to_cleanup}`")
 
     return cleanup
@@ -633,7 +638,6 @@ def poll_rollout_status(
 
 async def wait_for_rollout(
     deployment: dict | V1Deployable,
-    api_client,
     *,
     timeout: int = 300,
     polling_interval: int = 8,
@@ -681,10 +685,10 @@ async def wait_for_rollout(
         await asyncio.sleep(polling_interval)
 
 
-def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iterable[V1Pod]:
-    api_client = api_client or client.ApiClient()
-    apps_api = client.AppsV1Api(api_client)
-    core_api = client.CoreV1Api(api_client)
+def get_pods_for_statefulset(name: str, namespace: str) -> Iterable[V1Pod]:
+    global _api_client
+    apps_api = client.AppsV1Api(_api_client)
+    core_api = client.CoreV1Api(_api_client)
 
     kwargs = {
         "namespace": namespace,
@@ -736,9 +740,7 @@ def check_pod_condition(
         return condition(pod)
 
 
-def poll_namespace_has_objects(
-    namespace: str, api_client: ApiClient, types: Optional[List[str]] = None
-):
+def poll_namespace_has_objects(namespace: str, types: Optional[List[str]] = None):
     """
     Poll kubernetes to see if the namespace has any objects of the given types in it*.
 
@@ -750,11 +752,13 @@ def poll_namespace_has_objects(
     :return: True if any such resources are found, False otherwise.
     :rtype: bool
     """
+    global _api_client
+
     types = types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod"]
     logger.debug(f"Checking in namespace `{namespace}` for types: `{types}`")
     v1 = client.CoreV1Api()
-    apps_v1 = client.AppsV1Api(api_client)
-    batch_v1 = client.BatchV1Api(api_client)
+    apps_v1 = client.AppsV1Api(_api_client)
+    batch_v1 = client.BatchV1Api(_api_client)
 
     resource_checks = {
         "Pod": lambda: v1.list_namespaced_pod(namespace).items,
@@ -785,7 +789,6 @@ def poll_namespace_has_objects(
 def wait_for_no_objs_in_namespace(
     namespace: str,
     timeout: int = 300,
-    api_client: ApiClient = None,
     polling_interval: int = 2,
     types: Optional[List[str]] = None,
 ):
@@ -806,7 +809,6 @@ def wait_for_no_objs_in_namespace(
     while True:
         has_objects = poll_namespace_has_objects(
             namespace,
-            api_client,
             types,
         )
 
@@ -850,13 +852,13 @@ K8sModelStr = Literal[
 
 def dict_to_k8s_object(data: dict, model: K8sModelStr):
     """Convert a dict to a Kubernetes object."""
-    api_client = client.ApiClient()
+    global _api_client
 
     class _FakeResponse:
         def __init__(self, obj):
             self.data = json.dumps(obj)
 
-    return api_client.deserialize(_FakeResponse(data), model)
+    return _api_client.deserialize(_FakeResponse(data), model)
 
 
 def dict_to_v1probe(probe_dict: dict) -> V1Probe:
@@ -864,8 +866,8 @@ def dict_to_v1probe(probe_dict: dict) -> V1Probe:
 
 
 def k8s_obj_to_dict(deployment: Any) -> dict:
-    api_client = client.ApiClient()
-    return api_client.sanitize_for_serialization(deployment)
+    global _api_client
+    return _api_client.sanitize_for_serialization(deployment)
 
 
 # TODO [values param checking]: Add friendly error messages for missing/extraneous variables in values.yaml.

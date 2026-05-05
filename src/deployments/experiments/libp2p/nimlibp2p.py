@@ -6,7 +6,7 @@ from argparse import Namespace
 from contextlib import ExitStack
 from typing import Optional
 
-from kubernetes.client import ApiClient, V1StatefulSet
+from kubernetes.client import V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.experiments.base_experiment import BaseExperiment
@@ -59,7 +59,6 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
 
     async def _run(
         self,
-        api_client: ApiClient,
         workdir: str,
         args: Namespace,
         values_yaml: Optional[dict],
@@ -74,9 +73,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         publisher = (
             PodApiRequesterBuilder().with_namespace(args.namespace).with_mode("server").build()
         )
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=publisher, wait_for_ready=True
-        )
+        await self.deploy(stack, args, values_yaml, deployment=publisher, wait_for_ready=True)
 
         # Nodes
         nodes = build_nodes(
@@ -87,7 +84,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         namespace = nodes.metadata.namespace
 
         self.dump_yaml(nodes, workdir, name)
-        await self.deploy(api_client, stack, args, values_yaml, deployment=nodes)
+        await self.deploy(stack, args, values_yaml, deployment=nodes, wait_for_ready=False)
 
         await asyncio.sleep(config.delay_cold_start)
 

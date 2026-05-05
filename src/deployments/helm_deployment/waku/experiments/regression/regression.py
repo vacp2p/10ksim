@@ -138,7 +138,6 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         if not args.dry_run:
             await wait_for_rollout(
                 publisher,
-                api_client,
                 timeout=20,
                 pod_ready_condition=("Ready", "True"),
             )
@@ -150,7 +149,6 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
         if not args.dry_run:
             await wait_for_rollout(
                 publisher,
-                api_client,
                 timeout=timeout,
                 pod_ready_condition=("Ready", "False"),
             )

@@ -15,6 +15,7 @@ from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import 
 )
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
+
 from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.analysis.utils import file_utils, path_utils
 

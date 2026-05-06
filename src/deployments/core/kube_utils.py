@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Literal, Optional, Tuple, Union
 
 import dateparser
 import ruamel.yaml
@@ -681,23 +681,42 @@ async def wait_for_rollout(
         await asyncio.sleep(polling_interval)
 
 
-def get_pods_for_statefulset(name: str, namespace: str, api_client=None):
+def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iterable[V1Pod]:
     api_client = api_client or client.ApiClient()
     apps_api = client.AppsV1Api(api_client)
     core_api = client.CoreV1Api(api_client)
 
-    sts = apps_api.read_namespaced_stateful_set(name=name, namespace=namespace)
+    kwargs = {
+        "namespace": namespace,
+    }
 
-    selector = []
-    if sts.spec.selector and sts.spec.selector.match_labels:
-        selector.extend(f"{key}={value}" for key, value in sts.spec.selector.match_labels.items())
+    statefulset = apps_api.read_namespaced_stateful_set(name=name, namespace=namespace)
+    selector = statefulset.spec.selector
+    labels = selector.match_labels if selector and selector.match_labels else None
+    if labels is not None:
+        kwargs["label_selector"] = ",".join(f"{k}={v}" for k, v in labels.items())
 
-    label_selector = ",".join(selector)
+    def has_matching_owner(obj: V1Pod):
+        def is_ss_owner(owner):
+            return all(
+                [
+                    owner.kind == "StatefulSet",
+                    owner.api_version == "apps/v1",
+                    owner.name == statefulset.metadata.name,
+                    owner.uid == statefulset.metadata.uid,
+                    getattr(owner, "controller", True),
+                ]
+            )
 
-    return core_api.list_namespaced_pod(
-        namespace=namespace,
-        label_selector=label_selector,
-    ).items
+        owners = obj.metadata.owner_references
+        if not owners:
+            return False
+        return any(is_ss_owner(owner) for owner in owners)
+
+    return filter(
+        lambda obj: has_matching_owner(obj),
+        core_api.list_namespaced_pod(**kwargs).items,
+    )
 
 
 def check_pod_condition(

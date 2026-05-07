@@ -1,12 +1,10 @@
 import asyncio
 import logging
-import os
 from argparse import Namespace
 from contextlib import ExitStack
-from pathlib import Path
 from typing import Optional
 
-from kubernetes.client import ApiClient, V1ServicePort, V1Probe, V1HTTPGetAction
+from kubernetes.client import V1HTTPGetAction, V1Probe, V1ServicePort
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.builders import ServiceBuilder
@@ -39,7 +37,6 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
 
     async def _run(
         self,
-        api_client: ApiClient,
         workdir: str,
         args: Namespace,
         values_yaml: Optional[dict],
@@ -65,7 +62,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .build()
         )
         self.dump_yaml(bootstrap_service, workdir, "bootstrap-service")
-        await self.deploy(api_client, stack, args, values_yaml, deployment=bootstrap_service)
+        await self.deploy(stack, args, values_yaml, deployment=bootstrap_service)
 
         # 2. Build and Deploy Bootstrap Node
         bootstrap_nodes = (
@@ -86,7 +83,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .build()
         )
         self.dump_yaml(bootstrap_nodes, workdir, "bootstrap")
-        await self.deploy(api_client, stack, args, values_yaml, deployment=bootstrap_nodes, wait_for_ready=True)
+        await self.deploy(stack, args, values_yaml, deployment=bootstrap_nodes, wait_for_ready=True)
 
         # 3. Build and Deploy Regular Nodes
         nodes = (
@@ -108,7 +105,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .build()
         )
         self.dump_yaml(nodes, workdir, "nodes")
-        await self.deploy(api_client, stack, args, values_yaml, deployment=nodes, wait_for_ready=True)
+        await self.deploy(stack, args, values_yaml, deployment=nodes, wait_for_ready=True)
 
         # 4. Wait for Warmup
         if config.warmup_delay > 0:
@@ -128,7 +125,7 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .build()
         )
         self.dump_yaml(probe, workdir, "probe")
-        await self.deploy(api_client, stack, args, values_yaml, deployment=probe, wait_for_ready=True)
+        await self.deploy(stack, args, values_yaml, deployment=probe, wait_for_ready=True)
 
         # 6. Wait for Probe Execution
         if config.probe_delay > 0:

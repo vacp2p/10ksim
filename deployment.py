@@ -7,12 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from kubernetes import config
-from kubernetes.client import ApiClient
 from ruamel import yaml
 
 # Project Imports
-from src.deployments.core.kube_utils import init_logger, set_config_file
+from src.deployments.core.kube_utils import init_config_file, init_logger
 from src.deployments.registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
@@ -25,9 +23,7 @@ async def run_experiment(
     kube_config: Path,
 ):
     logger.debug(f"params: {args}")
-    config.load_kube_config(config_file=kube_config)
-    set_config_file(kube_config)
-    api_client = ApiClient()
+    init_config_file(kube_config)
 
     try:
         with open(values_path, "r") as values:
@@ -39,7 +35,7 @@ async def run_experiment(
     info = experiment_registry[name]
     experiment = info.cls()
     logger.info(f"Running experiment. name `{info.name}` file: `{info.metadata['module_path']}`")
-    await experiment.run(api_client, args, values_yaml)
+    await experiment.run(args, values_yaml)
 
 
 def setup_output_folder(args: argparse.Namespace) -> Path:

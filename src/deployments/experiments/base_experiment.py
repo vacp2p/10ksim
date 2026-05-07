@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, List, Optional, Union
 
 from kubernetes.client import (
-    ApiClient,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
@@ -121,10 +120,9 @@ class BaseExperiment(ABC, BaseModel):
 
         return yaml_obj
 
-    # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
+    # TODO: store stack, and (experiment) args in self and remove as function params.
     async def deploy(
         self,
-        api_client: ApiClient,
         stack,
         args: Namespace,
         values_yaml,
@@ -137,6 +135,8 @@ class BaseExperiment(ABC, BaseModel):
         exist_ok: bool = False,
         timeout=3600,
     ):
+        global _api_client
+
         def given(var):
             if isinstance(var, list):
                 return all(given(val) for val in var)
@@ -148,7 +148,7 @@ class BaseExperiment(ABC, BaseModel):
             )
 
         if isinstance(deployment, V1Deployable):
-            deployment = api_client.sanitize_for_serialization(deployment)
+            deployment = k8s_obj_to_dict(deployment)
 
         yaml_obj = (
             deployment
@@ -157,7 +157,6 @@ class BaseExperiment(ABC, BaseModel):
         )
 
         await self.deploy_yaml(
-            api_client,
             stack,
             args,
             values_yaml,
@@ -170,7 +169,6 @@ class BaseExperiment(ABC, BaseModel):
 
     async def deploy_yaml(
         self,
-        api_client: ApiClient,
         stack,
         args: Namespace,
         values_yaml,
@@ -198,14 +196,12 @@ class BaseExperiment(ABC, BaseModel):
 
         if len(self.deployed[namespace]) == 0:
             self._wait_until_clear(
-                api_client=api_client,
                 namespace=namespace,
                 skip_check=args.skip_check,
             )
 
         if not dry_run:
             cleanup = get_cleanup(
-                api_client=api_client,
                 namespace=namespace,
                 deployments=[yaml_obj],
             )
@@ -227,7 +223,7 @@ class BaseExperiment(ABC, BaseModel):
 
         if not dry_run:
             if wait_for_ready:
-                await wait_for_rollout(yaml_obj, api_client, timeout=timeout)
+                await wait_for_rollout(yaml_obj, timeout=timeout)
         self.log_event({"phase": "finished", **deployment_metadata})
 
         return yaml_obj
@@ -265,7 +261,6 @@ class BaseExperiment(ABC, BaseModel):
 
     async def run(
         self,
-        api_client: ApiClient,
         args: Namespace,
         values_yaml: Optional[yaml.YAMLObject],
     ):
@@ -296,7 +291,6 @@ class BaseExperiment(ABC, BaseModel):
             if args.values_path:
                 shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
             await self._run(
-                api_client=api_client,
                 workdir=workdir,
                 args=args,
                 values_yaml=values_yaml,
@@ -311,7 +305,6 @@ class BaseExperiment(ABC, BaseModel):
     async def _run(
         self,
         # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
-        api_client: ApiClient,
         workdir: str,
         args: Namespace,
         values_yaml: Optional[yaml.YAMLObject],
@@ -319,16 +312,14 @@ class BaseExperiment(ABC, BaseModel):
     ):
         pass
 
-    def _wait_until_clear(self, api_client: ApiClient, namespace: str, skip_check: bool):
+    def _wait_until_clear(self, namespace: str, skip_check: bool):
         # Wait for namespace to be clear unless --skip-check flag was used.
         if not skip_check:
             self.log_event("wait_for_clear_start")
-            wait_for_no_objs_in_namespace(namespace=namespace, api_client=api_client)
+            wait_for_no_objs_in_namespace(namespace=namespace)
             self.log_event("wait_for_clear_finished")
         else:
-            namepace_is_empty = poll_namespace_has_objects(
-                namespace=namespace, api_client=api_client
-            )
+            namepace_is_empty = poll_namespace_has_objects(namespace=namespace)
             if not namepace_is_empty:
                 logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")
 

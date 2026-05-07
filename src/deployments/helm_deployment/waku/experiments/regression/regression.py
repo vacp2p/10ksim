@@ -137,13 +137,10 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
 
         if not args.dry_run:
             await wait_for_rollout(
-                publisher["kind"],
-                publisher["metadata"]["name"],
-                publisher["metadata"]["namespace"],
-                20,
+                publisher,
                 api_client,
-                ("Ready", "True"),
-                # TODO [extend condition checks] lambda cond : cond.type == "Ready" and cond.status == "True"
+                timeout=20,
+                pod_ready_condition=("Ready", "True"),
             )
         self.log_event("publisher_deploy_finished")
 
@@ -152,13 +149,10 @@ class WakuRegressionNodes(BaseExperiment, BaseModel):
 
         if not args.dry_run:
             await wait_for_rollout(
-                publisher["kind"],
-                publisher["metadata"]["name"],
-                publisher["metadata"]["namespace"],
-                timeout,
+                publisher,
                 api_client,
-                ("Ready", "False"),
-                # TODO: consider state.reason == .completed
+                timeout=timeout,
+                pod_ready_condition=("Ready", "False"),
             )
         self.log_event("publisher_messages_finished")
         time.sleep(20)

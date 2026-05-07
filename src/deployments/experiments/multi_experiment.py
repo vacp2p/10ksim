@@ -53,9 +53,9 @@ class Multiple(BaseExperiment, BaseModel):
         )
         subparser.add_argument(
             "--delay",
-            type=Optional[float],
+            type=float,
             required=False,
-            default=None,
+            default=120,
             help="Delay (in seconds) between each experiment run.",
         )
 
@@ -73,7 +73,7 @@ class Multiple(BaseExperiment, BaseModel):
     ):
         logger.info("Multiple experiments")
         param_list = self.get_params_list()
-        self.delay_between_exps = args.delay or self.delay_between_exps
+        self.delay_between_exps = self.delay_between_exps or args.delay
         assert (
             self.delay_between_exps
         ), "delay_between_exps must be specified either in the subclass or the cli args (--delay)"

@@ -21,6 +21,14 @@ sns.set_theme()
 class WakuAnalyzer(Nimlibp2pAnalyzer):
     msg_hash_key: str = "msg_hash"
 
+    def supports(self, exp_name: str) -> Self:
+        if exp_name != "waku":
+            raise ValueError(
+                f"Experiment type not supported by this analyzer. "
+                f"Experiment: `{exp_name}` Analyzer: `{self.__class__}`"
+            )
+        return self
+
     def with_filter_check(self, *, on_fail: OnFail = "continue") -> Self:
         return self._with_parameterized_check(
             self.check_filter_messages,

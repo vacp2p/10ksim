@@ -11,7 +11,7 @@ from typing import Any, Iterator, Optional, Self
 
 from pydantic import BaseModel
 
-from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
+from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 from src.analysis.utils.file_utils import extract_exps, get_folders
 from src.analysis.utils.log_utils import (
     init_logger,
@@ -135,7 +135,8 @@ def get_analyzer_for_dev_testing(metadata) -> Analyzer:
     ]
 
     return (
-        WakuAnalyzer()
+        Nimlibp2pAnalyzer()
+        .supports(metadata["experiment"]["name"])
         .with_data_puller(data_puller)
         .with_ss_check(stateful_sets, nodes_per_statefulset)
         .with_reliability_check(

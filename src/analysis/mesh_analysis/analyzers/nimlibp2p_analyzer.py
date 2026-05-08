@@ -60,6 +60,14 @@ class Nimlibp2pAnalyzer(Analyzer):
 
     msg_hash_key: str = "msgId"
 
+    def supports(self, exp_name: str) -> Self:
+        if exp_name != "nimlibp2p":
+            raise ValueError(
+                f"Experiment type not supported by this analyzer. "
+                f"Experiment: `{exp_name}` Analyzer: `{self.__class__}`"
+            )
+        return self
+
     def with_ss_check(
         self,
         stateful_sets: List[str],

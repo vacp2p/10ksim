@@ -94,7 +94,7 @@ class WakuExperiment(BaseExperiment, BaseModel):
 
         num_messages: NonNegativeInt = 20
         num_nodes: NonNegativeInt = 20
-        num_boostrap_nodes: NonNegativeInt = 5
+        num_bootstrap_nodes: NonNegativeInt = 5
         delay_cold_start: NonNegativeFloat = 1
         delay_after_publish: NonNegativeFloat = 0.5
 
@@ -109,8 +109,6 @@ class WakuExperiment(BaseExperiment, BaseModel):
         self.log_event("run_start")
 
         config = self.ExpConfig(**values_yaml)
-        config.num_boostrap_nodes = 5
-        config.num_nodes = 20
         self.log_metadata({"params": vars(config)})
 
         # Publisher
@@ -128,7 +126,7 @@ class WakuExperiment(BaseExperiment, BaseModel):
         )
 
         # Nodes
-        deployments = build_nodes(args.namespace, config.num_nodes, config.num_boostrap_nodes)
+        deployments = build_nodes(args.namespace, config.num_nodes, config.num_bootstrap_nodes)
         nodes = deployments["nodes"]
         bootstrap = deployments["bootstrap"]
         for deployment in deployments.values():
@@ -160,19 +158,10 @@ class WakuExperiment(BaseExperiment, BaseModel):
                 )
                 await waku_publish(namespace=namespace, target=target)
             except PodApiApplicationError as e:
-                import pdb
-
-                pdb.set_trace()
                 logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
             except PodApiError as e:
-                import pdb
-
-                pdb.set_trace()
                 logger.error(f"PodApiError: {e} {traceback.format_exc()}")
             except Exception as e:
-                import pdb
-
-                pdb.set_trace()
                 logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
             await asyncio.sleep(config.delay_after_publish)

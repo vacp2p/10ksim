@@ -11,7 +11,7 @@ from typing import Any, Iterator, Optional, Self
 
 from pydantic import BaseModel
 
-from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
+from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 from src.analysis.utils.file_utils import extract_exps, get_folders
 from src.analysis.utils.log_utils import (
     init_logger,
@@ -119,9 +119,9 @@ async def process_experiment(exp: dict) -> dict:
     return results_dict
 
 
-def get_analyzer_for_dev_testing(exp) -> Analyzer:
-    stack = exp["stack"]
-    params = exp["params"]
+def get_analyzer_for_dev_testing(metadata) -> Analyzer:
+    stack = metadata["stack"]
+    params = metadata["params"]
     data_puller = DataPuller().with_kwargs(stack)
     stateful_sets = stack["stateful_sets"]
     nodes_per_statefulset = stack["nodes_per_statefulset"]
@@ -135,7 +135,7 @@ def get_analyzer_for_dev_testing(exp) -> Analyzer:
     ]
 
     return (
-        Nimlibp2pAnalyzer()
+        WakuAnalyzer()
         .with_data_puller(data_puller)
         .with_ss_check(stateful_sets, nodes_per_statefulset)
         .with_reliability_check(
@@ -144,7 +144,7 @@ def get_analyzer_for_dev_testing(exp) -> Analyzer:
             expected_num_peers=params["num_nodes"],
             expected_num_messages=params["num_messages"],
         )
-        .with_dump_analysis_dir(f"local_data/simulations_data/{exp['stack']['name']}/")
+        .with_dump_analysis_dir(f"local_data/simulations_data/{metadata['stack']['name']}/")
     )
 
 

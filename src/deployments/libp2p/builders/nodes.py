@@ -5,7 +5,7 @@ from kubernetes.client import V1ContainerPort, V1PodDNSConfig, V1ResourceRequire
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
+from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME, readiness_probe_metrics
 
 
 class Nodes:
@@ -13,7 +13,7 @@ class Nodes:
 
     DEFAULT_NAMESPACE = "zerotesting-nimlibp2p"
     DEFAULT_SERVICE_NAME = "nimp2p-service"
-    DEFAULT_IMAGE = Image(repo="ufarooqstatus/refactored-test-node", tag="v1.0")
+    DEFAULT_IMAGE = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="v3")
 
     @staticmethod
     def create_container_config() -> ContainerConfig:
@@ -30,6 +30,7 @@ class Nodes:
         ]
 
         config.with_resources(Nodes.create_resources())
+        config.with_readiness_probe(readiness_probe_metrics())
 
         return config
 

@@ -14,9 +14,8 @@ async def libp2p_dst_node_publish(
     target: Union[Target, str],
     *,
     topic: str = "test",
-    msg_size_kbytes: NonNegativeInt = 1,
+    msg_size_bytes: NonNegativeInt = 1,
 ) -> dict:
-    msg_size_bytes = msg_size_kbytes * 1024
     endpoint = Endpoint(
         name="nimlibp2p_message",
         url="http://{node}:{port}/publish",

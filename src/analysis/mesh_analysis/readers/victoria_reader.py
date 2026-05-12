@@ -44,8 +44,7 @@ class VictoriaReader(Reader):
                         exit()
                     try:
                         logs.append(
-                            (parsed_object["_msg"],)
-                            + tuple(parsed_object[k] for k in extra_fields)
+                            (parsed_object["_msg"],) + tuple(parsed_object[k] for k in extra_fields)
                         )
                     except KeyError as e:
                         logger.warning(f"Malformed log line skipped due to missing key {e}: {line}")

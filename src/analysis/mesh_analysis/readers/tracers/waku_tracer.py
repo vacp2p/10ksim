@@ -64,7 +64,7 @@ class WakuTracer(MessageTracer):
                     convert=self._trace_mixnet_in_logs,
                 ),
             ],
-            query="(sent relay message OR publishWithConn)",
+            query="sent relay message",
         )
         self.patterns.append(sent_pattern_group)
         return self

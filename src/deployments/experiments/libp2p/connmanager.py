@@ -4,7 +4,7 @@ from argparse import Namespace
 from contextlib import AsyncExitStack, ExitStack
 from typing import Optional
 
-from kubernetes.client import ApiClient, V1ServicePort
+from kubernetes.client import ApiClient, V1Probe, V1ServicePort, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
 from src.deployments.core.builders import ServiceBuilder
@@ -25,6 +25,12 @@ HUB_SCALE_STEPS = [5, 20, 50]
 WATERMARK_LOW = 10
 WATERMARK_HIGH = 20
 SILENCE_PERIOD_S = 2
+
+READINESS_PROBE = V1Probe(
+    tcp_socket=V1TCPSocketAction(port=5000),
+    initial_delay_seconds=2,
+    period_seconds=5,
+)
 
 
 def _hub_addrs(num_hubs: int, namespace: str) -> str:
@@ -213,6 +219,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -231,6 +238,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers-a", namespace=namespace, num_nodes=config.num_peers_outbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers-a")
             .with_option("NODE_ROLE", "RolePeer")
@@ -244,6 +252,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers-b", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers-b")
             .with_option("NODE_ROLE", "RolePeer")
@@ -268,6 +277,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -289,6 +299,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="wave1", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "wave1")
             .with_option("NODE_ROLE", "RolePeer")
@@ -311,6 +322,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="wave2", namespace=namespace, num_nodes=config.num_peers_outbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "wave2")
             .with_option("NODE_ROLE", "RolePeer")
@@ -339,6 +351,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -358,8 +371,11 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         protected = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name="protected", namespace=namespace, num_nodes=len(config.protected_peer_keys)
+                name="protected",
+                namespace=namespace,
+                num_nodes=len(config.protected_peer_keys),
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "protected")
             .with_option("NODE_ROLE", "RolePeer")
@@ -378,6 +394,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -402,6 +419,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -422,6 +440,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -450,6 +469,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -469,6 +489,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         abusers = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="abusers", namespace=namespace, num_nodes=config.num_abusers)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "abusers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -488,6 +509,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -515,6 +537,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -538,6 +561,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="protected", namespace=namespace, num_nodes=config.num_protected
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "protected")
             .with_option("NODE_ROLE", "RolePeer")
@@ -556,6 +580,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -582,6 +607,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -601,6 +627,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
+            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -673,6 +700,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 hub = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "hub")
                     .with_option("NODE_ROLE", "RoleHub")
@@ -693,6 +721,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 abusers = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="abusers", namespace=namespace, num_nodes=num_abusers)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "abusers")
                     .with_option("NODE_ROLE", "RolePeer")
@@ -711,6 +740,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 peers = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="peers", namespace=namespace, num_nodes=num_regular)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "peers")
                     .with_option("NODE_ROLE", "RolePeer")
@@ -745,6 +775,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 hub = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "hub")
                     .with_option("NODE_ROLE", "RoleHub")
@@ -764,6 +795,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 peers = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="peers", namespace=namespace, num_nodes=n + 20)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "peers")
                     .with_option("NODE_ROLE", "RolePeer")
@@ -809,6 +841,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 hub = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="hub", namespace=namespace, num_nodes=num_hubs)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "hub")
                     .with_option("NODE_ROLE", "RoleHub")
@@ -828,6 +861,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 peers = (
                     Libp2pStatefulSetBuilder()
                     .with_libp2p_config(name="peers", namespace=namespace, num_nodes=n)
+                    .with_readiness_probe(READINESS_PROBE)
                     .with_image(image)
                     .with_label("role", "peers")
                     .with_option("NODE_ROLE", "RolePeer")

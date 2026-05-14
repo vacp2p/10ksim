@@ -354,7 +354,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         self.dump_yaml(hub, workdir, "hub")
         await self.deploy(api_client, stack, args, {}, deployment=hub, wait_for_ready=True)
 
-        # Protected peers: each uses a fixed private key so the hub knows their peer ID
+        protected_keys_str = ",".join(config.protected_peer_keys)
         protected = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
@@ -366,27 +366,9 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_option("PORT", "5000")
             .with_option("DIAL_OUT", "true")
             .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
+            .with_option("PRIVATE_KEYS", protected_keys_str)
             .build()
         )
-        # Assign a fixed private key per pod via pod index — set as a single
-        # comma-separated env var and let the node pick its index from the hostname.
-        # For now we pass the first key to all protected pods; a future improvement
-        # is a per-pod override via a config map.
-        if config.protected_peer_keys:
-            protected = (
-                Libp2pStatefulSetBuilder()
-                .with_libp2p_config(
-                    name="protected", namespace=namespace, num_nodes=len(config.protected_peer_keys)
-                )
-                .with_image(image)
-                .with_label("role", "protected")
-                .with_option("NODE_ROLE", "RolePeer")
-                .with_option("PORT", "5000")
-                .with_option("DIAL_OUT", "true")
-                .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
-                .with_option("PRIVATE_KEY", config.protected_peer_keys[0])
-                .build()
-            )
         self.dump_yaml(protected, workdir, "protected")
         await self.deploy(api_client, stack, args, {}, deployment=protected, wait_for_ready=True)
 

@@ -181,14 +181,9 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Group B peers: they dial hub (no bonus)
     # -------------------------------------------------------------------------
     async def _run_a(self, api_client, args, stack, config, namespace, image, workdir):
-        hub_svc, hub, governance_svc, peers_a, peers_b = self._build_run_a(config, namespace, image)
+        hub, peers_a, peers_b = self._build_run_a(config, namespace, image)
 
-        for name, obj in [
-            ("hub-svc", hub_svc),
-            ("nimp2p-service", governance_svc),
-        ]:
-            self.dump_yaml(obj, workdir, name)
-            await self.deploy(api_client, stack, args, {}, deployment=obj)
+        await self._deploy_services(namespace, workdir, api_client, stack, args)
 
         self.dump_yaml(hub, workdir, "hub")
         await self.deploy(api_client, stack, args, {}, deployment=hub, wait_for_ready=True)
@@ -205,16 +200,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
 
     def _build_run_a(self, config, namespace, image):
         outbound_peers = _outbound_peers_str(config.num_peers_outbound, namespace)
-
-        hub_svc = (
-            ServiceBuilder()
-            .with_name("hub")
-            .with_namespace(namespace)
-            .with_selector("app", "zerotenkay")
-            .with_selector("role", "hub")
-            .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
-            .build()
-        )
 
         hub = (
             Libp2pStatefulSetBuilder()
@@ -263,7 +248,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .build()
         )
 
-        return hub_svc, hub, _governance_service(namespace), peers_a, peers_b
+        return hub, peers_a, peers_b
 
     # -------------------------------------------------------------------------
     # Run B: Grace period correctness + abuse
@@ -665,10 +650,10 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
                 }
             )
             async with AsyncExitStack() as step_stack:
-                hub_svc, hub, gov_svc, _, peers_b = self._build_run_a(step_cfg, namespace, image)
-                for name, obj in [("hub-svc", hub_svc), ("nimp2p-service", gov_svc)]:
-                    self.dump_yaml(obj, workdir, f"a-scale-{n}-{name}")
-                    await self.deploy(api_client, step_stack, args, {}, deployment=obj)
+                hub, _, peers_b = self._build_run_a(step_cfg, namespace, image)
+                await self._deploy_services(
+                    namespace, workdir, api_client, step_stack, args, prefix=f"a-scale-{n}-"
+                )
                 self.dump_yaml(hub, workdir, f"a-scale-{n}-hub")
                 await self.deploy(
                     api_client, step_stack, args, {}, deployment=hub, wait_for_ready=True

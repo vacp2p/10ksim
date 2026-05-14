@@ -1,17 +1,15 @@
 import asyncio
 import logging
 from argparse import Namespace
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from typing import Optional
 
-from kubernetes.client import ApiClient, V1Probe, V1ServicePort, V1TCPSocketAction
+from kubernetes.client import ApiClient, V1ServicePort
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
-from src.deployments.experiments.multi_experiment import Multiple
-from src.deployments.libp2p.bridge import Bridge as Libp2pBridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.registry import experiment
 
@@ -27,12 +25,6 @@ HUB_SCALE_STEPS = [5, 20, 50]
 WATERMARK_LOW = 10
 WATERMARK_HIGH = 20
 SILENCE_PERIOD_S = 2
-
-READINESS_PROBE = V1Probe(
-    tcp_socket=V1TCPSocketAction(port=5000),
-    initial_delay_seconds=2,
-    period_seconds=5,
-)
 
 
 def _hub_addrs(num_hubs: int, namespace: str) -> str:
@@ -75,9 +67,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         BaseExperiment.add_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
-    def _get_metadata(self) -> dict:
-        return Libp2pBridge().get_metadata(self.events_log_path)
-
     class ExpConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
 
@@ -118,20 +107,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         # How long to let the experiment run before teardown
         run_duration_s: int = 300
 
-    async def _deploy_services(self, namespace, workdir, api_client, stack, args, prefix=""):
-        hub_svc = (
-            ServiceBuilder()
-            .with_name("hub")
-            .with_namespace(namespace)
-            .with_selector("app", "zerotenkay")
-            .with_selector("role", "hub")
-            .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
-            .build()
-        )
-        for name, obj in [("hub-svc", hub_svc), ("nimp2p-service", _governance_service(namespace))]:
-            self.dump_yaml(obj, workdir, f"{prefix}{name}")
-            await self.deploy(api_client, stack, args, {}, deployment=obj)
-
     async def _run(
         self,
         api_client: ApiClient,
@@ -164,8 +139,18 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             await self._run_f(api_client, args, stack, config, namespace, image, workdir)
         elif run == "G":
             await self._run_g(api_client, args, stack, config, namespace, image, workdir)
+        elif run == "A_SCALE":
+            await self._run_a_scale(api_client, args, config, namespace, image, workdir)
+        elif run == "E_SCALE":
+            await self._run_e_scale(api_client, args, config, namespace, image, workdir)
+        elif run == "G_SCALE":
+            await self._run_g_scale(api_client, args, config, namespace, image, workdir)
+        elif run == "HUB_SCALE":
+            await self._run_hub_scale(api_client, args, config, namespace, image, workdir)
         else:
-            raise ValueError(f"Unknown run: {config.run}. Expected A–G.")
+            raise ValueError(
+                f"Unknown run: {config.run}. Expected A–G or A_SCALE/E_SCALE/G_SCALE/HUB_SCALE."
+            )
 
         self.log_event("internal_run_finished")
 
@@ -176,9 +161,14 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Group B peers: they dial hub (no bonus)
     # -------------------------------------------------------------------------
     async def _run_a(self, api_client, args, stack, config, namespace, image, workdir):
-        hub, peers_a, peers_b = self._build_run_a(config, namespace, image)
+        hub_svc, hub, governance_svc, peers_a, peers_b = self._build_run_a(config, namespace, image)
 
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            ("hub-svc", hub_svc),
+            ("nimp2p-service", governance_svc),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         self.dump_yaml(hub, workdir, "hub")
         await self.deploy(api_client, stack, args, {}, deployment=hub, wait_for_ready=True)
@@ -196,10 +186,19 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     def _build_run_a(self, config, namespace, image):
         outbound_peers = _outbound_peers_str(config.num_peers_outbound, namespace)
 
+        hub_svc = (
+            ServiceBuilder()
+            .with_name("hub")
+            .with_namespace(namespace)
+            .with_selector("app", "zerotenkay")
+            .with_selector("role", "hub")
+            .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+            .build()
+        )
+
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -218,7 +217,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers-a", namespace=namespace, num_nodes=config.num_peers_outbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers-a")
             .with_option("NODE_ROLE", "RolePeer")
@@ -232,7 +230,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers-b", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers-b")
             .with_option("NODE_ROLE", "RolePeer")
@@ -243,7 +240,7 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .build()
         )
 
-        return hub, peers_a, peers_b
+        return hub_svc, hub, _governance_service(namespace), peers_a, peers_b
 
     # -------------------------------------------------------------------------
     # Run B: Grace period correctness + abuse
@@ -252,12 +249,25 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Phase 2: Wave 2 uses aggressive reconnect to stay grace-exempt
     # -------------------------------------------------------------------------
     async def _run_b(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -279,7 +289,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="wave1", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "wave1")
             .with_option("NODE_ROLE", "RolePeer")
@@ -302,7 +311,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="wave2", namespace=namespace, num_nodes=config.num_peers_outbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "wave2")
             .with_option("NODE_ROLE", "RolePeer")
@@ -324,14 +332,27 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Protected peers use fixed private keys so their peer IDs are known in advance
     # -------------------------------------------------------------------------
     async def _run_c(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         protected_peers_str = ",".join(config.protected_peer_ids)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -347,24 +368,39 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         self.dump_yaml(hub, workdir, "hub")
         await self.deploy(api_client, stack, args, {}, deployment=hub, wait_for_ready=True)
 
-        protected_keys_str = ",".join(config.protected_peer_keys)
+        # Protected peers: each uses a fixed private key so the hub knows their peer ID
         protected = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name="protected",
-                namespace=namespace,
-                num_nodes=len(config.protected_peer_keys),
+                name="protected", namespace=namespace, num_nodes=len(config.protected_peer_keys)
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "protected")
             .with_option("NODE_ROLE", "RolePeer")
             .with_option("PORT", "5000")
             .with_option("DIAL_OUT", "true")
             .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
-            .with_option("PRIVATE_KEYS", protected_keys_str)
             .build()
         )
+        # Assign a fixed private key per pod via pod index — set as a single
+        # comma-separated env var and let the node pick its index from the hostname.
+        # For now we pass the first key to all protected pods; a future improvement
+        # is a per-pod override via a config map.
+        if config.protected_peer_keys:
+            protected = (
+                Libp2pStatefulSetBuilder()
+                .with_libp2p_config(
+                    name="protected", namespace=namespace, num_nodes=len(config.protected_peer_keys)
+                )
+                .with_image(image)
+                .with_label("role", "protected")
+                .with_option("NODE_ROLE", "RolePeer")
+                .with_option("PORT", "5000")
+                .with_option("DIAL_OUT", "true")
+                .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
+                .with_option("PRIVATE_KEY", config.protected_peer_keys[0])
+                .build()
+            )
         self.dump_yaml(protected, workdir, "protected")
         await self.deploy(api_client, stack, args, {}, deployment=protected, wait_for_ready=True)
 
@@ -374,7 +410,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -394,12 +429,25 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Hub: withWatermark(10, 20).withMaxConnections(30)
     # -------------------------------------------------------------------------
     async def _run_d(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -420,7 +468,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -444,12 +491,25 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Question: do abusers survive indefinitely?
     # -------------------------------------------------------------------------
     async def _run_e(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -469,7 +529,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         abusers = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="abusers", namespace=namespace, num_nodes=config.num_abusers)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "abusers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -489,7 +548,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -510,14 +568,27 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Question: does trim stop cleanly or loop/stall?
     # -------------------------------------------------------------------------
     async def _run_f(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         protected_peers_str = ",".join(config.protected_peer_ids)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -541,7 +612,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="protected", namespace=namespace, num_nodes=config.num_protected
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "protected")
             .with_option("NODE_ROLE", "RolePeer")
@@ -560,7 +630,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -582,12 +651,25 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
     # Question: does the hub stabilise or keep cycling?
     # -------------------------------------------------------------------------
     async def _run_g(self, api_client, args, stack, config, namespace, image, workdir):
-        await self._deploy_services(namespace, workdir, api_client, stack, args)
+        for name, obj in [
+            (
+                "hub-svc",
+                ServiceBuilder()
+                .with_name("hub")
+                .with_namespace(namespace)
+                .with_selector("app", "zerotenkay")
+                .with_selector("role", "hub")
+                .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                .build(),
+            ),
+            ("nimp2p-service", _governance_service(namespace)),
+        ]:
+            self.dump_yaml(obj, workdir, name)
+            await self.deploy(api_client, stack, args, {}, deployment=obj)
 
         hub = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "hub")
             .with_option("NODE_ROLE", "RoleHub")
@@ -607,7 +689,6 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
             .with_libp2p_config(
                 name="peers", namespace=namespace, num_nodes=config.num_peers_inbound
             )
-            .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_label("role", "peers")
             .with_option("NODE_ROLE", "RolePeer")
@@ -623,114 +704,266 @@ class ConnManagerExperiment(BaseExperiment, BaseModel):
         logger.info(f"Run G deployed. Waiting {config.run_duration_s}s.")
         await asyncio.sleep(config.run_duration_s)
 
+    # -------------------------------------------------------------------------
+    # Scale runs: A, E, G at 50 / 100 / 150 / 200 peers.
+    # Each step deploys, waits run_duration_s, then tears down before the next.
+    # Watermarks scale proportionally for A and G so the hub always manages a
+    # meaningful fraction of the peers. Run E keeps the original watermark (5/10)
+    # so the grace-abuse timing is comparable to the small-scale result.
+    # -------------------------------------------------------------------------
 
-# -------------------------------------------------------------------------
-# Scale experiments using the Multiple pipeline.
-# Each step runs the base "connmanager" experiment with different params,
-# getting its own output folder and metadata.json.
-# -------------------------------------------------------------------------
+    async def _run_a_scale(self, api_client, args, config, namespace, image, workdir):
+        """Run A at 50/100/150/200 inbound peers. lowWater=n//2, highWater=n."""
+        for n in SCALE_STEPS:
+            low, high = n // 2, n
+            logger.info(f"Run A-scale: n={n}, watermark={low}/{high}")
+            step_cfg = config.model_copy(
+                update={
+                    "watermark_low": low,
+                    "watermark_high": high,
+                    "num_peers_inbound": n + 20,  # enough above highWater to always trigger trim
+                    "num_peers_outbound": 0,
+                }
+            )
+            async with AsyncExitStack() as step_stack:
+                hub_svc, hub, gov_svc, _, peers_b = self._build_run_a(step_cfg, namespace, image)
+                for name, obj in [("hub-svc", hub_svc), ("nimp2p-service", gov_svc)]:
+                    self.dump_yaml(obj, workdir, f"a-scale-{n}-{name}")
+                    await self.deploy(api_client, step_stack, args, {}, deployment=obj)
+                self.dump_yaml(hub, workdir, f"a-scale-{n}-hub")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=hub, wait_for_ready=True
+                )
+                self.dump_yaml(peers_b, workdir, f"a-scale-{n}-peers-b")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=peers_b, wait_for_ready=True
+                )
+                logger.info(f"Run A-scale n={n} deployed. Waiting {config.run_duration_s}s.")
+                await asyncio.sleep(config.run_duration_s)
+            logger.info(f"Run A-scale n={n} done. Pausing 15s before next step.")
+            await asyncio.sleep(15)
 
+    async def _run_e_scale(self, api_client, args, config, namespace, image, workdir):
+        """Run E (grace abuse) at 50/100/150/200 total peers.
+        Watermark fixed at 5/10 (same as original Run E) so timing is comparable.
+        Abusers are 1/3 of n; the rest are regular peers.
+        The point: does startup timing variance at large pod counts weaken the attack?
+        """
+        for n in SCALE_STEPS:
+            num_abusers = n // 3
+            num_regular = n - num_abusers
+            logger.info(f"Run E-scale: n={n}, abusers={num_abusers}, regular={num_regular}")
+            async with AsyncExitStack() as step_stack:
+                for name, obj in [
+                    (
+                        "hub-svc",
+                        ServiceBuilder()
+                        .with_name("hub")
+                        .with_namespace(namespace)
+                        .with_selector("app", "zerotenkay")
+                        .with_selector("role", "hub")
+                        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                        .build(),
+                    ),
+                    ("nimp2p-service", _governance_service(namespace)),
+                ]:
+                    self.dump_yaml(obj, workdir, f"e-scale-{n}-{name}")
+                    await self.deploy(api_client, step_stack, args, {}, deployment=obj)
 
-@experiment(name="connmanager-a-scale")
-class ConnManagerAScale(Multiple):
-    """Run A at increasing peer counts (50/100/150/200).
-    Watermarks scale proportionally: lowWater=n//2, highWater=n.
-    """
+                hub = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+                    .with_image(image)
+                    .with_label("role", "hub")
+                    .with_option("NODE_ROLE", "RoleHub")
+                    .with_option("PORT", "5000")
+                    .with_option("WATERMARK_LOW", config.watermark_low)  # 5
+                    .with_option("WATERMARK_HIGH", config.watermark_high)  # 10
+                    .with_option("WATERMARK_GRACE_PERIOD_S", config.grace_period_s)
+                    .with_option("WATERMARK_SILENCE_PERIOD_S", config.silence_period_s)
+                    .with_option("NUM_HUBS", config.num_hubs)
+                    .with_option("HUB_NAMESPACE", namespace)
+                    .build()
+                )
+                self.dump_yaml(hub, workdir, f"e-scale-{n}-hub")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=hub, wait_for_ready=True
+                )
 
-    experiment_name: str = "connmanager"
-    delay_between_exps: float = 15
+                abusers = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="abusers", namespace=namespace, num_nodes=num_abusers)
+                    .with_image(image)
+                    .with_label("role", "abusers")
+                    .with_option("NODE_ROLE", "RolePeer")
+                    .with_option("PORT", "5000")
+                    .with_option("DIAL_OUT", "true")
+                    .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
+                    .with_option("RECONNECT", "before_grace")
+                    .with_option("RECONNECT_INTERVAL_S", config.reconnect_interval_s)
+                    .build()
+                )
+                self.dump_yaml(abusers, workdir, f"e-scale-{n}-abusers")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=abusers, wait_for_ready=True
+                )
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run A at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
+                peers = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="peers", namespace=namespace, num_nodes=num_regular)
+                    .with_image(image)
+                    .with_label("role", "peers")
+                    .with_option("NODE_ROLE", "RolePeer")
+                    .with_option("PORT", "5000")
+                    .with_option("DIAL_OUT", "true")
+                    .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
+                    .build()
+                )
+                self.dump_yaml(peers, workdir, f"e-scale-{n}-peers")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=peers, wait_for_ready=True
+                )
 
-    def get_params_list(self) -> list[dict]:
-        return [
-            {
-                "run": "A",
-                "watermark_low": n // 2,
-                "watermark_high": n,
-                "num_peers_inbound": n + 20,
-                "num_peers_outbound": 0,
-            }
-            for n in SCALE_STEPS
-        ]
+                logger.info(f"Run E-scale n={n} deployed. Waiting {config.run_duration_s}s.")
+                await asyncio.sleep(config.run_duration_s)
+            logger.info(f"Run E-scale n={n} done. Pausing 15s before next step.")
+            await asyncio.sleep(15)
 
+    async def _run_g_scale(self, api_client, args, config, namespace, image, workdir):
+        """Run G (oscillation) at 50/100/150/200 aggressive peers.
+        Watermark scales proportionally (lowWater=n//2, highWater=n) so the hub
+        always manages a meaningful fraction of peers and trim fires each step.
+        """
+        for n in SCALE_STEPS:
+            low, high = n // 2, n
+            logger.info(f"Run G-scale: n={n}, watermark={low}/{high}")
+            async with AsyncExitStack() as step_stack:
+                for name, obj in [
+                    (
+                        "hub-svc",
+                        ServiceBuilder()
+                        .with_name("hub")
+                        .with_namespace(namespace)
+                        .with_selector("app", "zerotenkay")
+                        .with_selector("role", "hub")
+                        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                        .build(),
+                    ),
+                    ("nimp2p-service", _governance_service(namespace)),
+                ]:
+                    self.dump_yaml(obj, workdir, f"g-scale-{n}-{name}")
+                    await self.deploy(api_client, step_stack, args, {}, deployment=obj)
 
-@experiment(name="connmanager-e-scale")
-class ConnManagerEScale(Multiple):
-    """Run E (grace abuse) at increasing peer counts.
-    Watermark fixed at defaults (same as original Run E) so timing is comparable.
-    Abusers are 1/3 of n; the rest are regular peers.
-    """
+                hub = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="hub", namespace=namespace, num_nodes=config.num_hubs)
+                    .with_image(image)
+                    .with_label("role", "hub")
+                    .with_option("NODE_ROLE", "RoleHub")
+                    .with_option("PORT", "5000")
+                    .with_option("WATERMARK_LOW", low)
+                    .with_option("WATERMARK_HIGH", high)
+                    .with_option("WATERMARK_SILENCE_PERIOD_S", config.silence_period_s)
+                    .with_option("NUM_HUBS", config.num_hubs)
+                    .with_option("HUB_NAMESPACE", namespace)
+                    .build()
+                )
+                self.dump_yaml(hub, workdir, f"g-scale-{n}-hub")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=hub, wait_for_ready=True
+                )
 
-    experiment_name: str = "connmanager"
-    delay_between_exps: float = 15
+                peers = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="peers", namespace=namespace, num_nodes=n + 20)
+                    .with_image(image)
+                    .with_label("role", "peers")
+                    .with_option("NODE_ROLE", "RolePeer")
+                    .with_option("PORT", "5000")
+                    .with_option("DIAL_OUT", "true")
+                    .with_option("HUB_ADDRS", _hub_addrs(config.num_hubs, namespace))
+                    .with_option("RECONNECT", "aggressive")
+                    .build()
+                )
+                self.dump_yaml(peers, workdir, f"g-scale-{n}-peers")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=peers, wait_for_ready=True
+                )
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run E at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
+                logger.info(f"Run G-scale n={n} deployed. Waiting {config.run_duration_s}s.")
+                await asyncio.sleep(config.run_duration_s)
+            logger.info(f"Run G-scale n={n} done. Pausing 15s before next step.")
+            await asyncio.sleep(15)
 
-    def get_params_list(self) -> list[dict]:
-        return [
-            {
-                "run": "E",
-                "num_abusers": n // 3,
-                "num_peers_inbound": n - n // 3,
-            }
-            for n in SCALE_STEPS
-        ]
+    # -------------------------------------------------------------------------
+    # Hub-scale run: fixed 100 inbound peers, hub count varies (5 / 20 / 50).
+    # Key questions: do hubs reliably connect to each other? Do hub-to-hub links
+    # survive trim pressure from 100 inbound peers per hub?
+    # Watermark: lowWater=num_peers_inbound//2, highWater=num_peers_inbound.
+    # -------------------------------------------------------------------------
+    async def _run_hub_scale(self, api_client, args, config, namespace, image, workdir):
+        """Hub-scale run: fixed n peers, hub count steps through HUB_SCALE_STEPS."""
+        n = config.num_peers_inbound
+        low = config.watermark_low
+        high = config.watermark_high
+        for num_hubs in HUB_SCALE_STEPS:
+            logger.info(f"Run Hub-scale: num_hubs={num_hubs}, n={n}, watermark={low}/{high}")
+            async with AsyncExitStack() as step_stack:
+                for name, obj in [
+                    (
+                        "hub-svc",
+                        ServiceBuilder()
+                        .with_name("hub")
+                        .with_namespace(namespace)
+                        .with_selector("app", "zerotenkay")
+                        .with_selector("role", "hub")
+                        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+                        .build(),
+                    ),
+                    ("nimp2p-service", _governance_service(namespace)),
+                ]:
+                    self.dump_yaml(obj, workdir, f"hub-scale-{num_hubs}-{name}")
+                    await self.deploy(api_client, step_stack, args, {}, deployment=obj)
 
+                hub = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="hub", namespace=namespace, num_nodes=num_hubs)
+                    .with_image(image)
+                    .with_label("role", "hub")
+                    .with_option("NODE_ROLE", "RoleHub")
+                    .with_option("PORT", "5000")
+                    .with_option("WATERMARK_LOW", low)
+                    .with_option("WATERMARK_HIGH", high)
+                    .with_option("WATERMARK_SILENCE_PERIOD_S", config.silence_period_s)
+                    .with_option("NUM_HUBS", num_hubs)
+                    .with_option("HUB_NAMESPACE", namespace)
+                    .build()
+                )
+                self.dump_yaml(hub, workdir, f"hub-scale-{num_hubs}-hub")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=hub, wait_for_ready=True
+                )
 
-@experiment(name="connmanager-g-scale")
-class ConnManagerGScale(Multiple):
-    """Run G (oscillation) at increasing peer counts.
-    Watermarks scale proportionally: lowWater=n//2, highWater=n.
-    """
+                peers = (
+                    Libp2pStatefulSetBuilder()
+                    .with_libp2p_config(name="peers", namespace=namespace, num_nodes=n)
+                    .with_image(image)
+                    .with_label("role", "peers")
+                    .with_option("NODE_ROLE", "RolePeer")
+                    .with_option("PORT", "5000")
+                    .with_option("DIAL_OUT", "true")
+                    .with_option("HUB_ADDRS", _hub_addrs(num_hubs, namespace))
+                    .with_option("RECONNECT", config.reconnect)
+                    .build()
+                )
+                self.dump_yaml(peers, workdir, f"hub-scale-{num_hubs}-peers")
+                await self.deploy(
+                    api_client, step_stack, args, {}, deployment=peers, wait_for_ready=True
+                )
 
-    experiment_name: str = "connmanager"
-    delay_between_exps: float = 15
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run G at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
-
-    def get_params_list(self) -> list[dict]:
-        return [
-            {
-                "run": "G",
-                "watermark_low": n // 2,
-                "watermark_high": n,
-                "num_peers_inbound": n + 20,
-            }
-            for n in SCALE_STEPS
-        ]
-
-
-@experiment(name="connmanager-hub-scale")
-class ConnManagerHubScale(Multiple):
-    """Hub-scale: fixed peer count, hub count varies (5/20/50).
-    Uses Run A deployment pattern with varying num_hubs.
-    """
-
-    experiment_name: str = "connmanager"
-    delay_between_exps: float = 15
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run A with varying hub counts")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
-
-    def get_params_list(self) -> list[dict]:
-        return [{"run": "A", "num_hubs": n} for n in HUB_SCALE_STEPS]
+                logger.info(
+                    f"Run Hub-scale num_hubs={num_hubs} deployed. Waiting {config.run_duration_s}s."
+                )
+                await asyncio.sleep(config.run_duration_s)
+            logger.info(f"Run Hub-scale num_hubs={num_hubs} done. Pausing 15s before next step.")
+            await asyncio.sleep(15)

@@ -176,6 +176,8 @@ if __name__ == "__main__":
 
     puller = DataPuller().with_kwargs(stack)
 
+    wave_sets = ["wave1", "wave2"] if args.run.upper() == "B" else None
+
     analyzer = (
         ConnManagerAnalyzer(
             dump_analysis_dir=f"local_data/simulations_data/connmanager/run_{args.run.lower()}/",
@@ -185,6 +187,7 @@ if __name__ == "__main__":
             hub_pod="hub-0",
             grace_period_s=args.grace_period_s,
             protected_peer_ids=args.protected_peer_ids or None,
+            wave_sets=wave_sets,
         )
     )
 

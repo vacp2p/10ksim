@@ -32,6 +32,21 @@ class ConnManagerTracer(MessageTracer):
         )
         return self
 
+    def with_peer_started_pattern(self) -> Self:
+        self.patterns.append(
+            PatternGroup(
+                name="peer_started",
+                trace_pairs=[
+                    TracePair(
+                        regex=r"(?:Peer|Hub) started.*?peerId=(?P<peer_id>\S+)",
+                        convert=self._trace_peer_started,
+                    ),
+                ],
+                query="started peerId",
+            )
+        )
+        return self
+
     def with_dropping_peer_pattern(self) -> Self:
         self.patterns.append(
             PatternGroup(
@@ -57,6 +72,13 @@ class ConnManagerTracer(MessageTracer):
         return df
 
     def _trace_dropping_peer(self, parsed_logs: List) -> pd.DataFrame:
+        columns = ["peer_id"]
+        if getattr(self, "extra_fields", None) is not None:
+            columns.extend(self.extra_fields)
+        df = pd.DataFrame(parsed_logs, columns=columns)
+        return df
+
+    def _trace_peer_started(self, parsed_logs: List) -> pd.DataFrame:
         columns = ["peer_id"]
         if getattr(self, "extra_fields", None) is not None:
             columns.extend(self.extra_fields)

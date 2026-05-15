@@ -56,5 +56,5 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
 
     def with_readiness_probe(self, probe: V1Probe) -> Self:
         container = find_libp2p_container_config(self.config)
-        container.with_readiness_probe(probe, overwrite=True)
+        container.with_readiness_probe(probe)
         return self

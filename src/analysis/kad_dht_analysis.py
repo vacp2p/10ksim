@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import argparse
+import logging
 from datetime import datetime, timezone
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,6 @@ import seaborn as sns
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.analysis.mesh_analysis.analyzers.kad_dht_analyzer import KadDHTAnalyzer
 from src.analysis.utils.log_utils import init_logger
-import logging
 
 sns.set_theme()
 

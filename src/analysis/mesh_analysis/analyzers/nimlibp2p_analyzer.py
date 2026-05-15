@@ -10,13 +10,8 @@ from result import Err, Ok, Result
 
 # Project Imports
 from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyzer, OnFail
-from src.analysis.mesh_analysis.readers.builders.victoria_reader_builder import (
-    VictoriaReaderBuilder,
-)
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
-
-from src.analysis.mesh_analysis.stacks.vaclab_stack_analysis import VaclabStackAnalysis
 from src.analysis.utils import file_utils, path_utils
 
 logger = logging.getLogger(__name__)
@@ -30,7 +25,7 @@ class Node(BaseModel):
 
 class MissingMessages(BaseModel):
     shard: Optional[NonNegativeInt]
-    messages: List[str]
+    messages: List[str | int]
     nodes: List[Node]
 
 
@@ -381,13 +376,12 @@ class Nimlibp2pAnalyzer(Analyzer):
                     shard, msg_identifier, peer_identifier, df_shard
                 )
                 all_missing.append(missing)
-            return all_missing
+            return list(filter(None, all_missing))
         else:
-            return [
-                self._get_peers_missing_messages_for_shard(
-                    shard_identifier, msg_identifier, peer_identifier, df
-                )
-            ]
+            missing = self._get_peers_missing_messages_for_shard(
+                shard_identifier, msg_identifier, peer_identifier, df
+            )
+            return [missing] if missing else []
 
     def _get_peers_missing_messages_for_shard(
         self,

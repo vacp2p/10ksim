@@ -2,8 +2,6 @@
 import argparse
 import asyncio
 import logging
-import random
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -35,27 +33,18 @@ async def run_experiment(
     except TypeError:
         # values_path is None.
         values_yaml = None
+    if values_yaml is None:
+        values_yaml = {}
 
     info = experiment_registry[name]
-    experiment = info.cls()
+    experiment = info.cls(
+        api_client=api_client,
+        config=values_yaml,
+        namespace=args.namespace,
+        output_folder=args.out_folder,
+    )
     logger.info(f"Running experiment. name `{info.name}` file: `{info.metadata['module_path']}`")
-    await experiment.run(api_client, args, values_yaml)
-
-
-def setup_output_folder(args: argparse.Namespace) -> Path:
-    base_out_dir = Path(__file__).parent / "out"
-    if args.out_folder is not None:
-        out_dir = (
-            args.out_folder if args.out_folder.is_absolute() else base_out_dir / args.out_folder
-        )
-    else:
-        # Adding a random number helps distinguish experiments.
-        random_number = random.randint(1000, 9999)
-        datetime_str = datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
-        out_dir = base_out_dir / f"{datetime_str}_{random_number}"
-
-    out_dir.mkdir(parents=True, exist_ok=False)
-    return out_dir
+    await experiment.run()
 
 
 async def main():
@@ -104,10 +93,9 @@ async def main():
             raise AttributeError(f"{info}") from e
 
     args = parser.parse_args()
-    out_folder = setup_output_folder(args)
-    args.output_folder = out_folder
     verbosity = args.verbosity or 2
-    init_logger(logging.getLogger(), verbosity, out_folder / "out.log")
+    init_logger(logging.getLogger(), verbosity)
+
     try:
         await run_experiment(
             name=args.experiment,

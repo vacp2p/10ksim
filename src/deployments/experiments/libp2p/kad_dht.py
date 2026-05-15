@@ -1,10 +1,7 @@
 import asyncio
 import logging
-from argparse import Namespace
-from contextlib import ExitStack
-from typing import Optional
 
-from kubernetes.client import ApiClient, V1HTTPGetAction, V1Probe, V1ServicePort
+from kubernetes.client import V1HTTPGetAction, V1Probe, V1ServicePort
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.builders import ServiceBuilder
@@ -16,8 +13,18 @@ from src.deployments.registry import experiment
 logger = logging.getLogger(__name__)
 
 
+class ExpConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    num_nodes: NonNegativeInt = 80
+    warmup_delay: NonNegativeFloat = 0
+    probe_delay: NonNegativeFloat = 60
+    image_repo: str = "radiken/dst-test-node-kad-dht"
+    image_tag: str = "melodie-fix"
+
+
 @experiment(name="kad-dht")
-class KadDHTExperiment(BaseExperiment, BaseModel):
+class KadDHTExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
@@ -26,30 +33,12 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
         BaseExperiment.add_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
-    class ExpConfig(BaseModel):
-        model_config = ConfigDict(extra="ignore")
-
-        num_nodes: NonNegativeInt = 80
-        warmup_delay: NonNegativeFloat = 0
-        probe_delay: NonNegativeFloat = 60
-        image_repo: str = "radiken/dst-test-node-kad-dht"
-        image_tag: str = "melodie-fix"
-
-    async def _run(
-        self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[dict],
-        stack: ExitStack,
-    ):
+    async def _run(self):
         self.log_event("run_start")
 
-        values_yaml = values_yaml or {}
-        config = self.ExpConfig(**values_yaml)
-        self.log_metadata({"params": vars(config)})
-        namespace = args.namespace
-        image = Image(repo=config.image_repo, tag=config.image_tag)
+        self.log_metadata({"params": vars(self.config)})
+        namespace = self.namespace
+        image = Image(repo=self.config.image_repo, tag=self.config.image_tag)
 
         # 1. Build and Deploy Headless Bootstrap Service
         bootstrap_service = (
@@ -62,8 +51,8 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
             .build()
         )
-        self.dump_yaml(bootstrap_service, workdir, "bootstrap-service")
-        await self.deploy(api_client, stack, args, values_yaml, deployment=bootstrap_service)
+        self.dump_yaml(bootstrap_service, "bootstrap-service")
+        await self.deploy(deployment=bootstrap_service)
 
         # 2. Build and Deploy Bootstrap Node
         bootstrap_nodes = (
@@ -83,15 +72,13 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             )
             .build()
         )
-        self.dump_yaml(bootstrap_nodes, workdir, "bootstrap")
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=bootstrap_nodes, wait_for_ready=True
-        )
+        self.dump_yaml(bootstrap_nodes, "bootstrap")
+        await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
 
         # 3. Build and Deploy Regular Nodes
         nodes = (
             Libp2pStatefulSetBuilder()
-            .with_libp2p_config(name="nodes", namespace=namespace, num_nodes=config.num_nodes)
+            .with_libp2p_config(name="nodes", namespace=namespace, num_nodes=self.config.num_nodes)
             .with_image(image)
             .with_label("role", "nodes")
             .with_option("NODE_ROLE", "RoleNormal")
@@ -107,15 +94,13 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             )
             .build()
         )
-        self.dump_yaml(nodes, workdir, "nodes")
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=nodes, wait_for_ready=True
-        )
+        self.dump_yaml(nodes, "nodes")
+        await self.deploy(deployment=nodes, wait_for_ready=True)
 
         # 4. Wait for Warmup
-        if config.warmup_delay > 0:
-            logger.info(f"Waiting {config.warmup_delay} seconds for DHT warmup...")
-            await asyncio.sleep(config.warmup_delay)
+        if self.config.warmup_delay > 0:
+            logger.info(f"Waiting {self.config.warmup_delay} seconds for DHT warmup...")
+            await asyncio.sleep(self.config.warmup_delay)
 
         # 5. Build and Deploy Probe
         probe = (
@@ -129,14 +114,14 @@ class KadDHTExperiment(BaseExperiment, BaseModel):
             .with_option("SERVICE", f"bootstrap.{namespace}.svc.cluster.local")
             .build()
         )
-        self.dump_yaml(probe, workdir, "probe")
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=probe, wait_for_ready=True
-        )
+        self.dump_yaml(probe, "probe")
+        await self.deploy(deployment=probe, wait_for_ready=True)
 
         # 6. Wait for Probe Execution
-        if config.probe_delay > 0:
-            logger.info(f"Waiting {config.probe_delay} seconds for probe to execute lookups...")
-            await asyncio.sleep(config.probe_delay)
+        if self.config.probe_delay > 0:
+            logger.info(
+                f"Waiting {self.config.probe_delay} seconds for probe to execute lookups..."
+            )
+            await asyncio.sleep(self.config.probe_delay)
 
         self.log_event("internal_run_finished")

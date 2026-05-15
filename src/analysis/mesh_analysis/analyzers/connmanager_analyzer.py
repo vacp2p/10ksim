@@ -120,18 +120,12 @@ class ConnManagerAnalyzer(Analyzer):
 
         return result
 
-    def _label_waves(
-        self, conn_df: pd.DataFrame, wave_sets: List[str]
-    ) -> pd.DataFrame:
+    def _label_waves(self, conn_df: pd.DataFrame, wave_sets: List[str]) -> pd.DataFrame:
         extra_fields = self.data_puller.kwargs.get("extra_fields", [])
         peer_id_to_wave: dict[str, str] = {}
 
         for wave_name in wave_sets:
-            tracer = (
-                ConnManagerTracer()
-                .with_extra_fields(extra_fields)
-                .with_peer_started_pattern()
-            )
+            tracer = ConnManagerTracer().with_extra_fields(extra_fields).with_peer_started_pattern()
             data = self.data_puller.get_pod_logs(tracer, f"{wave_name}-*")
             traced = tracer.trace(data)
             started_df = traced["peer_started"][0]

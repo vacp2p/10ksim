@@ -13,10 +13,7 @@ from pydantic import BaseModel
 
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 from src.analysis.utils.file_utils import extract_exps, get_folders
-from src.analysis.utils.log_utils import (
-    init_logger,
-    log_to_path,
-)
+from src.analysis.utils.log_utils import init_logger, log_to_path
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))

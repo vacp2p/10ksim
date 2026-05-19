@@ -11,6 +11,7 @@ from typing import Any, Iterator, Optional, Self
 
 from pydantic import BaseModel
 
+from src.analysis.mesh_analysis.analyzers.connmanager_analyzer import ConnManagerAnalyzer
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 from src.analysis.utils.file_utils import extract_exps, get_folders
 from src.analysis.utils.log_utils import init_logger, log_to_path
@@ -100,6 +101,13 @@ class StackGen:
         return self._args
 
 
+def get_analyzer(metadata) -> Analyzer:
+    experiment_name = metadata.get("experiment", {}).get("name", "")
+    if experiment_name.startswith("connmanager"):
+        return get_connmanager_analyzer(metadata)
+    return get_analyzer_for_dev_testing(metadata)
+
+
 async def process_experiment(exp: dict) -> dict:
     exp_name = exp["stack"]["name"]
     base_data_path = Path("local_data/simulations_data/")
@@ -110,7 +118,7 @@ async def process_experiment(exp: dict) -> dict:
         logger.info(f"log_path: {log_path}")
         logger.info(f"Processing experiment: {exp_name}\n")
         exp["stack"] = StackGen().vaclab().with_experiment(exp).build()
-        new_analyzer = get_analyzer_for_dev_testing(exp)
+        new_analyzer = get_analyzer(exp)
         results_dict["results"] = new_analyzer.run()
 
     return results_dict
@@ -142,6 +150,27 @@ def get_analyzer_for_dev_testing(metadata) -> Analyzer:
             expected_num_messages=params["num_messages"],
         )
         .with_dump_analysis_dir(f"local_data/simulations_data/{metadata['stack']['name']}/")
+    )
+
+
+def get_connmanager_analyzer(metadata) -> Analyzer:
+    stack = metadata["stack"]
+    params = metadata.get("params", {})
+    data_puller = DataPuller().with_kwargs(stack)
+
+    wave_sets = ["wave1", "wave2"] if params.get("run", "").upper() == "B" else None
+
+    return (
+        ConnManagerAnalyzer(
+            dump_analysis_dir=f"local_data/simulations_data/{stack['name']}/",
+        )
+        .with_data_puller(data_puller)
+        .with_hub_analysis(
+            hub_pod="hub-0",
+            grace_period_s=params.get("grace_period_s", 0),
+            protected_peer_ids=params.get("protected_peer_ids") or None,
+            wave_sets=wave_sets,
+        )
     )
 
 

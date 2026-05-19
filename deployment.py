@@ -42,6 +42,8 @@ async def run_experiment(
         config=values_yaml,
         namespace=args.namespace,
         output_folder=args.out_folder,
+        skip_check=args.skip_check,
+        dry_run=args.dry_run,
     )
     logger.info(f"Running experiment. name `{info.name}` file: `{info.metadata['module_path']}`")
     await experiment.run()

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  lint:
+    name: Lint (autoflake, isort, black)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - run: uv sync --frozen
+
+      - name: Check unused imports (autoflake)
+        run: uv run autoflake --remove-all-unused-imports --recursive --check .
+
+      - name: Check import order (isort)
+        run: uv run isort --profile black -l 100 --check-only --diff .
+
+      - name: Check formatting (black)
+        run: uv run black -l 100 --check --diff .

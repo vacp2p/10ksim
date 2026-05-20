@@ -87,3 +87,43 @@ Tools for scraping metrics and analyzing results.
    ```
    python3 log_analysis.py
    ```
+
+---
+
+## Contributing
+
+### CI
+
+Every pull request targeting `master` is checked automatically by GitHub Actions:
+- **Lint** — unused imports (autoflake), import order (isort), formatting (black)
+- **Tests** — all unit tests under `src/`
+
+PRs with failing checks should be fixed before merging.
+
+### Local setup (one-time)
+
+Install the pre-push git hook so formatting issues are caught before they reach GitHub:
+
+```shell
+make install-hooks
+```
+
+### Before committing
+
+Run the auto-formatter — it fixes unused imports, import order, and code style in one shot:
+
+```shell
+make format
+```
+
+To check without modifying files (same checks CI runs):
+
+```shell
+make check
+```
+
+### Running tests locally
+
+```shell
+uv run python -m unittest discover -s src -p "test_*.py" -v
+```

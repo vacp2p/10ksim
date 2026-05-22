@@ -1,6 +1,5 @@
 # Python Imports
-from typing import List, Literal, Self
-
+from typing import List, Self
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt
 

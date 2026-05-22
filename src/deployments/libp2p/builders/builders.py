@@ -1,8 +1,10 @@
-from typing import Literal, Self
+# Python Imports
+from typing import List, Literal, Self
 
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt
 
+# Project Imports
 from src.deployments.core.builders import StatefulSetBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.libp2p.builders.helpers import (

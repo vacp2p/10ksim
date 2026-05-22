@@ -4,7 +4,7 @@ from kubernetes.client import V1ContainerPort, V1PodDNSConfig, V1ResourceRequire
 # Project Imports
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
-from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from src.deployments.core.configs.statefulset import StatefulSetSpecConfig
 from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 
 

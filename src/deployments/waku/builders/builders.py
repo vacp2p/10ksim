@@ -1,5 +1,6 @@
 # Python imports
 from typing import List, Literal, Optional, Self
+
 from pydantic import PositiveInt
 
 # Project imports
@@ -8,7 +9,7 @@ from src.deployments.core.configs.container import Image
 from src.deployments.core.configs.helpers import with_container_command_args
 from src.deployments.waku.builders import bootstrap as WakuBootstrapNode
 from src.deployments.waku.builders import store as Store
-from src.deployments.waku.builders.enr_or_addr import Addrs, Enr
+from src.deployments.waku.builders.enr_or_addr import Enr
 from src.deployments.waku.builders.helpers import (
     WAKU_COMMAND_STR,
     WAKU_CONTAINER_NAME,

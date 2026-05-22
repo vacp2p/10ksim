@@ -44,12 +44,14 @@ class Nodes:
 
     @staticmethod
     def create_pod_spec_config(
-            dns_searches: List[str],
-            namespace: str,
+        dns_searches: List[str],
+        namespace: str,
     ) -> PodSpecConfig:
-        dns_searches_complete = [f"{service}.{namespace}.svc.cluster.local" for service in dns_searches] \
-            if dns_searches \
+        dns_searches_complete = (
+            [f"{service}.{namespace}.svc.cluster.local" for service in dns_searches]
+            if dns_searches
             else None
+        )
 
         return PodSpecConfig(
             container_configs=[Nodes.create_container_config()],
@@ -58,18 +60,20 @@ class Nodes:
 
     @staticmethod
     def create_pod_template_spec_config(
-            dns_searches: List[str],
-            namespace: str,
+        dns_searches: List[str],
+        namespace: str,
     ) -> PodTemplateSpecConfig:
-        config = PodTemplateSpecConfig(pod_spec_config=Nodes.create_pod_spec_config(dns_searches, namespace))
+        config = PodTemplateSpecConfig(
+            pod_spec_config=Nodes.create_pod_spec_config(dns_searches, namespace)
+        )
         config.with_app("zerotenkay")
         return config
 
     @staticmethod
     def create_stateful_set_spec_config(
-            service: str,
-            namespace: str,
-            dns_searches: List[str],
+        service: str,
+        namespace: str,
+        dns_searches: List[str],
     ) -> StatefulSetSpecConfig:
         config = StatefulSetSpecConfig(
             replicas=0,

@@ -5,7 +5,7 @@ from kubernetes.client import V1ContainerPort, V1PodDNSConfig, V1ResourceRequire
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME, readiness_probe_metrics
+from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 
 
 class Nodes:
@@ -30,7 +30,6 @@ class Nodes:
         ]
 
         config.with_resources(Nodes.create_resources())
-        config.with_readiness_probe(readiness_probe_metrics())
 
         return config
 

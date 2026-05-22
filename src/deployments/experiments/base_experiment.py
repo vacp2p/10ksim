@@ -2,14 +2,14 @@
 import json
 import logging
 import os
-import shutil
+import random
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from collections import defaultdict
 from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -22,11 +22,11 @@ from kubernetes.client import (
     V1Service,
     V1StatefulSet,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from ruamel import yaml
-from ruamel.yaml.comments import CommentedMap
 
 # Project Imports
+from src.analysis.utils.log_utils import log_to_path
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.kube_utils import (
     dict_get,
@@ -55,7 +55,10 @@ V1Deployable = Union[
 logger = logging.getLogger(__name__)
 
 
-class BaseExperiment(ABC, BaseModel):
+TCfg = TypeVar("TCfg", bound=BaseModel)
+
+
+class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     """Base experiment that add an ExitStack with `workdir` to `run` and uses an internal `_run`.
 
     How to use:
@@ -64,23 +67,36 @@ class BaseExperiment(ABC, BaseModel):
         - Implement `_run` in the child class.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    out_log_path: Path = Field(default=Path("out.log"))
     events_log_path: Path = Field(default=Path("events.log"))
     metadata_log_path: Path = Field(default=Path("metadata.json"))
 
-    deployed: dict[str, list] = defaultdict(list)
+    api_client: ApiClient = Field(exclude=True)
+    dry_run: bool = False
+    """If True, does not actually deploy kubernetes configs but runs kubectl apply --dry-run instead."""
+    skip_check: bool = False
+    """If present, does not wait until the namespace is empty before running the test."""
+    output_folder: Optional[Path] = None
+    """Base output folder for experiment."""
+    namespace: Optional[str] = None
+
+    config: TCfg
+
+    metadata: Optional[dict] = None
+
+    _deployed: dict[str, list] = defaultdict(list)
     """Dict of [namespace : yamls] for every yaml deployed with self.deploy.
 
     Used to determine whether or not to call `_wait_until_clear`."""
 
+    _workdir: Optional[Path] = None
+    """Path to deployment output folder. Based off of self.output_folder"""
+    _stack: Optional[ExitStack]
+
     @staticmethod
     def add_args(subparser: ArgumentParser):
-        subparser.add_argument(
-            "--workdir",
-            type=str,
-            required=False,
-            default=None,
-            help="Folder to use for generating the deployment files.",
-        )
         subparser.add_argument(
             "--skip-check",
             action="store_true",
@@ -102,10 +118,10 @@ class BaseExperiment(ABC, BaseModel):
             help="The namespace for deployments.",
         )
 
-    def build(self, values_yaml, workdir, service: str, *, extra_values_paths=None):
+    def build(self, values_yaml, service: str, *, extra_values_paths=None):
         yaml_obj = build_deployment(
             deployment_dir=Path(os.path.dirname(__file__)) / ".." / "helm_deployment" / service,
-            workdir=os.path.join(workdir, service),
+            workdir=os.path.join(self._workdir, service),
             cli_values=values_yaml,
             name=service,
             extra_values_names=[],
@@ -121,16 +137,11 @@ class BaseExperiment(ABC, BaseModel):
 
         return yaml_obj
 
-    # TODO: store api_client, stack, and (experiment) args in self and remove as function params.
     async def deploy(
         self,
-        api_client: ApiClient,
-        stack,
-        args: Namespace,
-        values_yaml,
         *,
+        values_yaml: Optional[object] = None,
         service: Optional[str] = None,
-        workdir: Optional[str] = None,
         deployment: Optional[yaml.YAMLObject | V1Deployable] = None,
         wait_for_ready: bool = True,
         extra_values_paths: List[str] = None,
@@ -142,25 +153,22 @@ class BaseExperiment(ABC, BaseModel):
                 return all(given(val) for val in var)
             return var is not None
 
-        if given(deployment) == (given(service) and given(workdir)):
+        if given(deployment) == (given(service)):
             raise ValueError(
-                "Invalid arguments. Pass one of the following: `deployment`, xor (`service` and `workdir`)."
+                "Invalid arguments. Pass one of the following: `deployment`, xor `service`."
             )
 
         if isinstance(deployment, V1Deployable):
-            deployment = api_client.sanitize_for_serialization(deployment)
+            deployment = self.api_client.sanitize_for_serialization(deployment)
 
         yaml_obj = (
             deployment
             if deployment is not None
-            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+            else self.build(values_yaml, service, extra_values_paths=extra_values_paths)
         )
 
         await self.deploy_yaml(
-            api_client,
-            stack,
-            args,
-            values_yaml,
+            values_yaml=values_yaml,
             deployment_yaml=yaml_obj,
             wait_for_ready=wait_for_ready,
             extra_values_paths=extra_values_paths,
@@ -170,13 +178,9 @@ class BaseExperiment(ABC, BaseModel):
 
     async def deploy_yaml(
         self,
-        api_client: ApiClient,
-        stack,
-        args: Namespace,
-        values_yaml,
         *,
+        values_yaml: Optional[str] = None,
         service: Optional[str] = None,
-        workdir: Optional[str] = None,
         deployment_yaml: Optional[yaml.YAMLObject] = None,
         wait_for_ready: bool = True,
         extra_values_paths: List[str] = None,
@@ -186,30 +190,29 @@ class BaseExperiment(ABC, BaseModel):
         yaml_obj = (
             deployment_yaml
             if deployment_yaml is not None
-            else self.build(values_yaml, workdir, service, extra_values_paths=extra_values_paths)
+            else self.build(values_yaml, service, extra_values_paths=extra_values_paths)
         )
 
         try:
-            dry_run = args.dry_run
+            dry_run = self.dry_run
         except AttributeError:
             dry_run = False
 
         namespace = yaml_obj["metadata"]["namespace"]
 
-        if len(self.deployed[namespace]) == 0:
+        if len(self._deployed[namespace]) == 0:
             self._wait_until_clear(
-                api_client=api_client,
                 namespace=namespace,
-                skip_check=args.skip_check,
+                skip_check=self.skip_check,
             )
 
         if not dry_run:
             cleanup = get_cleanup(
-                api_client=api_client,
+                api_client=self.api_client,
                 namespace=namespace,
                 deployments=[yaml_obj],
             )
-            stack.callback(cleanup)
+            self._stack.callback(cleanup)
 
         deployment_metadata = {
             "event": "deployment",
@@ -222,12 +225,12 @@ class BaseExperiment(ABC, BaseModel):
             deployment_metadata["replicas"] = yaml_obj["spec"]["replicas"]
 
         self.log_event({"phase": "start", **deployment_metadata})
-        self.deployed[namespace].append(yaml_obj)
+        self._deployed[namespace].append(yaml_obj)
         kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
 
         if not dry_run:
             if wait_for_ready:
-                await wait_for_rollout(yaml_obj, api_client, timeout=timeout)
+                await wait_for_rollout(yaml_obj, self.api_client, timeout=timeout)
         self.log_event({"phase": "finished", **deployment_metadata})
 
         return yaml_obj
@@ -242,8 +245,8 @@ class BaseExperiment(ABC, BaseModel):
                 )
             return Path(out_dir) / path
 
-    def dump_yaml(self, obj, workdir: str, name: str):
-        out_path = Path(workdir) / f"{name}.yaml"
+    def dump_yaml(self, obj, name: str):
+        out_path = Path(self._workdir) / f"{name}.yaml"
         os.makedirs(out_path.parent, exist_ok=True)
         logger.info(f"dumping deployment `{name}` to `{out_path}`")
         with open(out_path, "w") as out_file:
@@ -257,77 +260,68 @@ class BaseExperiment(ABC, BaseModel):
         self.log_event({**{"event": "metadata"}, **metadata})
 
     def _dump_metadata(self):
-        metadata = self._get_metadata()
-        self.log_metadata(metadata)
+        self.metadata = self._get_metadata()
+        self.log_metadata(self.metadata)
         out_path = Path(self.metadata_log_path)
         with open(out_path, "a") as out_file:
-            out_file.write(json.dumps(metadata, default=str))
+            out_file.write(json.dumps(self.metadata, default=str))
 
-    async def run(
-        self,
-        api_client: ApiClient,
-        args: Namespace,
-        values_yaml: Optional[yaml.YAMLObject],
-    ):
-        if values_yaml is None:
-            values_yaml = CommentedMap()
+    def _setup_log_paths(self):
+        base_out_dir = Path(__file__).parent / "out"
+        if self.output_folder is None:
+            # Adding a random number helps distinguish experiments.
+            random_number = random.randint(1000, 9999)
+            datetime_str = datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
+            self.output_folder = base_out_dir / f"{datetime_str}_{random_number}"
+        elif not self.output_folder.is_absolute():
+            self.output_folder = base_out_dir / self.output_folder
 
-        self.deployed.clear()
+        self._workdir = self.output_folder / "deployment_yamls"
+        self.out_log_path = self._get_out_path(self.out_log_path, self.output_folder)
+        self.events_log_path = self._get_out_path(self.events_log_path, self.output_folder)
+        self.metadata_log_path = self._get_out_path(self.metadata_log_path, self.output_folder)
 
-        workdir = args.output_folder
-        if args.workdir:
-            workdir = os.path.join(workdir, args.workdir)
+        for path in [self.output_folder, self._workdir]:
+            path.mkdir(parents=True, exist_ok=True)
+        for path in [self.out_log_path, self.events_log_path, self.metadata_log_path]:
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-        with ExitStack() as stack:
-            stack.callback(lambda: self.log_event("cleanup_finished"))
-            os.makedirs(workdir, exist_ok=True)
-            self.events_log_path = self._get_out_path(self.events_log_path, args.output_folder)
-            self.metadata_log_path = self._get_out_path(self.metadata_log_path, args.output_folder)
-            logger.info(f"Events path: `{self.events_log_path}`")
-            logger.info(f"Metadata path: `{self.metadata_log_path}`")
-            self.log_event(
-                {
-                    "event": "metadata",
-                    "experiment_name": self.__class__.name,
-                    "experiment_class": self.__class__.__name__,
-                    "args": vars(args),
-                }
-            )
-            if args.values_path:
-                shutil.copy(args.values_path, os.path.join(workdir, "cli_values.yaml"))
-            await self._run(
-                api_client=api_client,
-                workdir=workdir,
-                args=args,
-                values_yaml=values_yaml,
-                stack=stack,
-            )
-            stack.callback(lambda: self.log_event("cleanup_start"))
+    async def run(self):
+        self._deployed.clear()
+        self._setup_log_paths()
+        self.log_event(
+            {
+                "event": "metadata",
+                "experiment_name": self.__class__.name,
+                "experiment_class": self.__class__.__name__,
+                "args": vars(self.config),
+            }
+        )
+
+        with log_to_path(self.out_log_path):
+            with ExitStack() as self._stack:
+                self._stack.callback(lambda: self.log_event("cleanup_finished"))
+                self.log_metadata({"params": vars(self.config)})
+                await self._run()
+                self._stack.callback(lambda: self.log_event("cleanup_start"))
+            self._stack = None
 
         self.log_event("run_finished")
         self._dump_metadata()
 
     @abstractmethod
-    async def _run(
-        self,
-        # TODO [move things into class]: move all into class so they can be accessed more easily and set before calling run?
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[yaml.YAMLObject],
-        stack: ExitStack,
-    ):
+    async def _run(self):
         pass
 
-    def _wait_until_clear(self, api_client: ApiClient, namespace: str, skip_check: bool):
+    def _wait_until_clear(self, namespace: str, skip_check: bool):
         # Wait for namespace to be clear unless --skip-check flag was used.
         if not skip_check:
             self.log_event("wait_for_clear_start")
-            wait_for_no_objs_in_namespace(namespace=namespace, api_client=api_client)
+            wait_for_no_objs_in_namespace(namespace=namespace, api_client=self.api_client)
             self.log_event("wait_for_clear_finished")
         else:
             namepace_is_empty = poll_namespace_has_objects(
-                namespace=namespace, api_client=api_client
+                namespace=namespace, api_client=self.api_client
             )
             if not namepace_is_empty:
                 logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")

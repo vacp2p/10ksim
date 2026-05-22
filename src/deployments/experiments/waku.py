@@ -1,19 +1,13 @@
 import asyncio
 import logging
-import os
 import random
 import traceback
-from argparse import Namespace
-from contextlib import ExitStack
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from kubernetes import client
-from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.statefulset import StatefulSetConfig
-from src.deployments.core.kube_utils import get_YAML
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.builders.nodes import Nodes
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
@@ -73,8 +67,18 @@ def build_store_nodes(namespace: str) -> dict:
     return api_client.sanitize_for_serialization(deployment)
 
 
+class ExpConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    num_messages: NonNegativeInt = 20
+    num_nodes: NonNegativeInt = 20
+    num_bootstrap_nodes: NonNegativeInt = 5
+    delay_cold_start: NonNegativeFloat = 1
+    delay_after_publish: NonNegativeFloat = 0.5
+
+
 @experiment(name="waku")
-class WakuExperiment(BaseExperiment, BaseModel):
+class WakuExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
@@ -89,63 +93,36 @@ class WakuExperiment(BaseExperiment, BaseModel):
         logger.info(event)
         return super().log_event(event)
 
-    class ExpConfig(BaseModel):
-        model_config = ConfigDict(extra="ignore")
-
-        num_messages: NonNegativeInt = 20
-        num_nodes: NonNegativeInt = 20
-        num_bootstrap_nodes: NonNegativeInt = 5
-        delay_cold_start: NonNegativeFloat = 1
-        delay_after_publish: NonNegativeFloat = 0.5
-
-    async def _run(
-        self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[dict],
-        stack: ExitStack,
-    ):
+    async def _run(self):
         self.log_event("run_start")
-
-        config = self.ExpConfig(**values_yaml)
-        self.log_metadata({"params": vars(config)})
 
         # Publisher
         publisher = (
             PodApiRequesterBuilder()
-            .with_namespace(args.namespace)
+            .with_namespace(self.namespace)
             .with_mode("server")
             # .with_debug()
             # .with_image(Image(repo="pearsonwhite/pod-api-requester", tag="9497aebc1483572b5bd4a4712bfcb76a63d04cf8"))
             .build()
         )
 
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=publisher, wait_for_ready=True
-        )
+        await self.deploy(deployment=publisher, wait_for_ready=True)
 
         # Nodes
-        deployments = build_nodes(args.namespace, config.num_nodes, config.num_bootstrap_nodes)
-        nodes = deployments["nodes"]
-        bootstrap = deployments["bootstrap"]
+        deployments = build_nodes(
+            self.namespace, self.config.num_nodes, self.config.num_bootstrap_nodes
+        )
         for deployment in deployments.values():
-            name = deployment["metadata"]["name"]
-            out_path = Path(workdir) / name / f"{name}.yaml"
-            os.makedirs(out_path.parent, exist_ok=True)
-            logger.info(f"dumping deployment `{name}` to `{out_path}`")
-            with open(out_path, "w") as out_file:
-                yaml = get_YAML()
-                yaml.dump(deployment, out_file)
-            await self.deploy(api_client, stack, args, values_yaml, deployment=deployment)
+            await self.deploy(deployment=deployment)
 
-        await asyncio.sleep(config.delay_cold_start)
+        await asyncio.sleep(self.config.delay_cold_start)
+        nodes = deployments["nodes"]
         num_nodes = nodes["spec"]["replicas"]
         name = nodes["metadata"]["name"]
         namespace = nodes["metadata"]["namespace"]
         logger.info(f"Starting disconnect+publish loop for nodes in `{name}`")
         self.log_event("start_messages")
-        for _ in range(0, config.num_messages):
+        for _ in range(0, self.config.num_messages):
             index = random.randint(0, num_nodes - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name})
@@ -164,7 +141,7 @@ class WakuExperiment(BaseExperiment, BaseModel):
             except Exception as e:
                 logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
-            await asyncio.sleep(config.delay_after_publish)
+            await asyncio.sleep(self.config.delay_after_publish)
 
         self.log_event("publisher_messages_finished")
 

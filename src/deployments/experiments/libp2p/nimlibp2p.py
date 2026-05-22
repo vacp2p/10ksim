@@ -2,11 +2,9 @@ import asyncio
 import logging
 import random
 import traceback
-from argparse import Namespace
-from contextlib import ExitStack
-from typing import Literal, Optional
+from typing import Literal
 
-from kubernetes.client import ApiClient, V1StatefulSet
+from kubernetes.client import V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.container import Image
@@ -14,6 +12,7 @@ from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.libp2p.builders.builders import Option as NimLibp2p
+from src.deployments.libp2p.builders.helpers import readiness_probe_metrics
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.pod_api_requester.configs import Target
 from src.deployments.pod_api_requester.nimlibp2p import libp2p_dst_node_publish
@@ -52,6 +51,7 @@ def build_nodes(
         .with_option(NimLibp2p.muxer, params.muxer)
         .with_option(NimLibp2p.connect_to, params.connect_to)
         .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
+        .with_readiness_probe(readiness_probe_metrics())
         .with_image(params.image)
     )
     if params.network_delay or params.network_jitter:
@@ -80,7 +80,7 @@ async def publish(config, namespace, random_name):
 
 
 @experiment(name="nimlibp2p")
-class NimLibp2pExperiment(BaseExperiment, BaseModel):
+class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
@@ -91,53 +91,38 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
-    async def _run(
-        self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[dict],
-        stack: ExitStack,
-    ):
+    async def _run(self):
         self.log_event("run_start")
-
-        config = ExpConfig(**values_yaml)
-
-        self.log_metadata({"params": vars(config)})
 
         # Publisher
         publisher = (
-            PodApiRequesterBuilder().with_namespace(args.namespace).with_mode("server").build()
+            PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
         )
-        await self.deploy(
-            api_client, stack, args, values_yaml, deployment=publisher, wait_for_ready=True
-        )
+        await self.deploy(deployment=publisher, wait_for_ready=True)
 
         # Nodes
         nodes = build_nodes(
-            args.namespace,
-            config,
+            namespace=self.namespace,
+            params=self.config,
         )
         name = nodes.metadata.name
         namespace = nodes.metadata.namespace
 
-        self.dump_yaml(nodes, workdir, name)
-        await self.deploy(api_client, stack, args, values_yaml, deployment=nodes)
-        logger.info(f"Waiting for cold_start_delay: {config.delay_cold_start}")
+        await self.deploy(deployment=nodes)
 
-        await asyncio.sleep(config.delay_cold_start)
+        await asyncio.sleep(self.config.delay_cold_start)
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
 
         self.log_event("start_messages")
 
         tasks = []
-        for msg_index in range(config.num_messages):
-            index = random.randint(0, config.num_nodes - 1)
+        for msg_index in range(self.config.num_messages):
+            index = random.randint(0, self.config.num_nodes - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
-            tasks.append(asyncio.create_task(publish(config, namespace, random_name)))
-            await asyncio.sleep(config.delay_after_publish)
+            tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))
+            await asyncio.sleep(self.config.delay_after_publish)
         await asyncio.gather(*tasks)
 
         self.log_event("publisher_messages_finished")

@@ -68,14 +68,3 @@ class Nodes:
         )
         config.with_app("zerotenkay")
         return config
-
-    @staticmethod
-    def create_statefulset_config(namespace: str) -> StatefulSetConfig:
-        return StatefulSetConfig(
-            name="pod",
-            namespace=namespace,
-            apiVersion="apps/v1",
-            kind="StatefulSet",
-            pod_management_policy="Parallel",
-            stateful_set_spec=Nodes.create_stateful_set_spec_config(namespace),
-        )

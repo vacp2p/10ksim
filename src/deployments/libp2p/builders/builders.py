@@ -33,13 +33,17 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         self,
         name: str,
         namespace: str,
+        service: str,
         num_nodes: PositiveInt,
+        dns_searches: List[str] = None,
     ) -> Self:
         self.config.name = name
         self.config.namespace = namespace
         self.config.pod_management_policy = "Parallel"
         self.config.stateful_set_spec = Nodes.create_stateful_set_spec_config(
+            service=service,
             namespace=namespace,
+            dns_searches=dns_searches
         )
         self.config.stateful_set_spec.replicas = num_nodes
 

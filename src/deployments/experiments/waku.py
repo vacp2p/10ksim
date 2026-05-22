@@ -96,7 +96,6 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
     async def _run(self):
         self.log_event("run_start")
 
-
         # Publisher
         publisher = (
             PodApiRequesterBuilder()

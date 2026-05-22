@@ -9,7 +9,7 @@ from collections import defaultdict
 from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generic, Dict, Generic, List, Optional, TypeVar, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -22,7 +22,7 @@ from kubernetes.client import (
     V1Service,
     V1StatefulSet,
 )
-from pydantic import BaseModel, ConfigDict, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
@@ -56,20 +56,6 @@ V1Deployable = Union[
 logger = logging.getLogger(__name__)
 
 ARG_NOT_SET = object()
-
-def setup_output_folder(out_folder: Optional[str]) -> Path:
-    base_out_dir = Path(__file__).parent / "out"
-    if out_folder is not None:
-        out_dir = out_folder if out_folder.is_absolute() else base_out_dir / out_folder
-    else:
-        # Adding a random number helps distinguish experiments.
-        random_number = random.randint(1000, 9999)
-        datetime_str = datetime.now().strftime("%Y.%m.%d_%H.%M.%f")[:-3]
-        out_dir = base_out_dir / f"{datetime_str}_{random_number}"
-
-    out_dir.mkdir(parents=True, exist_ok=False)
-    return out_dir
-
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
 

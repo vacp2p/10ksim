@@ -192,18 +192,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             timeout=timeout,
         )
 
-    # TODO: fix dump_yaml for KAD DHT
-    def dump_yaml(self, obj: K8sModelStr):
-        name = obj["metadata"]["name"]
-        out_path = Path(self._workdir) / f"{name}.yaml"
-        logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
-        if out_path.exists():
-            logger.warning(f"File already exists. Overwriting {out_path}")
-        os.makedirs(out_path.parent, exist_ok=True)
-        with open(out_path, "w") as out_file:
-            yaml = get_YAML()
-            yaml.dump(k8s_obj_to_dict(obj), out_file)
-
     async def deploy_yaml(
         self,
         *,
@@ -280,9 +268,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             obj = k8s_obj_to_dict(obj)
         name = name or obj["metadata"]["name"]
         out_path = Path(self._workdir) / f"{name}.yaml"
-        logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
-        if out_path.exists():
-            logger.warning(f"File already exists. Overwriting {out_path}")
         logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
         if out_path.exists():
             logger.warning(f"File already exists. Overwriting {out_path}")

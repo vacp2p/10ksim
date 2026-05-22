@@ -58,3 +58,8 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         container = find_libp2p_container_config(self.config)
         container.with_readiness_probe(probe, overwrite=True)
         return self
+
+    def with_pull_policy(self, policy: Literal["IfNotPresent", "Always", "Never"]) -> Self:
+        config = find_libp2p_container_config(self.config)
+        config.image_pull_policy = policy
+        return self

@@ -36,7 +36,6 @@ class KadDHTExperiment(BaseExperiment[ExpConfig]):
     async def _run(self):
         self.log_event("run_start")
 
-        self.log_metadata({"params": vars(self.config)})
         namespace = self.namespace
         image = Image(repo=self.config.image_repo, tag=self.config.image_tag)
 

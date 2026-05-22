@@ -230,7 +230,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         if not dry_run:
             if wait_for_ready:
-                await wait_for_rollout(yaml_obj, self.api_client)
+                await wait_for_rollout(yaml_obj, self.api_client, timeout=timeout)
         self.log_event({"phase": "finished", **deployment_metadata})
 
         return yaml_obj
@@ -265,15 +265,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         out_path = Path(self.metadata_log_path)
         with open(out_path, "a") as out_file:
             out_file.write(json.dumps(self.metadata, default=str))
-
-    def _dump_initial_metadata(self):
-        self.log_metadata(
-            {
-                "experiment_name": self.__class__.name,
-                "experiment_class": self.__class__.__name__,
-                "dump": self.serialize(),
-            }
-        )
 
     def _setup_log_paths(self):
         base_out_dir = Path(__file__).parent / "out"

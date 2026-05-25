@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-pvc
+  namespace: nomos-testnet
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: node-04.ih-eu-mda1.misc.vaclab
+  containers:
+    - name: shell
+      image: busybox
+      command: ["sh", "-c", "sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: nomos-data-nomos-prof-no-ibd-0

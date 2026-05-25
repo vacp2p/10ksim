@@ -1,0 +1,24 @@
+ss -lunp | grep 7001
+
+socket statistics -l (listening) -u (UDP) -n (numeric output) -p (process info)
+
+When it works:
+root@test-2:/# ss -lunp | grep 7001
+UNCONN 0 0 0.0.0.0:7001 0.0.0.0:* users:(("logos-blockchai",pid=1,fd=24),("logos-blockchai",pid=1,fd=23))
+
+When it doesn't:
+root@test-2:/#
+
+
+
+logos-blockchain-node init \
+    -p /dns4/node-genesis-0.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-1.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-2.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-3.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-4.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-5.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-6.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-7.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-8.nomos-genesis/udp/7000/quic-v1 \
+    -p /dns4/node-genesis-9.nomos-genesis/udp/7000/quic-v1

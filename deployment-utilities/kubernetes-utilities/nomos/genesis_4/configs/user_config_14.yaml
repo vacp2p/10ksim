@@ -1,0 +1,209 @@
+network:
+  backend:
+    swarm:
+      host: 0.0.0.0
+      port: 3000
+      node_key: f4dc0ffe06333f0cf285fc81d1b19964ecfc7458413a8fdeb001f78735a892cb
+      gossipsub:
+        history_length: 5
+        history_gossip: 3
+        mesh_n: 6
+        mesh_n_low: 5
+        mesh_n_high: 12
+        retain_scores: 4
+        gossip_lazy: 6
+        gossip_factor: 0.25
+        heartbeat_initial_delay:
+          secs: 5
+          nanos: 0
+        heartbeat_interval:
+          secs: 1
+          nanos: 0
+        fanout_ttl:
+          secs: 60
+          nanos: 0
+        check_explicit_peers_ticks: 300
+        duplicate_cache_time:
+          secs: 60
+          nanos: 0
+        validate_messages: false
+        allow_self_origin: false
+        do_px: false
+        prune_peers: 0
+        prune_backoff:
+          secs: 60
+          nanos: 0
+        unsubscribe_backoff:
+          secs: 10
+          nanos: 0
+        backoff_slack: 1
+        flood_publish: true
+        graft_flood_threshold:
+          secs: 10
+          nanos: 0
+        mesh_outbound_min: 2
+        opportunistic_graft_ticks: 60
+        opportunistic_graft_peers: 2
+        gossip_retransimission: 3
+        max_messages_per_rpc: null
+        max_ihave_length: 5000
+        max_ihave_messages: 10
+        iwant_followup_time:
+          secs: 3
+          nanos: 0
+        published_message_ids_cache_time:
+          secs: 10
+          nanos: 0
+      kademlia:
+        query_timeout_secs: null
+        replication_factor: null
+        parallelism: null
+        disjoint_query_paths: null
+        max_packet_size: null
+        kbucket_inserts: null
+        caching: null
+        periodic_bootstrap_interval_secs: null
+      identify:
+        agent_version: null
+        interval_secs: null
+        push_listen_addr_updates: null
+        cache_size: null
+        hide_listen_addrs: true
+      chain_sync:
+        peer_response_timeout: 5000
+      nat:
+        type: traversal
+        autonat:
+          max_candidates: null
+          probe_interval_millisecs: null
+          retest_successful_external_addresses_interval:
+            secs: 60
+            nanos: 0
+        mapping:
+          timeout: '1.000000000'
+          lease_duration:
+            secs: 7200
+            nanos: 0
+          max_retries: 3
+          renewal_delay_fraction: 0.8
+          retry_interval:
+            secs: 30
+            nanos: 0
+        gateway_monitor:
+          check_interval:
+            secs: 300
+            nanos: 0
+    initial_peers:
+    - /dns4/node-genesis-0.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-1.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-2.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-3.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-4.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-5.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-6.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-7.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-8.nomos-genesis/udp/7000/quic-v1
+    - /dns4/node-genesis-9.nomos-genesis/udp/7000/quic-v1
+blend:
+  non_ephemeral_signing_key_id: 5bae29f4c779093f47f6f307d559e688d55776ade59a4d27e36dab49c3dea2f5
+  core:
+    backend:
+      listening_address: /ip4/0.0.0.0/udp/3400/quic-v1
+      core_peering_degree:
+        start: 2
+        end: 3
+      edge_node_connection_timeout: '1.000000000'
+      max_edge_node_incoming_connections: 300
+      max_dial_attempts_per_peer: 3
+    zk:
+      secret_key_kms_id: 9fb1bd632a9d130c50b7f39ae57d4e0cb663429ed7379815d102691555c74725
+  edge:
+    backend:
+      max_dial_attempts_per_peer_per_message: 1
+      replication_factor: 1
+cryptarchia:
+  service:
+    bootstrap:
+      prolonged_bootstrap_period: '300.000000000'
+      force_bootstrap: false
+      offline_grace_period:
+        grace_period: '1200.000000000'
+        state_recording_interval: '60.000000000'
+  network:
+    bootstrap:
+      ibd:
+        peers: []
+        delay_before_new_download:
+          secs: 10
+          nanos: 0
+    sync:
+      orphan:
+        max_orphan_cache_size: 1000
+    network:
+      max_connected_peers_to_try_download: 16
+      max_discovered_peers_to_try_download: 16
+  leader:
+    wallet:
+      max_tx_fee: 18446744073709551615
+      funding_pk: 06c1bdd5f19ea3a72988aef1be4be2caa75ffe128bdf90677087d911632d2618
+time:
+  backend:
+    server: pool.ntp.org:123
+    client:
+      timeout: '5.000000000'
+      listening_interface: 0.0.0.0
+    update_interval: '15.000000000'
+sdp:
+  declaration_id: null
+  wallet:
+    max_tx_fee: 18446744073709551615
+    funding_pk: 06c1bdd5f19ea3a72988aef1be4be2caa75ffe128bdf90677087d911632d2618
+api:
+  backend:
+    listen_address: 0.0.0.0:8080
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 500
+  testing:
+    listen_address: 0.0.0.0:8081
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 500
+storage:
+  backend:
+    folder_name: ./db
+    read_only: false
+    column_family: blocks
+kms:
+  backend:
+    keys:
+      5bae29f4c779093f47f6f307d559e688d55776ade59a4d27e36dab49c3dea2f5: !Ed25519 75ac357b2f4d444b78d437ea27ec1890967aaa4276494e7457bc4912df0a6ec9
+      06c1bdd5f19ea3a72988aef1be4be2caa75ffe128bdf90677087d911632d2618: !Zk 2f1b179cbfea9bd8972dbc402f72e5c935efce856799dfc7f699f823a8a2161a
+      f20c2c632b2eb995687935eb29170b27bc3266bb1d891cb887d472552f4f7019: !Zk ac45a042f08ac02038b8cd65aab741924c27685944ad22fc70df8ac2ada9ce17
+      9fb1bd632a9d130c50b7f39ae57d4e0cb663429ed7379815d102691555c74725: !Zk 56ae2944e4ad9feb70c354a76ad0e2bf039eef25553ebc8d124db3e38456ad03
+wallet:
+  known_keys:
+    06c1bdd5f19ea3a72988aef1be4be2caa75ffe128bdf90677087d911632d2618: 06c1bdd5f19ea3a72988aef1be4be2caa75ffe128bdf90677087d911632d2618
+    f20c2c632b2eb995687935eb29170b27bc3266bb1d891cb887d472552f4f7019: f20c2c632b2eb995687935eb29170b27bc3266bb1d891cb887d472552f4f7019
+  voucher_master_key_id: f20c2c632b2eb995687935eb29170b27bc3266bb1d891cb887d472552f4f7019
+tracing:
+  logger:
+    file:
+      directory: .
+      prefix: '1776445033'
+    loki: null
+    gelf: null
+    otlp: null
+    stdout: true
+    stderr: false
+  tracing: None
+  filter: None
+  metrics: !Otlp
+    endpoint: "http://otel-opentelemetry-collector.opentelemetry:4317/"
+    host_identifier: "node-genesis-14"
+  console: None
+  level: DEBUG
+state:
+  base_folder: ./state

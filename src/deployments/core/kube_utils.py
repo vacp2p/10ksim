@@ -41,8 +41,6 @@ from kubernetes.utils import FailToCreateError
 from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-# Project Imports
-
 V1Deployable = Union[
     V1PodTemplateSpec,
     V1Pod,
@@ -52,77 +50,6 @@ V1Deployable = Union[
     V1Job,
     V1CronJob,
 ]
-
-
-def get_log_level(verbosity: Union[str, int]) -> int:
-    """
-    Convert a verbosity value (int or str) to a logging level.
-
-    :param verbosity: Verbosity as an integer (0-4) or log level name as a string (e.g., 'INFO').
-    :type verbosity: Union[str, int]
-    :return: Corresponding logging level for `logger.setLevel`.
-    :rtype: int
-    :raises ValueError: If the string is not a valid log level name.
-    :raises TypeError: If verbosity is not int or str.
-    """
-    if isinstance(verbosity, int):
-        if verbosity >= 4:
-            return logging.NOTSET
-        elif verbosity == 3:
-            return logging.DEBUG
-        elif verbosity == 2:
-            return logging.INFO
-        elif verbosity == 1:
-            return logging.WARNING
-        else:
-            return logging.ERROR
-    elif isinstance(verbosity, str):
-        level = getattr(logging, verbosity.upper(), None)
-        if isinstance(level, int):
-            return level
-        else:
-            raise ValueError(f"Unknown log level name: `{verbosity}`")
-    else:
-        raise TypeError(
-            f"Param `verbosity` must be a string or an int. Instead, given: `{type(verbosity)}`"
-        )
-
-
-def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Optional[str] = None):
-    """
-    Initialize the given logger's format and level. Optionally log to a file.
-
-    :param logger: The logger instance to configure (For example: logging.getLogger(__name__)).
-    :type logger: logging.Logger
-    :param verbosity: Verbosity as a string (e.g., 'INFO', 'DEBUG') or as an integer (0-4).
-    :type verbosity: Union[str, int]
-    :param log_path: Optional path to a file to also write logs to.
-    :type log_path: Optional[str]
-
-    Set the format and level for the given logger, affecting all loggers that inherit from it.
-    Optionally adds a handler to log all messages to a file.
-    """
-    # Remove all existing handlers
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-
-    if log_path:
-        file_handler = logging.FileHandler(log_path)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-
-    level = get_log_level(verbosity)
-    logger.setLevel(level)
-    logger.info(f"Logging level set to: `{logging.getLevelName(level)}`")
-
 
 logger = logging.getLogger(__name__)
 

@@ -90,7 +90,7 @@ class Config(BaseModel):
     logger_name: str = ""
     level: int
     fmt: str
-    handlers: List[tuple[str, int]] = []
+    handlers: List[tuple[Path, int]] = []
     tz_offset_hours: float
 
 
@@ -138,7 +138,7 @@ def apply_config(config: Config, log_queue=None):
                 child_logger.propagate = True
 
         for path, level in config.handlers:
-            fh = logging.FileHandler(path, maxBytes=10**6, backupCount=5)
+            fh = logging.FileHandler(path.as_posix())
             fh.setLevel(level)
             fh.setFormatter(formatter)
             root.addHandler(fh)
@@ -172,13 +172,15 @@ def capture_current_logging() -> Config:
     return Config(level=level, fmt=fmt, handlers=extra_handlers, tz_offset_hours=tz_offset_hours)
 
 
-def init_logger(logger: logging.Logger, verbosity: Union[str, int], log_path: Optional[str] = None):
+def init_logger(
+    logger: logging.Logger, verbosity: Union[str, int], log_path: Optional[Path | str] = None
+):
     level = get_log_level(verbosity)
     config = Config(
         logger_name=logger.name,
         level=level,
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[(log_path, level)] if log_path else [],
+        handlers=[(Path(log_path), level)] if log_path else [],
         tz_offset_hours=0,
     )
     configured = apply_config(config)

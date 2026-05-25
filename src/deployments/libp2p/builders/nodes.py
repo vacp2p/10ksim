@@ -4,7 +4,7 @@ from kubernetes.client import V1ContainerPort, V1PodDNSConfig, V1ResourceRequire
 # Project Imports
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
-from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
+from src.deployments.core.configs.statefulset import StatefulSetSpecConfig
 from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 
 
@@ -68,14 +68,3 @@ class Nodes:
         )
         config.with_app("zerotenkay")
         return config
-
-    @staticmethod
-    def create_statefulset_config(namespace: str) -> StatefulSetConfig:
-        return StatefulSetConfig(
-            name="pod",
-            namespace=namespace,
-            apiVersion="apps/v1",
-            kind="StatefulSet",
-            pod_management_policy="Parallel",
-            stateful_set_spec=Nodes.create_stateful_set_spec_config(namespace),
-        )

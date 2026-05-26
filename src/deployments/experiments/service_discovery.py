@@ -165,7 +165,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         rare_advertisers = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name="popular-advertisers",
+                name="rare-advertisers",
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_registrars,
                 service=self.config.registrar_service_name,
@@ -189,7 +189,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         discoverer = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name="popular-advertisers",
+                name="discoverer",
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_registrars,
                 service=self.config.registrar_service_name,

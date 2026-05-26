@@ -1,12 +1,9 @@
 # Python Imports
 import logging
-from argparse import Namespace
-from contextlib import ExitStack
-from typing import List, Optional
+from typing import List
 
-from kubernetes.client import ApiClient, V1Probe, V1ServicePort, V1TCPSocketAction
+from kubernetes.client import V1Probe, V1ServicePort, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
-from ruamel import yaml
 
 # Project Imports
 from src.deployments.core.builders import ServiceBuilder
@@ -24,8 +21,22 @@ READINESS_PROBE = V1Probe(
 )
 
 
+class ExpConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    num_registrars: NonNegativeInt = 10
+    num_bootstraps: NonNegativeInt = 3
+    image_repo: str = "soutullostatus/nimlibp2p"
+    image_tag: str = "service-discovery"
+    namespace: str = "nimlibp2p"
+    bootstrap_service_name: str = "bootstrap-service"
+    registrar_service_name: str = "registrar-service"
+    kad_service_name: str = "kad-service"
+    dns_searches: List[str] = ["bootstrap-service"]
+
+
 @experiment(name="service-discovery")
-class ServiceDiscovery(BaseExperiment, BaseModel):
+class ServiceDiscovery(BaseExperiment[ExpConfig]):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
     def add_parser(cls, subparsers) -> None:
@@ -39,63 +50,32 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
 
     async def _run(
         self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[yaml.YAMLObject],
-        stack: ExitStack,
-    ):
-        pass
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    class ExpConfig(BaseModel):
-        model_config = ConfigDict(extra="ignore")
-        num_registrars: NonNegativeInt = 10
-        num_bootstraps: NonNegativeInt = 3
-        image_repo: str = "soutullostatus/nimlibp2p"
-        image_tag: str = "service-discovery"
-        namespace: str = "nimlibp2p"
-        bootstrap_service_name: str = "bootstrap-service"
-        registrar_service_name: str = "registrar-service"
-        kad_service_name: str = "kad-service"
-        dns_searches: List[str] = ["bootstrap-service"]
-
-    async def _run(
-        self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[dict],
-        stack: ExitStack,
     ):
         self.log_event("run_start")
-        config = self.ExpConfig(**values_yaml)
-        self.log_metadata({"params": vars(config)})
 
-        image = Image(repo=config.image_repo, tag=config.image_tag)
+        image = Image(repo=self.config.image_repo, tag=self.config.image_tag)
 
         bootstrap_service = (
             ServiceBuilder()
-            .with_name(config.bootstrap_service_name)
-            .with_namespace(config.namespace)
+            .with_name(self.config.bootstrap_service_name)
+            .with_namespace(self.config.namespace)
             .with_selector("app", "service-discovery")
             .with_selector("role", "bootstrap")
             .with_port(V1ServicePort(port=5000, target_port=5000))
             .with_cluster_ip("None")
             .build()
         )
-        self.dump_yaml(bootstrap_service, workdir, config.bootstrap_service_name)
-        await self.deploy(api_client, stack, args, {}, deployment=bootstrap_service)
+        self.dump_yaml(bootstrap_service, self.config.bootstrap_service_name)
+        await self.deploy(deployment=bootstrap_service)
         self.log_event("Bootstrap service deployed")
 
         bootstrap = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="bootstrap",
-                namespace=config.namespace,
-                num_nodes=config.num_bootstraps,
-                service=config.bootstrap_service_name,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_bootstraps,
+                service=self.config.bootstrap_service_name,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
@@ -106,23 +86,23 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(bootstrap, workdir, "bootstrap")
-        await self.deploy(api_client, stack, args, {}, deployment=bootstrap, wait_for_ready=True)
+        self.dump_yaml(bootstrap, "bootstrap")
+        await self.deploy(deployment=bootstrap, wait_for_ready=True)
         self.log_event("Bootstrap nodes deployed")
 
         registrars = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="registrar",
-                namespace=config.namespace,
-                num_nodes=config.num_registrars,
-                service=config.registrar_service_name,
-                dns_searches=config.dns_searches,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_registrars,
+                service=self.config.registrar_service_name,
+                dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_option("NODE_ROLE", "RoleHybrid")
-            .with_option("SERVICE", config.bootstrap_service_name)
+            .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_option("ADVERTISE_SERVICES", "chat")
             .with_option("DISCOVER_SERVICES", "chat")
             .with_pull_policy("Always")
@@ -131,46 +111,46 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(registrars, workdir, "registrars")
-        await self.deploy(api_client, stack, args, {}, deployment=registrars, wait_for_ready=True)
+        self.dump_yaml(registrars, "registrars")
+        await self.deploy(deployment=registrars, wait_for_ready=True)
         self.log_event("Registrar deployed")
 
         kad_dhts = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="normal-kad-dht",
-                namespace=config.namespace,
-                num_nodes=config.num_registrars,
-                service=config.kad_service_name,
-                dns_searches=config.dns_searches,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_registrars,
+                service=self.config.kad_service_name,
+                dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)  # TODO change image
             .with_option("NODE_ROLE", "RoleBootstrap")
-            .with_option("SERVICE", config.bootstrap_service_name)
+            .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
             .with_label("role", "kad-dht")
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(kad_dhts, workdir, "kad_dhts")
-        await self.deploy(api_client, stack, args, {}, deployment=kad_dhts, wait_for_ready=True)
+        self.dump_yaml(kad_dhts, "kad_dhts")
+        await self.deploy(deployment=kad_dhts, wait_for_ready=True)
         self.log_event("kad_dhts deployed")
 
         popular_advertisers = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="popular-advertisers",
-                namespace=config.namespace,
-                num_nodes=config.num_registrars,
-                service=config.registrar_service_name,
-                dns_searches=config.dns_searches,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_registrars,
+                service=self.config.registrar_service_name,
+                dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_option("NODE_ROLE", "RoleAdvertiser")
-            .with_option("SERVICE", config.bootstrap_service_name)
+            .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_option("ADVERTISE_SERVICES", "chat")
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
@@ -178,25 +158,23 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(registrars, workdir, "popular_advertisers")
-        await self.deploy(
-            api_client, stack, args, {}, deployment=popular_advertisers, wait_for_ready=True
-        )
+        self.dump_yaml(registrars, "popular_advertisers")
+        await self.deploy(deployment=popular_advertisers, wait_for_ready=True)
         self.log_event("popular_advertisers deployed")
 
         rare_advertisers = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="popular-advertisers",
-                namespace=config.namespace,
-                num_nodes=config.num_registrars,
-                service=config.registrar_service_name,
-                dns_searches=config.dns_searches,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_registrars,
+                service=self.config.registrar_service_name,
+                dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_option("NODE_ROLE", "RoleAdvertiser")
-            .with_option("SERVICE", config.bootstrap_service_name)
+            .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_option("ADVERTISE_SERVICES", "secret_chat")
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
@@ -204,25 +182,23 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(registrars, workdir, "rare_advertisers")
-        await self.deploy(
-            api_client, stack, args, {}, deployment=rare_advertisers, wait_for_ready=True
-        )
+        self.dump_yaml(registrars, "rare_advertisers")
+        await self.deploy(deployment=rare_advertisers, wait_for_ready=True)
         self.log_event("rare_advertisers deployed")
 
         discoverer = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
                 name="popular-advertisers",
-                namespace=config.namespace,
-                num_nodes=config.num_registrars,
-                service=config.registrar_service_name,
-                dns_searches=config.dns_searches,
+                namespace=self.config.namespace,
+                num_nodes=self.config.num_registrars,
+                service=self.config.registrar_service_name,
+                dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)
             .with_option("NODE_ROLE", "RoleDiscoverer")
-            .with_option("SERVICE", config.bootstrap_service_name)
+            .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_option("DISCOVER_SERVICES", "secret_chat")
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
@@ -230,6 +206,6 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
             .build()
         )  # TODO: Change policy
 
-        self.dump_yaml(registrars, workdir, "discoverer")
-        await self.deploy(api_client, stack, args, {}, deployment=discoverer, wait_for_ready=True)
+        self.dump_yaml(registrars, "discoverer")
+        await self.deploy(deployment=discoverer, wait_for_ready=True)
         self.log_event("discoverer deployed")

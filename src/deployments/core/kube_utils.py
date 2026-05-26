@@ -1034,7 +1034,9 @@ def default_chart_yaml_str(name) -> str:
     apiVersion: v2
     name: {name}
     version: 0.1.0
-    description: A Helm chart for Kubernetes""".format(name=name)
+    description: A Helm chart for Kubernetes""".format(
+        name=name
+    )
 
 
 def helm_build_dir(workdir: str, values_paths: List[str], name: str) -> yaml.YAMLObject:

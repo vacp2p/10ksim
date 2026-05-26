@@ -1,18 +1,14 @@
 # Python Imports
 import logging
 import random
-from argparse import Namespace
 from asyncio import sleep
-from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime
 from datetime import timezone as dt_timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-from kubernetes.client import ApiClient
 from pydantic import BaseModel, ConfigDict
-from ruamel import yaml
 
 # Project Imports
 from src.deployments.core.kube_utils import dict_get, dict_set
@@ -38,11 +34,6 @@ class NimMultipleRegression(BaseExperiment, BaseModel):
 
     async def _run(
         self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[yaml.YAMLObject],
-        stack: ExitStack,
     ):
         logger.info("Multiple nimlibp2p regression")
         network_params = get_batch()
@@ -61,13 +52,13 @@ class NimMultipleRegression(BaseExperiment, BaseModel):
             # Adding a random number helps distinguish experiments.
             random_number = random.randint(1, 200000)
             exp_workdir = (
-                Path(workdir)
+                Path(self._workdir)
                 / image
                 / f"delay_{delay}_jitter_{jitter}_messages_{messages}_mix_{mix_nodes}_gossip_{nonmix_nodes}_rand_{random_number}"
             )
-            exp_args = deepcopy(args)
-            exp_args.workdir = exp_workdir
-            exp_args.delay = None
+            exp_config = deepcopy(self.config)
+            exp_config.workdir = exp_workdir
+            exp_config.delay = None
             exp_values_yaml = deepcopy(values_yaml)
             dict_set(
                 exp_values_yaml, "nimlibp2p.nodes.network.delay", delay, sep=".", replace_leaf=True
@@ -129,7 +120,7 @@ class NimMultipleRegression(BaseExperiment, BaseModel):
 
             experiment = NimMixNodes()
             logger.info(f"running wtih delay {delay} jitter {jitter}")
-            experiment.run(api_client, exp_args, exp_values_yaml)
+            experiment.run(api_client, exp_config, exp_values_yaml)
 
             logger.info("sleep 100")
             await sleep(100)

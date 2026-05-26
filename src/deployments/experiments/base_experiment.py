@@ -54,6 +54,7 @@ V1Deployable = Union[
 
 logger = logging.getLogger(__name__)
 
+ARG_NOT_SET = object()
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
 
@@ -193,6 +194,8 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             else self.build(values_yaml, service, extra_values_paths=extra_values_paths)
         )
 
+        self.dump_yaml(yaml_obj)
+
         try:
             dry_run = self.dry_run
         except AttributeError:
@@ -245,10 +248,18 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
                 )
             return Path(out_dir) / path
 
-    def dump_yaml(self, obj, name: str):
+    def dump_yaml(self, obj: V1Deployable | dict, name: Optional[str] = None):
+        if not isinstance(obj, dict):
+            obj = k8s_obj_to_dict(obj)
+        name = name or obj["metadata"]["name"]
         out_path = Path(self._workdir) / f"{name}.yaml"
+        logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
+        if out_path.exists():
+            logger.warning(f"File already exists. Overwriting {out_path}")
+        logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
+        if out_path.exists():
+            logger.warning(f"File already exists. Overwriting {out_path}")
         os.makedirs(out_path.parent, exist_ok=True)
-        logger.info(f"dumping deployment `{name}` to `{out_path}`")
         with open(out_path, "w") as out_file:
             yaml = get_YAML()
             yaml.dump(k8s_obj_to_dict(obj), out_file)

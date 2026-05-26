@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Literal, Self
 
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt
@@ -57,4 +57,9 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
     def with_readiness_probe(self, probe: V1Probe) -> Self:
         container = find_libp2p_container_config(self.config)
         container.with_readiness_probe(probe, overwrite=True)
+        return self
+
+    def with_pull_policy(self, policy: Literal["IfNotPresent", "Always", "Never"]) -> Self:
+        config = find_libp2p_container_config(self.config)
+        config.image_pull_policy = policy
         return self

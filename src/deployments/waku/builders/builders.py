@@ -98,3 +98,8 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
     def with_image(self, image: Image) -> Self:
         self.with_image_in_container(WAKU_CONTAINER_NAME, image, overwrite=True)
         return self
+
+    def with_pull_policy(self, policy: Literal["IfNotPresent", "Always", "Never"]) -> Self:
+        config = find_waku_container_config(self.config)
+        config.image_pull_policy = policy
+        return self

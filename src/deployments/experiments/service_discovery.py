@@ -24,13 +24,6 @@ READINESS_PROBE = V1Probe(
 )
 
 
-# TODO: Check namespace is already created when we deploy.
-# TODO: Utilities to set up resources and that stuff should be located in same place (shared between builders)
-# TODO: How do we handle different containers in the same pod? Should be more direct
-# TODO: Why do we need namespace in subparser and ExperimentConfig also
-# TODO: Reduce log levels
-
-
 @experiment(name="service-discovery")
 class ServiceDiscovery(BaseExperiment, BaseModel):
 
@@ -40,7 +33,7 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
         BaseExperiment.add_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
-    def log_event(self, event):  # TODO deberia ser de base experiment??
+    def log_event(self, event):
         logger.info(event)
         return super().log_event(event)
 
@@ -76,8 +69,6 @@ class ServiceDiscovery(BaseExperiment, BaseModel):
         values_yaml: Optional[dict],
         stack: ExitStack,
     ):
-        # Rare Service Discovery in a Large Noisy Network
-        # https://www.notion.so/Dogfooding-Service-Discovery-3528f96fb65c800f98d2f1bbaf1822f1?source=copy_link#35d8f96fb65c80bf9200fc87374b5044
         self.log_event("run_start")
         config = self.ExpConfig(**values_yaml)
         self.log_metadata({"params": vars(config)})

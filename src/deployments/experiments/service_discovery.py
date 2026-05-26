@@ -84,7 +84,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_label("app", "service-discovery")
             .with_label("role", "bootstrap")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(bootstrap, "bootstrap")
         await self.deploy(deployment=bootstrap, wait_for_ready=True)
@@ -109,7 +109,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_label("app", "service-discovery")
             .with_label("role", "registrar")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(registrars, "registrars")
         await self.deploy(deployment=registrars, wait_for_ready=True)
@@ -125,14 +125,14 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
                 dns_searches=self.config.dns_searches,
             )
             .with_readiness_probe(READINESS_PROBE)
-            .with_image(image)  # TODO change image
+            .with_image(image)
             .with_option("NODE_ROLE", "RoleBootstrap")
             .with_option("SERVICE", self.config.bootstrap_service_name)
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
             .with_label("role", "kad-dht")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(kad_dhts, "kad_dhts")
         await self.deploy(deployment=kad_dhts, wait_for_ready=True)
@@ -156,7 +156,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_label("app", "service-discovery")
             .with_label("role", "popular-advertiser")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(registrars, "popular_advertisers")
         await self.deploy(deployment=popular_advertisers, wait_for_ready=True)
@@ -180,7 +180,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_label("app", "service-discovery")
             .with_label("role", "rare-advertiser")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(registrars, "rare_advertisers")
         await self.deploy(deployment=rare_advertisers, wait_for_ready=True)
@@ -204,7 +204,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_label("app", "service-discovery")
             .with_label("role", "rare-advertiser")
             .build()
-        )  # TODO: Change policy
+        )
 
         self.dump_yaml(registrars, "discoverer")
         await self.deploy(deployment=discoverer, wait_for_ready=True)

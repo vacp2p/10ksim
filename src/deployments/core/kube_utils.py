@@ -285,11 +285,21 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "CronJob": [],
         "Pod": [],
         "Service": [],
+        "ConfigMap": [],
     }
     types = (
         types
         if types
-        else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job", "Service"]
+        else [
+            "Deployment",
+            "StatefulSet",
+            "DaemonSet",
+            "ReplicaSet",
+            "Pod",
+            "Job",
+            "Service",
+            "ConfigMap",
+        ]
     )
     for yaml in yamls:
         try:
@@ -331,6 +341,7 @@ def cleanup_resources(
         "CronJob",
         "Pod",
         "Service",
+        "ConfigMap",
     ]
 
     map = {
@@ -359,6 +370,9 @@ def cleanup_resources(
         ),
         "Pod": lambda name: client.CoreV1Api(api_client).delete_namespaced_pod(name, namespace),
         "Service": lambda name: client.CoreV1Api(api_client).delete_namespaced_service(
+            name, namespace
+        ),
+        "ConfigMap": lambda name: client.CoreV1Api(api_client).delete_namespaced_config_map(
             name, namespace
         ),
     }

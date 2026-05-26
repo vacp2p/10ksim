@@ -15,10 +15,17 @@ logger = logging.getLogger(__name__)
 
 JobState = Literal["complete", "failed"]
 
+
+class ShadowLogParseError(RuntimeError):
+    """pull_shadow_logs couldn't parse the runner's markers out of pod stdout."""
+
+
 # Markers the runner container's command writes around per-host log files. Kept
-# in sync with the bash snippet in builders.build_shadow_job.
-_DONE_RE = re.compile(rb"^===SHADOW_DONE_EXIT=(\d+)===$", re.MULTILINE)
-_HOST_BEGIN_RE = re.compile(rb"^===SHADOW_HOST_FILE_BEGIN===(.+?)===$", re.MULTILINE)
+# in sync with the bash snippet in builders.build_shadow_job. The trailing
+# `\n?` consumes the newline that `echo` adds, so the next .end() points cleanly
+# at the start of the section body without needing a manual `+1`.
+_DONE_RE = re.compile(rb"^===SHADOW_DONE_EXIT=(\d+)===\n?", re.MULTILINE)
+_HOST_BEGIN_RE = re.compile(rb"^===SHADOW_HOST_FILE_BEGIN===(.+?)===\n?", re.MULTILINE)
 _HOST_END_MARKER = b"===SHADOW_HOST_FILE_END==="
 
 
@@ -103,32 +110,45 @@ def pull_shadow_logs(
     done_match = _DONE_RE.search(raw)
     if not done_match:
         # The runner never reached the marker (Shadow crashed before tail loop,
-        # or markers got mangled). Save the raw log unconditionally.
-        (dest_dir / "shadow_stdout.log").write_bytes(raw)
-        logger.warning(
-            f"SHADOW_DONE_EXIT marker not found in pod logs; saved raw output to "
-            f"{dest_dir / 'shadow_stdout.log'} ({len(raw)} bytes)"
+        # the container OOM-killed, or markers got mangled). Save the raw log
+        # so callers can debug, then raise so the experiment records this as
+        # a real failure rather than silently treating it as success.
+        raw_path = dest_dir / "shadow_stdout.log"
+        raw_path.write_bytes(raw)
+        raise ShadowLogParseError(
+            f"SHADOW_DONE_EXIT marker not found in pod logs "
+            f"(raw output saved to {raw_path}, {len(raw)} bytes)"
         )
-        return
 
     pre = raw[: done_match.start()]
     post = raw[done_match.end() :]
     shadow_exit_rc = int(done_match.group(1).decode())
     (dest_dir / "shadow_stdout.log").write_bytes(pre)
-    logger.info(f"Shadow process exited with rc={shadow_exit_rc}")
+    if shadow_exit_rc != 0:
+        # Defensive: today this also flows through the Job's Failed condition
+        # so the experiment raises anyway. If the bash wrapper is ever changed
+        # to mask the rc (e.g. `exit 0` instead of `exit $rc`), this warning
+        # is the only signal we'd have left.
+        logger.warning(f"Shadow process exited with non-zero rc={shadow_exit_rc}")
+    else:
+        logger.info(f"Shadow process exited with rc={shadow_exit_rc}")
 
     # Parse per-host sections. Each begins with =BEGIN===<path>= and ends with =END=.
     data_root = dest_dir / "shadow_data"
     count = 0
     for begin_match in _HOST_BEGIN_RE.finditer(post):
         host_path = begin_match.group(1).decode()  # e.g. "shadow.data/hosts/pod-0/main.1000.stdout"
-        body_start = begin_match.end() + 1  # skip newline
+        body_start = begin_match.end()  # regex consumed the trailing newline
         end_idx = post.find(_HOST_END_MARKER, body_start)
         if end_idx < 0:
             logger.warning(f"No END marker for `{host_path}`, skipping")
             continue
-        # Strip the trailing newline that the runner's `echo` added before END.
-        body = post[body_start:end_idx].rstrip(b"\n")
+        # Strip the single trailing newline that the runner's `echo` added before
+        # the END marker. Use rstrip(b"\n", count=1) semantics manually to avoid
+        # losing legitimate trailing blank lines that were in the original file.
+        body = post[body_start:end_idx]
+        if body.endswith(b"\n"):
+            body = body[:-1]
         out_path = data_root / host_path
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_bytes(body)

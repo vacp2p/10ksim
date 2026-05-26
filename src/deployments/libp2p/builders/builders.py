@@ -34,9 +34,9 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         self,
         name: str,
         namespace: str,
-        service: str,
         num_nodes: PositiveInt,
         dns_searches: List[str] = None,
+        service: str = "nimp2p-service",
     ) -> Self:
         self.config.name = name
         self.config.namespace = namespace

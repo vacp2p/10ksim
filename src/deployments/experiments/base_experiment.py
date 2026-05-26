@@ -285,7 +285,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     def _dump_metadata(self):
         self.metadata = self._get_metadata()
         self.log_metadata(self.metadata)
-        full_metadata = {**self.metadata, **self.serialize}
+        full_metadata = {**self.metadata, **self.serialize()}
         out_path = Path(self.metadata_log_path)
         with open(out_path, "a") as out_file:
             out_file.write(json.dumps(full_metadata, default=str))

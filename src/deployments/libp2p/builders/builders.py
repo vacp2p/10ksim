@@ -1,4 +1,4 @@
-from typing import Self, Literal
+from typing import Literal, Self
 
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt

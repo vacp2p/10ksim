@@ -44,7 +44,12 @@ def build_nodes(
 ) -> V1StatefulSet:
     config = (
         Libp2pStatefulSetBuilder()
-        .with_libp2p_config(name="pod", namespace=namespace, num_nodes=params.num_nodes)
+        .with_libp2p_config(
+            name="pod",
+            namespace=namespace,
+            num_nodes=params.num_nodes,
+            dns_searches=["nimp2p-service"],
+        )
         .with_option(NimLibp2p.peers, params.num_nodes)
         .with_option(NimLibp2p.self_trigger, True)
         .with_option(NimLibp2p.service, "nimp2p-service")

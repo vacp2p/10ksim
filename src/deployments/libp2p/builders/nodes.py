@@ -47,15 +47,16 @@ class Nodes:
         dns_searches: List[str],
         namespace: str,
     ) -> PodSpecConfig:
-        dns_searches_complete = (
-            [f"{service}.{namespace}.svc.cluster.local" for service in dns_searches]
-            if dns_searches
-            else None
-        )
+        dns_config = None
+        if dns_searches:
+            dns_searches_complete = [
+                f"{service}.{namespace}.svc.cluster.local" for service in dns_searches
+            ]
+            dns_config = V1PodDNSConfig(searches=dns_searches_complete)
 
         return PodSpecConfig(
             container_configs=[Nodes.create_container_config()],
-            dns_config=V1PodDNSConfig(searches=dns_searches_complete),
+            dns_config=dns_config,
         )
 
     @staticmethod

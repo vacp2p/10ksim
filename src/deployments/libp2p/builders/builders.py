@@ -1,8 +1,9 @@
-from typing import Literal, Self
-
+# Python Imports
+from typing import List, Self
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt
 
+# Project Imports
 from src.deployments.core.builders import StatefulSetBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.libp2p.builders.helpers import (
@@ -34,12 +35,14 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         name: str,
         namespace: str,
         num_nodes: PositiveInt,
+        dns_searches: List[str] = None,
+        service: str = "nimp2p-service",
     ) -> Self:
         self.config.name = name
         self.config.namespace = namespace
         self.config.pod_management_policy = "Parallel"
         self.config.stateful_set_spec = Nodes.create_stateful_set_spec_config(
-            namespace=namespace,
+            service=service, namespace=namespace, dns_searches=dns_searches
         )
         self.config.stateful_set_spec.replicas = num_nodes
 

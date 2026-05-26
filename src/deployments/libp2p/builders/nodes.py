@@ -1,4 +1,6 @@
 # Python Imports
+from typing import List
+
 from kubernetes.client import V1ContainerPort, V1PodDNSConfig, V1ResourceRequirements
 
 # Project Imports
@@ -42,29 +44,41 @@ class Nodes:
 
     @staticmethod
     def create_pod_spec_config(
+        dns_searches: List[str],
         namespace: str,
     ) -> PodSpecConfig:
+        dns_searches_complete = (
+            [f"{service}.{namespace}.svc.cluster.local" for service in dns_searches]
+            if dns_searches
+            else None
+        )
+
         return PodSpecConfig(
             container_configs=[Nodes.create_container_config()],
-            dns_config=V1PodDNSConfig(searches=[f"nimp2p-service.{namespace}.svc.cluster.local"]),
+            dns_config=V1PodDNSConfig(searches=dns_searches_complete),
         )
 
     @staticmethod
     def create_pod_template_spec_config(
+        dns_searches: List[str],
         namespace: str,
     ) -> PodTemplateSpecConfig:
-        config = PodTemplateSpecConfig(pod_spec_config=Nodes.create_pod_spec_config(namespace))
+        config = PodTemplateSpecConfig(
+            pod_spec_config=Nodes.create_pod_spec_config(dns_searches, namespace)
+        )
         config.with_app("zerotenkay")
         return config
 
     @staticmethod
     def create_stateful_set_spec_config(
+        service: str,
         namespace: str,
+        dns_searches: List[str],
     ) -> StatefulSetSpecConfig:
         config = StatefulSetSpecConfig(
             replicas=0,
-            service_name="nimp2p-service",
-            pod_template_spec_config=Nodes.create_pod_template_spec_config(namespace),
+            service_name=service,
+            pod_template_spec_config=Nodes.create_pod_template_spec_config(dns_searches, namespace),
         )
         config.with_app("zerotenkay")
         return config

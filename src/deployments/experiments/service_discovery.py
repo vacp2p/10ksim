@@ -40,7 +40,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
 
     @classmethod
     def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Connection manager experiment")
+        subparser = subparsers.add_parser(cls.name, help="Service discovery experiment")
         BaseExperiment.add_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
@@ -158,7 +158,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(registrars, "popular_advertisers")
+        self.dump_yaml(popular_advertisers, "popular_advertisers")
         await self.deploy(deployment=popular_advertisers, wait_for_ready=True)
         self.log_event("popular_advertisers deployed")
 
@@ -182,7 +182,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(registrars, "rare_advertisers")
+        self.dump_yaml(rare_advertisers, "rare_advertisers")
         await self.deploy(deployment=rare_advertisers, wait_for_ready=True)
         self.log_event("rare_advertisers deployed")
 
@@ -202,10 +202,10 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_option("DISCOVER_SERVICES", "secret_chat")
             .with_pull_policy("Always")
             .with_label("app", "service-discovery")
-            .with_label("role", "rare-advertiser")
+            .with_label("role", "discoverer")
             .build()
         )
 
-        self.dump_yaml(registrars, "discoverer")
+        self.dump_yaml(discoverer, "discoverer")
         await self.deploy(deployment=discoverer, wait_for_ready=True)
         self.log_event("discoverer deployed")

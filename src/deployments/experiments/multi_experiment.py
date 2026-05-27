@@ -20,11 +20,10 @@ logger = logging.getLogger(__name__)
 
 @experiment(name="multi")
 class Multiple(BaseExperiment):
-    """Meta-experiment that runs a registered experiment N times with different params.
+    """Runs a registered experiment N times with different params.
 
-    Subclasses set `experiment_name` (and optionally `delay_between_exps`) as class
-    fields and implement `get_params_list()` to yield per-run overrides. See
-    `multi_nimlibp2p.py` for a worked example.
+    Subclasses set `experiment_name` and implement `get_params_list()`.
+    See `multi_nimlibp2p.py` for a worked example.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -40,12 +39,7 @@ class Multiple(BaseExperiment):
 
     @classmethod
     def add_args(cls, subparser) -> None:
-        # Pre-#269 Multiple supported --name and --delay CLI flags. Those passed
-        # raw args.* into _run, which is no longer how BaseExperiment works
-        # (post-#269 everything lives on the pydantic instance). Subclasses set
-        # `experiment_name` and `delay_between_exps` as class fields instead.
-        # Kept as a no-op for subclasses that still call Multiple.add_args() in
-        # their add_parser hook (e.g. MultiNimlibp2p).
+        # No-op. Kept so existing subclasses calling Multiple.add_args() don't break.
         pass
 
     def log_event(self, event):
@@ -53,13 +47,6 @@ class Multiple(BaseExperiment):
         return super().log_event(event)
 
     async def _run(self):
-        """Loop through `get_params_list()` and run the named experiment for each set.
-
-        Each child run gets a deepcopy of the parent's `config` dict with the per-run
-        overrides applied via `dict_set`. Children are instantiated with the same
-        kwargs that `deployment.py` uses, so they're indistinguishable from a direct
-        `deployment.py <exp-name>` invocation.
-        """
         logger.info("Multiple experiments")
         param_list = self.get_params_list()
 
@@ -69,9 +56,6 @@ class Multiple(BaseExperiment):
                 "(e.g. `experiment_name = MyExperiment.name`)"
             )
 
-        # The parent's `self.config` is the raw values_yaml dict that deployment.py
-        # loaded from --values. BaseExperiment[TCfg] is unspecialized for Multiple
-        # so config stays as a dict rather than being coerced to a pydantic model.
         base_values = self.config if isinstance(self.config, dict) else {}
 
         for params in param_list:
@@ -80,9 +64,6 @@ class Multiple(BaseExperiment):
 
             params_str = self.get_name_from_params(params)
             random_number = random.randint(1, 200000)
-            # Children get an output folder nested under the parent's. Absolute
-            # path so BaseExperiment._setup_log_paths doesn't double-resolve it
-            # under `experiments/out/`.
             exp_workdir = self.output_folder / f"{params_str}__rand_{random_number}"
 
             exp_values_yaml = deepcopy(base_values)

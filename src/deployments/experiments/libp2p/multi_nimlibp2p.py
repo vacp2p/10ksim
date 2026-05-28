@@ -16,10 +16,9 @@ def shallow_merge(a: BaseModel, b: BaseModel):
 
 @experiment(name="multi_nimlibp2p")
 class MultiNimlibp2p(Multiple):
-    experiment_name: Optional[str] = NimLibp2pExperiment.name
 
     def model_post_init(self, __context: Any) -> None:
-        self.delay_between_exps = 6 * 60
+        self.config.name = NimLibp2pExperiment.name
         super().model_post_init(__context)
 
     @classmethod

@@ -35,9 +35,7 @@ echo "$curl_output" | awk '
   }}
   END {{ if (NR == 0) exit 1 }}  # If no matching line is found, exit with failure
 '
-""".format(
-        num_topics
-    )
+""".format(num_topics)
     return prefix + [command_block]
 
 

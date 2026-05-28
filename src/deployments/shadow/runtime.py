@@ -1,7 +1,5 @@
-# Runtime helpers for Shadow runs: poll for k8s Job completion + pull per-host logs.
-#
-# Kept separate from builders.py because these do I/O (kubectl + k8s API calls)
-# while builders are pure data rendering.
+# Runtime helpers for Shadow runs: poll the Job, pull output off the PVC. Does I/O
+# (kubectl + k8s API), unlike builders.py.
 import asyncio
 import logging
 import subprocess
@@ -27,12 +25,7 @@ async def wait_for_job_complete(
     timeout_s: int = 1800,
     poll_interval_s: int = 5,
 ) -> JobState:
-    """Poll a k8s Job until it reports Complete or Failed in its conditions.
-
-    Returns the terminal state. Raises TimeoutError if neither condition is
-    reached before `timeout_s`. Mirrors what `kubectl wait --for=condition=...`
-    does but works inside our async experiment flow without spawning a subprocess.
-    """
+    """Poll the Job until it reports Complete or Failed; raise TimeoutError otherwise."""
     batch = BatchV1Api(api_client)
     elapsed = 0
     while elapsed < timeout_s:
@@ -82,14 +75,8 @@ def _wait_pod_running(
 
 
 def _flatten_host_logs(data_root: Path, dest: Path) -> int:
-    """Flatten Shadow's per-host output into one `<host>.log` per host.
-
-    Shadow runs the same test-node binary as k8s, so the log lines are identical;
-    only the layout differs. The mesh_analysis FileStack/FileReader expects a flat
-    folder of `<peer>.log` files, so we concatenate each host's stdout+stderr into
-    `<host>.log` (skipping Shadow's `.shimlog` syscall noise). A Shadow run then
-    reads like a k8s run with no analyzer changes.
-    """
+    """Concatenate each host's stdout+stderr into `<host>.log` (skip `.shimlog`) — the
+    flat layout mesh_analysis FileStack expects."""
     hosts_dir = data_root / "shadow.data" / "hosts"
     if not hosts_dir.is_dir():
         logger.warning(f"No hosts dir at `{hosts_dir}`; skipping log flatten")
@@ -119,19 +106,9 @@ def pull_shadow_logs(
     node_pin: Optional[str] = None,
     reader_ready_timeout_s: int = 120,
 ) -> None:
-    """Pull Shadow's output into `dest_dir`.
-
-    Writes:
-      - `shadow_stdout.log`: the Job pod's stdout (Shadow's boot info, sim
-        progress, syscall counters), via `kubectl logs`.
-      - `shadow_data/shadow.data/hosts/<host>/<file>`: the per-host stdout/stderr
-        and metrics files Shadow wrote to the run PVC, copied out with `kubectl cp`.
-      - `logs/<host>.log`: per-host stdout+stderr flattened into the flat layout
-        the mesh_analysis FileStack expects, so the run is analyzable like a k8s run.
-
-    The per-host files live on the run PVC rather than pod stdout, so we spin up a
-    short-lived reader pod that mounts the same claim and copy the tree out of it.
-    """
+    """Pull Shadow's output into `dest_dir`: `shadow_stdout.log` (Job pod stdout via
+    kubectl logs), `shadow_data/` (the PVC's shadow.data, copied out via a reader pod +
+    kubectl cp), and `logs/<host>.log` (flattened for FileStack)."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     core = CoreV1Api(api_client)
 

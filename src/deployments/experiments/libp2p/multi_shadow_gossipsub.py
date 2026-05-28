@@ -12,9 +12,7 @@ from src.deployments.registry import experiment
 class MultiShadowGossipsub(Multiple):
     def model_post_init(self, __context: Any) -> None:
         self.config.name = ShadowGossipsubExperiment.name
-        # Shadow runs finish in seconds wall clock, so the long default between
-        # iterations isn't needed.
-        self.config.delay = 60
+        self.config.delay = 60  # Shadow runs finish in seconds; no long inter-run wait
         super().model_post_init(__context)
 
     @classmethod

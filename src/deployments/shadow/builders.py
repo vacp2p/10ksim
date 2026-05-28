@@ -1,17 +1,5 @@
-# Builders for Shadow simulator runs.
-#
-# Pure data: takes config values, returns kubernetes-client objects and yaml dicts.
-# No I/O, no kubectl calls. Validation-friendly with `--dry-run`.
-#
-# A Shadow run looks like:
-#   - ConfigMap: holds the rendered `shadow.yaml` plus `traffic_sync.py` (publisher script).
-#   - Job pod with:
-#       - init container: pulls the dynamic-linked nim test-node image, copies `/node/main`
-#         into a shared emptyDir.
-#       - main container: `radiken/dst-shadow-base`, mounts the binary and the ConfigMap,
-#         runs `shadow /sim/config/shadow.yaml`.
-#
-# See the Notion runbook "Using Shadow at DST" for background.
+# Builders for Shadow simulator runs: config values -> kubernetes-client objects
+# and yaml dicts. Pure data, no I/O. See the "Using Shadow at DST" runbook.
 from pathlib import Path
 from typing import Optional
 
@@ -38,8 +26,6 @@ from kubernetes.client import (
 )
 from ruamel.yaml import YAML
 
-# Path to traffic_sync.py inside the 10ksim repo. Used to read the script
-# contents into the ConfigMap at experiment time.
 TRAFFIC_SYNC_REPO_PATH = (
     "deployment-utilities/docker_utilities/nimlibp2p/publisher_headless/traffic_sync.py"
 )
@@ -47,12 +33,9 @@ TRAFFIC_SYNC_REPO_PATH = (
 # Mount targets inside the Shadow runner container.
 _BIN_MOUNT = "/sim/bin"
 _CONFIG_MOUNT = "/sim/config"
-# PVC-backed working directory. Shadow writes shadow.data/ here so the per-host
-# logs and metrics dumps land on persistent storage instead of pod stdout.
-_RUN_MOUNT = "/sim/run"
+_RUN_MOUNT = "/sim/run"  # PVC-backed; Shadow writes shadow.data/ here
 
-# Default security context that Shadow needs. The default container security
-# profile blocks LD_PRELOAD + ptrace, which Shadow's syscall interposer relies on.
+# Shadow's syscall interposer needs LD_PRELOAD + ptrace.
 _SHADOW_SECURITY = V1SecurityContext(
     seccomp_profile=V1SeccompProfile(type="Unconfined"),
     capabilities=V1Capabilities(add=["SYS_PTRACE"]),
@@ -71,16 +54,8 @@ def render_shadow_yaml(
     muxer: str = "yamux",
     metrics_interval_s: int = 15,
 ) -> dict:
-    """Build the shadow.yaml structure as a Python dict.
-
-    Each simulated peer runs the nim test node (`./main`) with the env vars the test
-    node expects in Shadow mode. The extra `publisher` host runs `traffic_sync.py`
-    against the peers' HTTP `/publish` endpoints (port 8645) on `pod-N` hostnames.
-
-    Topology is Shadow's built-in `1_gbit_switch` for now. Per-link bandwidth and
-    latency variation needs a GML graph file, which we'll add when an experiment
-    actually needs it.
-    """
+    """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
+    running `traffic_sync.py` against the peers' `/publish` endpoints (port 8645)."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 
@@ -89,16 +64,12 @@ def render_shadow_yaml(
         "CONNECTTO": str(connect_to),
         "SHADOWENV": "true",  # env.nim requires the literal string "true"
         "MUXER": muxer,
-        # storeMetrics scrape cadence. Short so the last scrape captures the
-        # post-traffic libp2p_network_bytes counter (the bandwidth metric).
         "METRICS_INTERVAL_S": str(metrics_interval_s),
     }
     peer_process = {
         "path": "./main",
         "start_time": "5s",
-        # The nim test node is a long-running daemon; tell Shadow not to error
-        # when it's still running at sim stop_time.
-        "expected_final_state": "running",
+        "expected_final_state": "running",  # daemon: don't error when alive at stop_time
         "environment": peer_env,
     }
     hosts = {
@@ -156,11 +127,7 @@ def build_configmap(
     shadow_yaml: dict,
     traffic_sync_path: Path,
 ) -> V1ConfigMap:
-    """Build the ConfigMap holding shadow.yaml + traffic_sync.py.
-
-    The ConfigMap is mounted at /sim/config/ inside the runner container, so the
-    Shadow process sees /sim/config/shadow.yaml and /sim/config/traffic_sync.py.
-    """
+    """ConfigMap with shadow.yaml + traffic_sync.py, mounted at /sim/config/."""
     return V1ConfigMap(
         api_version="v1",
         kind="ConfigMap",
@@ -186,25 +153,18 @@ def build_shadow_job(
     memory_request: str = "4Gi",
     memory_limit: str = "8Gi",
 ) -> V1Job:
-    """Build the k8s Job that runs Shadow.
-
-    Init container fetches the nim binary from `test_node_image` into the shared
-    emptyDir. Main container is the generic Shadow runner image; it mounts the
-    binary and the ConfigMap, then runs `shadow`.
-    """
+    """k8s Job that runs Shadow: init container stages the nim binary, main container
+    is the Shadow runner."""
     init_container = V1Container(
         name="fetch-test-node",
         image=test_node_image,
         image_pull_policy="Always",
-        # The test-node image's ENTRYPOINT is the binary itself; we override
-        # to copy rather than run.
+        # image ENTRYPOINT is the binary; override to copy it out
         command=["sh", "-c", f"cp /node/main {_BIN_MOUNT}/main && chmod +x {_BIN_MOUNT}/main"],
         volume_mounts=[V1VolumeMount(name="bin", mount_path=_BIN_MOUNT)],
     )
 
-    # Stage the binary + shadow.yaml into the PVC-backed run dir, then exec Shadow
-    # so the container's exit code is Shadow's (the Job condition reflects it).
-    # Output lands in /sim/run/shadow.data on the PVC; the reader pod copies it out.
+    # Stage binary + config into the PVC run dir, then exec Shadow.
     main_command = [
         "/bin/bash",
         "-eu",
@@ -273,11 +233,7 @@ def build_pvc(
     storage: str = "5Gi",
     storage_class: str = "longhorn",
 ) -> V1PersistentVolumeClaim:
-    """Claim that holds Shadow's `shadow.data/` output for the run.
-
-    ReadWriteOnce is enough: the Job and the reader pod don't run concurrently and
-    are pinned to the same node, so the claim never needs a cross-node attachment.
-    """
+    """PVC holding the run's shadow.data/ output (RWO; Job and reader pod share a node)."""
     return V1PersistentVolumeClaim(
         api_version="v1",
         kind="PersistentVolumeClaim",
@@ -298,13 +254,8 @@ def build_log_reader_pod(
     image: str,
     node_pin: Optional[str] = None,
 ) -> V1Pod:
-    """Short-lived pod that mounts the run PVC and sleeps so `kubectl cp` can copy
-    `shadow.data/` out after the Job has finished.
-
-    Pinned to the same node as the Job so the ReadWriteOnce claim attaches without a
-    cross-node migration. Reuses the Shadow base image since it already has `tar`
-    (needed by `kubectl cp`) and is cached on the node from the run.
-    """
+    """Short-lived pod mounting the run PVC so `kubectl cp` can copy shadow.data/ out
+    after the Job finishes. Same node as the Job (RWO); reuses the base image (has tar)."""
     return V1Pod(
         api_version="v1",
         kind="Pod",

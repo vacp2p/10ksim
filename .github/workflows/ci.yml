@@ -18,6 +18,11 @@ jobs:
 
       - run: uv sync --frozen
 
+      - name: black version
+        run: uv run black --version
+      - name: python version
+        run: uv run python --version
+
       - name: Check unused imports (autoflake)
         run: uv run autoflake --remove-all-unused-imports --recursive --check .
 

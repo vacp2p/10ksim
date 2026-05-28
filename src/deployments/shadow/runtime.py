@@ -4,29 +4,19 @@
 # while builders are pure data rendering.
 import asyncio
 import logging
-import re
 import subprocess
+import time
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from kubernetes.client import ApiClient, BatchV1Api, CoreV1Api
+from kubernetes.client.rest import ApiException
+
+from src.deployments.shadow.builders import _RUN_MOUNT, build_log_reader_pod
 
 logger = logging.getLogger(__name__)
 
 JobState = Literal["complete", "failed"]
-
-
-class ShadowLogParseError(RuntimeError):
-    """pull_shadow_logs couldn't parse the runner's markers out of pod stdout."""
-
-
-# Markers the runner container's command writes around per-host log files. Kept
-# in sync with the bash snippet in builders.build_shadow_job. The trailing
-# `\n?` consumes the newline that `echo` adds, so the next .end() points cleanly
-# at the start of the section body without needing a manual `+1`.
-_DONE_RE = re.compile(rb"^===SHADOW_DONE_EXIT=(\d+)===\n?", re.MULTILINE)
-_HOST_BEGIN_RE = re.compile(rb"^===SHADOW_HOST_FILE_BEGIN===(.+?)===\n?", re.MULTILINE)
-_HOST_END_MARKER = b"===SHADOW_HOST_FILE_END==="
 
 
 async def wait_for_job_complete(
@@ -72,85 +62,83 @@ def _find_job_pod(api_client: ApiClient, namespace: str, job_name: str) -> str:
     return pods[-1].metadata.name
 
 
+def _wait_pod_running(
+    core: CoreV1Api, namespace: str, pod_name: str, timeout_s: int, poll_interval_s: int = 3
+) -> None:
+    """Block until the pod is Running with its container ready."""
+    elapsed = 0
+    while elapsed < timeout_s:
+        pod = core.read_namespaced_pod(name=pod_name, namespace=namespace)
+        phase = pod.status.phase
+        if phase == "Running":
+            statuses = pod.status.container_statuses or []
+            if statuses and all(s.ready for s in statuses):
+                return
+        elif phase in ("Failed", "Succeeded"):
+            raise RuntimeError(f"Reader pod `{namespace}/{pod_name}` reached phase {phase}")
+        time.sleep(poll_interval_s)
+        elapsed += poll_interval_s
+    raise TimeoutError(f"Reader pod `{namespace}/{pod_name}` not ready within {timeout_s}s")
+
+
 def pull_shadow_logs(
     *,
     api_client: ApiClient,
     namespace: str,
     job_name: str,
+    pvc_name: str,
+    reader_image: str,
     dest_dir: Path,
+    node_pin: Optional[str] = None,
+    reader_ready_timeout_s: int = 120,
 ) -> None:
     """Pull Shadow's output into `dest_dir`.
 
     Writes:
-      - `shadow_stdout.log`: everything the runner container printed up to the
-        `===SHADOW_DONE_EXIT===` marker. Shadow's own boot info, sim progress,
-        syscall counters.
-      - `shadow_data/hosts/<host>/<file>`: per-host stdout/stderr files the
-        runner appended after the marker (one section per file, delimited by
-        `===SHADOW_HOST_FILE_BEGIN/END===`).
+      - `shadow_stdout.log`: the Job pod's stdout (Shadow's boot info, sim
+        progress, syscall counters), via `kubectl logs`.
+      - `shadow_data/shadow.data/hosts/<host>/<file>`: the per-host stdout/stderr
+        and metrics files Shadow wrote to the run PVC, copied out with `kubectl cp`.
 
-    Why this shape: once the Job's pod hits Phase=Succeeded, `kubectl exec` and
-    `kubectl cp` both refuse. `kubectl logs` is the only mechanism that still
-    works, so the runner container streams the per-host files into its own
-    stdout (with markers) as its last act, and we parse them out here.
+    The per-host files live on the run PVC rather than pod stdout, so we spin up a
+    short-lived reader pod that mounts the same claim and copy the tree out of it.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    pod = _find_job_pod(api_client, namespace, job_name)
-    logger.info(f"Pulling Shadow logs from `{namespace}/{pod}` into `{dest_dir}`")
+    core = CoreV1Api(api_client)
 
+    job_pod = _find_job_pod(api_client, namespace, job_name)
+    logger.info(f"Pulling Shadow stdout from `{namespace}/{job_pod}`")
     result = subprocess.run(
-        ["kubectl", "-n", namespace, "logs", pod, "--tail=-1"],
+        ["kubectl", "-n", namespace, "logs", job_pod, "--tail=-1"],
         check=True,
         capture_output=True,
     )
-    raw = result.stdout
+    (dest_dir / "shadow_stdout.log").write_bytes(result.stdout)
 
-    # Split: everything before SHADOW_DONE_EXIT is shadow's own stdout;
-    # everything after is the per-host file dump (sectioned).
-    done_match = _DONE_RE.search(raw)
-    if not done_match:
-        # The runner never reached the marker (Shadow crashed before tail loop,
-        # the container OOM-killed, or markers got mangled). Save the raw log
-        # so callers can debug, then raise so the experiment records this as
-        # a real failure rather than silently treating it as success.
-        raw_path = dest_dir / "shadow_stdout.log"
-        raw_path.write_bytes(raw)
-        raise ShadowLogParseError(
-            f"SHADOW_DONE_EXIT marker not found in pod logs "
-            f"(raw output saved to {raw_path}, {len(raw)} bytes)"
+    reader_name = f"{job_name}-reader"
+    reader = build_log_reader_pod(
+        namespace=namespace,
+        name=reader_name,
+        pvc_name=pvc_name,
+        image=reader_image,
+        node_pin=node_pin,
+    )
+    logger.info(f"Starting reader pod `{namespace}/{reader_name}` to copy shadow.data off the PVC")
+    core.create_namespaced_pod(namespace=namespace, body=reader)
+    try:
+        _wait_pod_running(core, namespace, reader_name, reader_ready_timeout_s)
+        data_dest = dest_dir / "shadow_data"
+        data_dest.mkdir(parents=True, exist_ok=True)
+        src = f"{namespace}/{reader_name}:{_RUN_MOUNT}/shadow.data"
+        subprocess.run(
+            ["kubectl", "cp", "--retries=3", src, str(data_dest / "shadow.data")],
+            check=True,
+            capture_output=True,
         )
-
-    pre = raw[: done_match.start()]
-    post = raw[done_match.end() :]
-    shadow_exit_rc = int(done_match.group(1).decode())
-    (dest_dir / "shadow_stdout.log").write_bytes(pre)
-    if shadow_exit_rc != 0:
-        # Defensive: today this also flows through the Job's Failed condition
-        # so the experiment raises anyway. If the bash wrapper is ever changed
-        # to mask the rc (e.g. `exit 0` instead of `exit $rc`), this warning
-        # is the only signal we'd have left.
-        logger.warning(f"Shadow process exited with non-zero rc={shadow_exit_rc}")
-    else:
-        logger.info(f"Shadow process exited with rc={shadow_exit_rc}")
-
-    # Parse per-host sections. Each begins with =BEGIN===<path>= and ends with =END=.
-    data_root = dest_dir / "shadow_data"
-    count = 0
-    for begin_match in _HOST_BEGIN_RE.finditer(post):
-        host_path = begin_match.group(1).decode()  # e.g. "shadow.data/hosts/pod-0/main.1000.stdout"
-        body_start = begin_match.end()  # regex consumed the trailing newline
-        end_idx = post.find(_HOST_END_MARKER, body_start)
-        if end_idx < 0:
-            logger.warning(f"No END marker for `{host_path}`, skipping")
-            continue
-        # Strip the single trailing newline that the runner's `echo` added before
-        # the END marker. Use rstrip(b"\n", count=1) semantics manually to avoid
-        # losing legitimate trailing blank lines that were in the original file.
-        body = post[body_start:end_idx]
-        if body.endswith(b"\n"):
-            body = body[:-1]
-        out_path = data_root / host_path
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(body)
-        count += 1
-    logger.info(f"Saved {count} per-host log files under {data_root}/")
+        logger.info(f"Copied shadow.data into {data_dest}/")
+    finally:
+        try:
+            core.delete_namespaced_pod(name=reader_name, namespace=namespace)
+            logger.info(f"Deleted reader pod `{namespace}/{reader_name}`")
+        except ApiException as e:
+            logger.warning(f"Failed to delete reader pod `{reader_name}`: {e}")

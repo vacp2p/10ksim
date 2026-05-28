@@ -286,6 +286,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Pod": [],
         "Service": [],
         "ConfigMap": [],
+        "PersistentVolumeClaim": [],
     }
     types = (
         types
@@ -299,6 +300,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
             "Job",
             "Service",
             "ConfigMap",
+            "PersistentVolumeClaim",
         ]
     )
     for yaml in yamls:
@@ -342,6 +344,7 @@ def cleanup_resources(
         "Pod",
         "Service",
         "ConfigMap",
+        "PersistentVolumeClaim",
     ]
 
     map = {
@@ -375,6 +378,9 @@ def cleanup_resources(
         "ConfigMap": lambda name: client.CoreV1Api(api_client).delete_namespaced_config_map(
             name, namespace
         ),
+        "PersistentVolumeClaim": lambda name: client.CoreV1Api(
+            api_client
+        ).delete_namespaced_persistent_volume_claim(name, namespace),
     }
 
     for kind in deletion_order:

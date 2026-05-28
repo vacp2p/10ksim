@@ -24,6 +24,10 @@ from kubernetes.client import (
     V1Job,
     V1JobSpec,
     V1ObjectMeta,
+    V1PersistentVolumeClaim,
+    V1PersistentVolumeClaimSpec,
+    V1PersistentVolumeClaimVolumeSource,
+    V1Pod,
     V1PodSpec,
     V1PodTemplateSpec,
     V1ResourceRequirements,
@@ -43,6 +47,9 @@ TRAFFIC_SYNC_REPO_PATH = (
 # Mount targets inside the Shadow runner container.
 _BIN_MOUNT = "/sim/bin"
 _CONFIG_MOUNT = "/sim/config"
+# PVC-backed working directory. Shadow writes shadow.data/ here so the per-host
+# logs and metrics dumps land on persistent storage instead of pod stdout.
+_RUN_MOUNT = "/sim/run"
 
 # Default security context that Shadow needs. The default container security
 # profile blocks LD_PRELOAD + ptrace, which Shadow's syscall interposer relies on.
@@ -62,6 +69,7 @@ def render_shadow_yaml(
     publisher_start_s: int,
     connect_to: int = 2,
     muxer: str = "yamux",
+    metrics_interval_s: int = 15,
 ) -> dict:
     """Build the shadow.yaml structure as a Python dict.
 
@@ -81,6 +89,9 @@ def render_shadow_yaml(
         "CONNECTTO": str(connect_to),
         "SHADOWENV": "true",  # env.nim requires the literal string "true"
         "MUXER": muxer,
+        # storeMetrics scrape cadence. Short so the last scrape captures the
+        # post-traffic libp2p_network_bytes counter (the bandwidth metric).
+        "METRICS_INTERVAL_S": str(metrics_interval_s),
     }
     peer_process = {
         "path": "./main",
@@ -166,6 +177,7 @@ def build_shadow_job(
     namespace: str,
     name: str,
     configmap_name: str,
+    pvc_name: str,
     test_node_image: str,
     shadow_base_image: str,
     node_pin: Optional[str] = None,
@@ -190,34 +202,18 @@ def build_shadow_job(
         volume_mounts=[V1VolumeMount(name="bin", mount_path=_BIN_MOUNT)],
     )
 
-    # The main container's command does three things:
-    #   1. Stage the nim binary and shadow.yaml into /sim/run so Shadow can resolve
-    #      `./main` relative to its config.
-    #   2. Run Shadow.
-    #   3. After Shadow exits, print each per-host stdout/stderr to the container's
-    #      stdout wrapped in unique markers. We then parse these out of
-    #      `kubectl logs` (which works on completed pods, unlike `kubectl exec`).
-    #
-    # The markers are deliberately ugly + unlikely to appear in libp2p/python output.
+    # Stage the binary + shadow.yaml into the PVC-backed run dir, then exec Shadow
+    # so the container's exit code is Shadow's (the Job condition reflects it).
+    # Output lands in /sim/run/shadow.data on the PVC; the reader pod copies it out.
     main_command = [
         "/bin/bash",
         "-eu",
         "-c",
         (
-            "set -o pipefail; "
-            "mkdir -p /sim/run && cd /sim/run && "
-            f"cp {_BIN_MOUNT}/main ./main && "
-            f"cp {_CONFIG_MOUNT}/shadow.yaml ./shadow.yaml && "
-            "shadow shadow.yaml; "
-            "rc=$?; "
-            'echo "===SHADOW_DONE_EXIT=$rc==="; '
-            "for f in shadow.data/hosts/*/*.stdout shadow.data/hosts/*/*.stderr; do "
-            '  [ -f "$f" ] || continue; '
-            '  echo "===SHADOW_HOST_FILE_BEGIN===$f==="; '
-            '  cat "$f" || true; '
-            '  echo "===SHADOW_HOST_FILE_END==="; '
-            "done; "
-            "exit $rc"
+            f"cp {_BIN_MOUNT}/main {_RUN_MOUNT}/main && "
+            f"cp {_CONFIG_MOUNT}/shadow.yaml {_RUN_MOUNT}/shadow.yaml && "
+            f"cd {_RUN_MOUNT} && "
+            "exec shadow shadow.yaml"
         ),
     ]
     main_container = V1Container(
@@ -233,6 +229,7 @@ def build_shadow_job(
         volume_mounts=[
             V1VolumeMount(name="bin", mount_path=_BIN_MOUNT),
             V1VolumeMount(name="config", mount_path=_CONFIG_MOUNT),
+            V1VolumeMount(name="run", mount_path=_RUN_MOUNT),
         ],
     )
 
@@ -245,6 +242,10 @@ def build_shadow_job(
             V1Volume(
                 name="config",
                 config_map=V1ConfigMapVolumeSource(name=configmap_name, default_mode=0o755),
+            ),
+            V1Volume(
+                name="run",
+                persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
             ),
         ],
         node_selector={"kubernetes.io/hostname": node_pin} if node_pin else None,
@@ -261,5 +262,69 @@ def build_shadow_job(
                 metadata=V1ObjectMeta(labels={"app": name}),
                 spec=pod_spec,
             ),
+        ),
+    )
+
+
+def build_pvc(
+    *,
+    namespace: str,
+    name: str,
+    storage: str = "5Gi",
+    storage_class: str = "longhorn",
+) -> V1PersistentVolumeClaim:
+    """Claim that holds Shadow's `shadow.data/` output for the run.
+
+    ReadWriteOnce is enough: the Job and the reader pod don't run concurrently and
+    are pinned to the same node, so the claim never needs a cross-node attachment.
+    """
+    return V1PersistentVolumeClaim(
+        api_version="v1",
+        kind="PersistentVolumeClaim",
+        metadata=V1ObjectMeta(name=name, namespace=namespace),
+        spec=V1PersistentVolumeClaimSpec(
+            access_modes=["ReadWriteOnce"],
+            storage_class_name=storage_class,
+            resources=V1ResourceRequirements(requests={"storage": storage}),
+        ),
+    )
+
+
+def build_log_reader_pod(
+    *,
+    namespace: str,
+    name: str,
+    pvc_name: str,
+    image: str,
+    node_pin: Optional[str] = None,
+) -> V1Pod:
+    """Short-lived pod that mounts the run PVC and sleeps so `kubectl cp` can copy
+    `shadow.data/` out after the Job has finished.
+
+    Pinned to the same node as the Job so the ReadWriteOnce claim attaches without a
+    cross-node migration. Reuses the Shadow base image since it already has `tar`
+    (needed by `kubectl cp`) and is cached on the node from the run.
+    """
+    return V1Pod(
+        api_version="v1",
+        kind="Pod",
+        metadata=V1ObjectMeta(name=name, namespace=namespace, labels={"app": name}),
+        spec=V1PodSpec(
+            restart_policy="Never",
+            containers=[
+                V1Container(
+                    name="reader",
+                    image=image,
+                    command=["sleep", "3600"],
+                    volume_mounts=[V1VolumeMount(name="run", mount_path=_RUN_MOUNT)],
+                )
+            ],
+            volumes=[
+                V1Volume(
+                    name="run",
+                    persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
+                )
+            ],
+            node_selector={"kubernetes.io/hostname": node_pin} if node_pin else None,
         ),
     )

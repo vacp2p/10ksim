@@ -17,6 +17,7 @@ from src.deployments.registry import experiment
 from src.deployments.shadow.builders import (
     TRAFFIC_SYNC_REPO_PATH,
     build_configmap,
+    build_pvc,
     build_shadow_job,
     render_shadow_yaml,
 )
@@ -42,6 +43,9 @@ class ExpConfig(BaseModel):
     # takes ~60s simulated; publisher starts comfortably after that.
     publisher_start_s: NonNegativeInt = 90
     sim_stop_time_s: NonNegativeInt = 180
+    # storeMetrics scrape cadence (s). Short so the last scrape captures the
+    # post-traffic bandwidth counter. Test node defaults to 300 (for k8s).
+    metrics_interval_s: NonNegativeInt = 15
     # Job-pod resources. Defaults sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -53,6 +57,9 @@ class ExpConfig(BaseModel):
     shadow_base_image: str = "radiken/dst-shadow-base:latest"
     # Where the runner Pod is pinned. Avoid node-01 (control plane).
     node_pin: Optional[str] = "node-05.ih-eu-mda1.misc.vaclab"
+    # Run PVC: holds shadow.data/ so logs+metrics stay off pod stdout. ~200KB/peer,
+    # so 5Gi covers well past 10k peers.
+    pvc_storage: str = "5Gi"
     # Job poll
     wait_timeout_s: NonNegativeInt = 1800
 
@@ -79,6 +86,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         run_id = self.output_folder.name.lower().replace("_", "-")[:50].strip("-")
         cm_name = f"shadow-{run_id}"
         job_name = f"shadow-{run_id}"
+        pvc_name = f"shadow-{run_id}-data"
 
         # 1. Render shadow.yaml and build the k8s objects.
         shadow_yaml = render_shadow_yaml(
@@ -89,6 +97,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             sim_stop_time_s=cfg.sim_stop_time_s,
             publisher_start_s=cfg.publisher_start_s,
             connect_to=cfg.connect_to,
+            metrics_interval_s=cfg.metrics_interval_s,
         )
         traffic_sync_path = _REPO_ROOT / TRAFFIC_SYNC_REPO_PATH
         if not traffic_sync_path.exists():
@@ -96,6 +105,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
                 f"traffic_sync.py not found at expected path: {traffic_sync_path}"
             )
 
+        pvc = build_pvc(namespace=namespace, name=pvc_name, storage=cfg.pvc_storage)
         configmap = build_configmap(
             namespace=namespace,
             name=cm_name,
@@ -106,6 +116,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             namespace=namespace,
             name=job_name,
             configmap_name=cm_name,
+            pvc_name=pvc_name,
             test_node_image=cfg.test_node_image,
             shadow_base_image=cfg.shadow_base_image,
             node_pin=cfg.node_pin,
@@ -116,15 +127,20 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         )
 
         # Dump for debugging / dry-run inspection.
+        self.dump_yaml(pvc, f"pvc-{pvc_name}")
         self.dump_yaml(configmap, f"configmap-{cm_name}")
         self.dump_yaml(job, f"job-{job_name}")
 
-        # 2. Apply ConfigMap then Job.
+        # 2. Apply PVC, then ConfigMap, then Job.
         # deploy_yaml expects a dict; sanitize the kubernetes-client objects first.
+        pvc_dict = self.api_client.sanitize_for_serialization(pvc)
         cm_dict = self.api_client.sanitize_for_serialization(configmap)
         job_dict = self.api_client.sanitize_for_serialization(job)
 
-        # ConfigMap has no rollout/ready state, so wait_for_ready=False.
+        # PVC and ConfigMap have no rollout/ready state, so wait_for_ready=False.
+        # PVC is deployed first so ExitStack cleanup (LIFO) deletes it last, after
+        # the Job and its pod have released the claim.
+        await self.deploy_yaml(deployment_yaml=pvc_dict, wait_for_ready=False)
         await self.deploy_yaml(deployment_yaml=cm_dict, wait_for_ready=False)
         # Job: BaseExperiment's wait_for_rollout doesn't handle Jobs, so we use
         # our own wait_for_job_complete below.
@@ -151,7 +167,10 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
                 api_client=self.api_client,
                 namespace=namespace,
                 job_name=job_name,
+                pvc_name=pvc_name,
+                reader_image=cfg.shadow_base_image,
                 dest_dir=logs_dir,
+                node_pin=cfg.node_pin,
             )
             self.log_event({"event": "logs_pulled", "dest": str(logs_dir)})
         except Exception as e:

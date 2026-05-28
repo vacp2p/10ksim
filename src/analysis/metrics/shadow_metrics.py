@@ -11,10 +11,14 @@ import argparse
 import logging
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 import requests
+
+from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
+from src.analysis.metrics.scrapper import Scrapper
 
 logger = logging.getLogger(__name__)
 
@@ -107,12 +111,19 @@ def import_shadow_metrics(
     namespace: str,
     interval_s: int = 15,
     start_epoch_s: Optional[int] = None,
+    job: str = "libp2p-nodes",
+    node: str = "shadow",
 ) -> dict:
     """Import every peer's snapshots into VM with synthesized timestamps + labels.
 
     Snapshot `k` of every peer is imported at `start_epoch_s + k*interval_s`, so the
     per-peer series line up by index. If `start_epoch_s` is None we anchor the last
     snapshot near now to stay inside VM's default retention.
+
+    Each series is tagged with the labels a k8s scrape would add (`pod`, `instance`,
+    `job`, `node`, `namespace`) so the existing libp2p PromQL/extract_field analysis
+    reads a Shadow run unchanged. `instance` is set to the peer so per-peer metrics
+    key the same way they do off k8s scrape targets.
     """
     metric_files = sorted(hosts_dir.glob("*/metrics_*.txt"))
     if not metric_files:
@@ -133,15 +144,19 @@ def import_shadow_metrics(
     posted = 0
     last_epoch_s = start_epoch_s
     for peer, snaps in per_peer:
+        labels = [
+            f"pod={peer}",
+            f"instance={peer}",
+            f"namespace={namespace}",
+            f"job={job}",
+            f"node={node}",
+        ]
         for k, snap in enumerate(snaps):
             epoch_s = start_epoch_s + k * interval_s
             last_epoch_s = max(last_epoch_s, epoch_s)
             resp = requests.post(
                 f"{vm_url}/api/v1/import/prometheus",
-                params={
-                    "timestamp": epoch_s * 1000,
-                    "extra_label": [f"pod={peer}", f"namespace={namespace}"],
-                },
+                params={"timestamp": epoch_s * 1000, "extra_label": labels},
                 data=snap.encode(),
                 timeout=15,
             )
@@ -150,9 +165,53 @@ def import_shadow_metrics(
 
     # VM ingests asynchronously; force a flush so the import is immediately queryable.
     requests.get(f"{vm_url}/internal/force_flush", timeout=15)
-    summary = {"peers": len(per_peer), "snapshots_posted": posted, "last_epoch_s": last_epoch_s}
+    summary = {
+        "peers": len(per_peer),
+        "snapshots_posted": posted,
+        "start_epoch_s": start_epoch_s,
+        "last_epoch_s": last_epoch_s,
+    }
     logger.info(f"Imported Shadow metrics: {summary}")
     return summary
+
+
+def scrape_run_metrics(
+    *,
+    run_dir: Path,
+    namespace: str = "zerotesting-shadow",
+    interval_s: int = 15,
+    rate_interval: str = "60s",
+    step: str = "15s",
+) -> Path:
+    """Run the full k8s metrics pipeline against a Shadow run.
+
+    Spins up an ephemeral VM, imports the run's snapshots, then points the existing
+    `Scrapper` (libp2p metric set) at it and dumps the same per-metric CSVs the k8s
+    path produces, under `<run_dir>/metrics/`. Returns that dump directory.
+    """
+    hosts = hosts_dir_for_run(run_dir)
+    dump_location = run_dir / "metrics"
+    with EphemeralVictoriaMetrics() as vm:
+        info = import_shadow_metrics(
+            hosts_dir=hosts, vm_url=vm.url, namespace=namespace, interval_s=interval_s
+        )
+        start_dt = datetime.fromtimestamp(info["start_epoch_s"], tz=timezone.utc)
+        end_dt = datetime.fromtimestamp(info["last_epoch_s"], tz=timezone.utc)
+        config = (
+            Nimlibp2pScrapeBuilder(
+                namespace=namespace,
+                dump_location=dump_location,
+                rate_interval=rate_interval,
+                step=step,
+            )
+            .with_interval(start_dt, end_dt, run_dir.name)
+            .with_libp2p_metrics()
+            .build()
+        )
+        config.url = f"{vm.url}/api/v1/"
+        Scrapper(config=config).query_and_dump_metrics()
+    logger.info(f"Dumped Shadow metrics CSVs under {dump_location}/")
+    return dump_location
 
 
 def query(vm_url: str, promql: str, at_epoch_s: Optional[int] = None) -> dict:
@@ -177,16 +236,12 @@ def main() -> None:
     parser.add_argument("--interval-s", type=int, default=15)
     args = parser.parse_args()
 
-    hosts_dir = hosts_dir_for_run(args.run_dir)
-    with EphemeralVictoriaMetrics() as vm:
-        info = import_shadow_metrics(
-            hosts_dir=hosts_dir, vm_url=vm.url, namespace=args.namespace, interval_s=args.interval_s
-        )
-        result = query(
-            vm.url, "sum by (direction) (libp2p_network_bytes_total)", info["last_epoch_s"]
-        )
-        for series in result["data"]["result"]:
-            print(f"{series['metric'].get('direction')}: {series['value'][1]} bytes")
+    dump_location = scrape_run_metrics(
+        run_dir=args.run_dir, namespace=args.namespace, interval_s=args.interval_s
+    )
+    print(f"Metrics CSVs written under {dump_location}/")
+    for csv in sorted(dump_location.rglob("*.csv")):
+        print(f"  {csv.relative_to(dump_location)}")
 
 
 if __name__ == "__main__":

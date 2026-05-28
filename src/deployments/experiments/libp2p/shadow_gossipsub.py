@@ -1,11 +1,10 @@
 # Shadow GossipSub experiment.
 #
-# Runs N nim libp2p peers + 1 publisher host inside Shadow on a single k8s pod.
-# Mirrors the smoke v3 we validated by hand: 1_gbit_switch network, peers form a
-# mesh, the publisher POSTs publish commands at peer pod-N hostnames, receivers
-# log timestamps.
+# Runs N nim libp2p peers + 1 publisher host inside Shadow on a single k8s pod:
+# 1_gbit_switch network, peers form a mesh, the publisher POSTs publish commands
+# at peer pod-N hostnames, receivers log timestamps.
 #
-# See "Shadow 10ksim Integration Plan" in Notion for the architecture.
+# See the "Using Shadow at DST" runbook in Notion for the architecture.
 import logging
 from pathlib import Path
 from typing import Optional

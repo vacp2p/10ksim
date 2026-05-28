@@ -5,8 +5,9 @@
 # Shadow can't be scraped live: all peers run inside one pod on a simulated
 # network, so storeMetrics appends a full /metrics snapshot to metrics_<peer>.txt
 # every METRICS_INTERVAL_S. The snapshots carry no timestamps, so we synthesize
-# them from snapshot order x interval and import into a throwaway VM tagged with
-# pod/namespace labels. The VM is queryable exactly like the lab one.
+# them from snapshot order x interval and import into a throwaway VM, tagged with
+# the labels a k8s scrape adds (pod/instance/job/node/namespace) so the existing
+# PromQL analysis queries the VM exactly like the lab one.
 import argparse
 import logging
 import subprocess
@@ -214,16 +215,6 @@ def scrape_run_metrics(
     return dump_location
 
 
-def query(vm_url: str, promql: str, at_epoch_s: Optional[int] = None) -> dict:
-    """Run an instant PromQL query against the VM and return the parsed JSON."""
-    params = {"query": promql}
-    if at_epoch_s is not None:
-        params["time"] = at_epoch_s
-    resp = requests.get(f"{vm_url}/api/v1/query", params=params, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = argparse.ArgumentParser(
@@ -240,7 +231,7 @@ def main() -> None:
         run_dir=args.run_dir, namespace=args.namespace, interval_s=args.interval_s
     )
     print(f"Metrics CSVs written under {dump_location}/")
-    for csv in sorted(dump_location.rglob("*.csv")):
+    for csv in sorted(p for p in dump_location.rglob("*") if p.is_file()):
         print(f"  {csv.relative_to(dump_location)}")
 
 

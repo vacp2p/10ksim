@@ -322,7 +322,9 @@ def build_log_reader_pod(
             volumes=[
                 V1Volume(
                     name="run",
-                    persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
+                    persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(
+                        claim_name=pvc_name
+                    ),
                 )
             ],
             node_selector={"kubernetes.io/hostname": node_pin} if node_pin else None,

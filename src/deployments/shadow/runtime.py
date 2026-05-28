@@ -81,6 +81,33 @@ def _wait_pod_running(
     raise TimeoutError(f"Reader pod `{namespace}/{pod_name}` not ready within {timeout_s}s")
 
 
+def _flatten_host_logs(data_root: Path, dest: Path) -> int:
+    """Flatten Shadow's per-host output into one `<host>.log` per host.
+
+    Shadow runs the same test-node binary as k8s, so the log lines are identical;
+    only the layout differs. The mesh_analysis FileStack/FileReader expects a flat
+    folder of `<peer>.log` files, so we concatenate each host's stdout+stderr into
+    `<host>.log` (skipping Shadow's `.shimlog` syscall noise). A Shadow run then
+    reads like a k8s run with no analyzer changes.
+    """
+    hosts_dir = data_root / "shadow.data" / "hosts"
+    if not hosts_dir.is_dir():
+        logger.warning(f"No hosts dir at `{hosts_dir}`; skipping log flatten")
+        return 0
+    dest.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for host_dir in sorted(p for p in hosts_dir.iterdir() if p.is_dir()):
+        parts = sorted(host_dir.glob("*.stdout")) + sorted(host_dir.glob("*.stderr"))
+        if not parts:
+            continue
+        with (dest / f"{host_dir.name}.log").open("wb") as out:
+            for part in parts:
+                out.write(part.read_bytes())
+        count += 1
+    logger.info(f"Flattened {count} host logs into `{dest}/`")
+    return count
+
+
 def pull_shadow_logs(
     *,
     api_client: ApiClient,
@@ -99,6 +126,8 @@ def pull_shadow_logs(
         progress, syscall counters), via `kubectl logs`.
       - `shadow_data/shadow.data/hosts/<host>/<file>`: the per-host stdout/stderr
         and metrics files Shadow wrote to the run PVC, copied out with `kubectl cp`.
+      - `logs/<host>.log`: per-host stdout+stderr flattened into the flat layout
+        the mesh_analysis FileStack expects, so the run is analyzable like a k8s run.
 
     The per-host files live on the run PVC rather than pod stdout, so we spin up a
     short-lived reader pod that mounts the same claim and copy the tree out of it.
@@ -136,6 +165,7 @@ def pull_shadow_logs(
             capture_output=True,
         )
         logger.info(f"Copied shadow.data into {data_dest}/")
+        _flatten_host_logs(data_dest, dest_dir / "logs")
     finally:
         try:
             core.delete_namespaced_pod(name=reader_name, namespace=namespace)

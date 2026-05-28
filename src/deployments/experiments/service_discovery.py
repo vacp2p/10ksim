@@ -65,7 +65,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_cluster_ip("None")
             .build()
         )
-        self.dump_yaml(bootstrap_service, self.config.bootstrap_service_name)
         await self.deploy(deployment=bootstrap_service)
         self.log_event("Bootstrap service deployed")
 
@@ -86,7 +85,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(bootstrap, "bootstrap")
         await self.deploy(deployment=bootstrap, wait_for_ready=True)
         self.log_event("Bootstrap nodes deployed")
 
@@ -111,7 +109,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(registrars, "registrars")
         await self.deploy(deployment=registrars, wait_for_ready=True)
         self.log_event("Registrar deployed")
 
@@ -134,7 +131,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(kad_dhts, "kad_dhts")
         await self.deploy(deployment=kad_dhts, wait_for_ready=True)
         self.log_event("kad_dhts deployed")
 
@@ -158,7 +154,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(popular_advertisers, "popular_advertisers")
         await self.deploy(deployment=popular_advertisers, wait_for_ready=True)
         self.log_event("popular_advertisers deployed")
 
@@ -182,7 +177,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(rare_advertisers, "rare_advertisers")
         await self.deploy(deployment=rare_advertisers, wait_for_ready=True)
         self.log_event("rare_advertisers deployed")
 
@@ -206,6 +200,5 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .build()
         )
 
-        self.dump_yaml(discoverer, "discoverer")
         await self.deploy(deployment=discoverer, wait_for_ready=True)
         self.log_event("discoverer deployed")

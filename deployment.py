@@ -12,6 +12,7 @@ from ruamel import yaml
 # Project Imports
 from src.analysis.utils.log_utils import init_logger
 from src.deployments.core.kube_utils import set_config_file
+from src.deployments.experiments.base_experiment import ARG_NOT_SET
 from src.deployments.registry import registry as experiment_registry
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,11 @@ async def run_experiment(
     if values_yaml is None:
         values_yaml = {}
 
+    cli_args = {key: value for key, value in vars(args).items() if value is not ARG_NOT_SET}
     info = experiment_registry[name]
     experiment = info.cls(
         api_client=api_client,
-        config=values_yaml,
+        config={**values_yaml, **cli_args},
         namespace=args.namespace,
         output_folder=args.out_folder,
         skip_check=args.skip_check,

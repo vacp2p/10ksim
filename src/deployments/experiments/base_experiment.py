@@ -318,13 +318,13 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         if not skip_check:
             self.log_event("wait_for_clear_start")
             wait_for_no_objs_in_namespace(namespace=namespace, api_client=self.api_client)
-            self.log_event("wait_for_clear_finished")
         else:
             namepace_is_empty = poll_namespace_has_objects(
                 namespace=namespace, api_client=self.api_client
             )
             if not namepace_is_empty:
                 logger.warning(f"Namespace is not empty! Namespace: `{namespace}`")
+        self.log_event("wait_for_clear_finished")
 
     def _preprocess_event(self, event: Any) -> Any:
         if isinstance(event, str):

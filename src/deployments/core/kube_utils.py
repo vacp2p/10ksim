@@ -61,6 +61,10 @@ def set_config_file(config: str):
     _kube_config = config
 
 
+def get_config_file() -> Optional[str]:
+    return _kube_config
+
+
 def is_local() -> bool:
     """
     Detects if Kubernetes cluster is local.

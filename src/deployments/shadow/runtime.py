@@ -10,9 +10,16 @@ from typing import Literal, Optional
 from kubernetes.client import ApiClient, BatchV1Api, CoreV1Api
 from kubernetes.client.rest import ApiException
 
+from src.deployments.core.kube_utils import get_config_file
 from src.deployments.shadow.builders import _RUN_MOUNT, build_log_reader_pod
 
 logger = logging.getLogger(__name__)
+
+
+def _kubectl_prefix() -> list[str]:
+    cfg = get_config_file()
+    return ["kubectl"] + (["--kubeconfig", cfg] if cfg else [])
+
 
 JobState = Literal["complete", "failed"]
 
@@ -115,7 +122,7 @@ def pull_shadow_logs(
     job_pod = _find_job_pod(api_client, namespace, job_name)
     logger.info(f"Pulling Shadow stdout from `{namespace}/{job_pod}`")
     result = subprocess.run(
-        ["kubectl", "-n", namespace, "logs", job_pod, "--tail=-1"],
+        _kubectl_prefix() + ["-n", namespace, "logs", job_pod, "--tail=-1"],
         check=True,
         capture_output=True,
     )
@@ -137,7 +144,7 @@ def pull_shadow_logs(
         data_dest.mkdir(parents=True, exist_ok=True)
         src = f"{namespace}/{reader_name}:{_RUN_MOUNT}/shadow.data"
         subprocess.run(
-            ["kubectl", "cp", "--retries=3", src, str(data_dest / "shadow.data")],
+            _kubectl_prefix() + ["cp", "--retries=3", src, str(data_dest / "shadow.data")],
             check=True,
             capture_output=True,
         )

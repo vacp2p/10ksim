@@ -61,6 +61,10 @@ def set_config_file(config: str):
     _kube_config = config
 
 
+def get_config_file() -> Optional[str]:
+    return _kube_config
+
+
 def is_local() -> bool:
     """
     Detects if Kubernetes cluster is local.
@@ -285,11 +289,23 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "CronJob": [],
         "Pod": [],
         "Service": [],
+        "ConfigMap": [],
+        "PersistentVolumeClaim": [],
     }
     types = (
         types
         if types
-        else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod", "Job", "Service"]
+        else [
+            "Deployment",
+            "StatefulSet",
+            "DaemonSet",
+            "ReplicaSet",
+            "Pod",
+            "Job",
+            "Service",
+            "ConfigMap",
+            "PersistentVolumeClaim",
+        ]
     )
     for yaml in yamls:
         try:
@@ -331,6 +347,8 @@ def cleanup_resources(
         "CronJob",
         "Pod",
         "Service",
+        "ConfigMap",
+        "PersistentVolumeClaim",
     ]
 
     map = {
@@ -361,6 +379,12 @@ def cleanup_resources(
         "Service": lambda name: client.CoreV1Api(api_client).delete_namespaced_service(
             name, namespace
         ),
+        "ConfigMap": lambda name: client.CoreV1Api(api_client).delete_namespaced_config_map(
+            name, namespace
+        ),
+        "PersistentVolumeClaim": lambda name: client.CoreV1Api(
+            api_client
+        ).delete_namespaced_persistent_volume_claim(name, namespace),
     }
 
     for kind in deletion_order:

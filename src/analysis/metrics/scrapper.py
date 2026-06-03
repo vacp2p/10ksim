@@ -16,10 +16,10 @@ class Scrapper(BaseModel):
     _config: ScrapeConfig
     _k8s: object
 
-    def __init__(self, kube_config: str, config: ScrapeConfig):
+    def __init__(self, kube_config: Optional[str] = None, config: ScrapeConfig = None):
         self._url = config.url
         self._config = config
-        self._k8s = kubernetes_manager.KubernetesManager(kube_config)
+        self._k8s = kubernetes_manager.KubernetesManager(kube_config) if kube_config else None
 
     def query_and_dump_metrics(self):
         # https://github.com/kubernetes-client/python/blob/master/examples/pod_portforward.py

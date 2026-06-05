@@ -159,8 +159,11 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         if state == "failed":
             raise RuntimeError(f"Shadow Job `{namespace}/{job_name}` failed")
 
-        self._run_analysis()
         self.log_event("internal_run_finished")
+
+    async def run(self):
+        await super().run()
+        self._run_analysis()
 
     def _run_analysis(self) -> None:
         """Post-run analysis (best-effort; never fails the run): bandwidth CSVs via the

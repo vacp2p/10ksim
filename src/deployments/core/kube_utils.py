@@ -542,7 +542,7 @@ def poll_rollout_status(
         def default_condition(obj: V1Deployment):
             desired = obj.spec.replicas
             available = obj.status.available_replicas or 0
-            return available, desired
+            return available == desired
 
     elif kind == "statefulset":
 

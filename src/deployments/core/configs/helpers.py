@@ -1,6 +1,6 @@
 # Python Imports
 from copy import deepcopy
-from typing import Dict, List, Literal, Tuple, Type, TypeVar, Union, get_args
+from typing import Dict, List, Literal, Tuple, Type, TypeVar, Union, get_args, Optional
 
 from kubernetes.client import V1Capabilities, V1Container, V1SecurityContext
 from pydantic import NonNegativeInt
@@ -169,4 +169,48 @@ def init_container_delay(
         command=[
             f"tc qdisc add dev eth0 root netem delay {str(delay)}ms {str(jitter)}ms distribution normal",
         ],
+    )
+    
+def init_container_bandwidth_limit(
+    ingress_rate: Optional[str] = None,
+    egress_rate: Optional[str] = None,
+    burst: str = "32kbit",
+) -> V1Container:
+    """
+    Create init container for bandwidth limiting using tc.
+    
+    Args:
+        ingress_rate: Download limit (e.g., "512kbit", "1mbit")
+        egress_rate: Upload limit (e.g., "512kbit", "1mbit")  
+        burst: Token bucket burst size
+        
+    Returns:
+        V1Container configured to set up tc bandwidth limiting
+    """
+    commands = []
+    
+    if ingress_rate:
+        # Ingress limiting requires IFB (Intermediate Functional Block) redirect
+        commands.extend([
+            "modprobe ifb numifbs=1",
+            "ip link set dev ifb0 up",
+            "tc qdisc add dev eth0 handle ffff: ingress",
+            "tc filter add dev eth0 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0",
+            f"tc qdisc add dev ifb0 root tbf rate {ingress_rate} burst {burst} latency 400ms",
+        ])
+    
+    if egress_rate:
+        # Egress limiting - straightforward TBF on eth0
+        commands.append(
+            f"tc qdisc add dev eth0 root tbf rate {egress_rate} burst {burst} latency 400ms"
+        )
+    
+    full_command = " && ".join(commands)
+    
+    return V1Container(
+        name="setup-bandwidth-limit",
+        image="soutullostatus/tc-container:1",
+        image_pull_policy="IfNotPresent",
+        security_context=V1SecurityContext(capabilities=V1Capabilities(add=["NET_ADMIN"])),
+        command=["/bin/sh", "-c", full_command],
     )

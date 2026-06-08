@@ -23,6 +23,18 @@ class Option:
     service = "SERVICE"
     max_connections = "MAXCONNECTIONS"
     cold_start_delay = "COLDSTARTDELAY"
+    
+    # NEW: GossipSub mesh params for pritority queues
+    gossipsub_d = "GOSSIPSUB_D"
+    gossipsub_d_low = "GOSSIPSUB_D_LOW"
+    gossipsub_d_high = "GOSSIPSUB_D_HIGH"
+    gossipsub_d_out = "GOSSIPSUB_D_OUT"
+    gossipsub_d_lazy = "GOSSIPSUB_D_LAZY"
+    max_high_priority_queue = "GOSSIPSUB_MAX_HIGH_PRIORITY_QUEUE_LEN"
+    max_medium_priority_queue = "GOSSIPSUB_MAX_MEDIUM_PRIORITY_QUEUE_LEN"
+    max_low_priority_queue = "GOSSIPSUB_MAX_LOW_PRIORITY_QUEUE_LEN"
+    slow_peer_penalty_weight = "GOSSIPSUB_SLOW_PEER_PENALTY_WEIGHT"
+    slow_peer_penalty_decay = "GOSSIPSUB_SLOW_PEER_PENALTY_DECAY"
 
 
 class Libp2pStatefulSetBuilder(StatefulSetBuilder):

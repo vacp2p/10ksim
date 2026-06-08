@@ -117,6 +117,11 @@ class ServiceBuilder(BaseModel):
             self.config.service_spec.ports = []
         self.config.service_spec.ports.append(port)
         return self
+    def with_publish_not_ready_addresses(self, value: bool = True) -> Self:
+        """Set publishNotReadyAddresses for headless services."""
+        if not hasattr(self.config, 'publish_not_ready_addresses'):
+            self.config.publish_not_ready_addresses = value
+        return self
 
     def build(self) -> V1Service:
         return build_service(self.config)

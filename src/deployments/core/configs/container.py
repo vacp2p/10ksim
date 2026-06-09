@@ -7,6 +7,7 @@ from kubernetes.client import (
     V1EnvVar,
     V1Probe,
     V1ResourceRequirements,
+    V1SecurityContext,
     V1VolumeMount,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +33,7 @@ class Image(BaseModel):
 
 class ContainerConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    security_context: Optional[V1SecurityContext] = None
     command_config: CommandConfig = Field(default_factory=CommandConfig)
     readiness_probe: Optional[V1Probe] = None
     # Optional fields default to None to avoid inclusion in the deployment yaml
@@ -96,6 +98,7 @@ def build_container(config: ContainerConfig) -> V1Container:
     return V1Container(
         name=config.name,
         image=str(config.image),
+        security_context=config.security_context,
         image_pull_policy=config.image_pull_policy,
         ports=deepcopy(config.ports),
         env=deepcopy(config.env),

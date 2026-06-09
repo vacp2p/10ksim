@@ -42,7 +42,7 @@ def build_nodes(
     namespace: str,
     params: ExpConfig,
 ) -> V1StatefulSet:
-    config = (
+    builder = (
         Libp2pStatefulSetBuilder()
         .with_libp2p_config(
             name="pod",
@@ -60,9 +60,11 @@ def build_nodes(
         .with_image(params.image)
     )
     if params.network_delay or params.network_jitter:
-        config = config.with_network_delay(delay=params.network_delay, jitter=params.network_jitter)
+        builder = builder.with_network_delay(
+            delay=params.network_delay, jitter=params.network_jitter
+        )
 
-    return config.build()
+    return builder.build()
 
 
 async def publish(config, namespace, random_name):

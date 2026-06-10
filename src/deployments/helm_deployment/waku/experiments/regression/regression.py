@@ -18,9 +18,10 @@ from src.deployments.core.base_bridge import (
     get_valid_shifted_times,
     parse_events_log,
 )
-from src.deployments.core.kube_utils import get_flag_value, wait_for_rollout
+from src.deployments.core.k8s_rollout import wait_for_rollout
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
+from src.utils.cli_utils import get_flag_value
 
 logger = logging.getLogger(__name__)
 

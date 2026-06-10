@@ -13,7 +13,7 @@ from kubernetes.client import (
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.deployments.core.configs.command import CommandConfig, build_command
-from src.deployments.core.kube_utils import dict_to_v1probe
+from src.deployments.core.k8s_object import dict_to_v1probe
 
 T = TypeVar("T")
 

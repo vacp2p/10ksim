@@ -11,7 +11,7 @@ from ruamel import yaml
 
 # Project Imports
 from src.analysis.utils.log_utils import init_logger
-from src.deployments.core.kube_utils import set_config_file
+from src.deployments.core.k8s_config import set_config_file
 from src.deployments.experiments.base_experiment import ARG_NOT_SET
 from src.deployments.registry import registry as experiment_registry
 

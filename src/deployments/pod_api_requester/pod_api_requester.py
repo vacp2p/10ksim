@@ -11,7 +11,7 @@ from kubernetes import client
 from pydantic import BaseModel, NonNegativeInt
 
 # Project Imports
-from src.deployments.core import kube_utils
+from src.deployments.core.k8s_kubeconfig import get_node_ip
 from src.deployments.pod_api_requester.configs import Endpoint, Target
 
 logger = logging.getLogger(__name__)
@@ -157,7 +157,7 @@ def _get_api_requester_info(
 
     # Get publisher IP.
     node = v1.read_node(name=pod.spec.node_name)
-    target_ip = kube_utils.get_node_ip(node)
+    target_ip = get_node_ip(node)
 
     # Get publisher port.
     service = v1.read_namespaced_service(service_name, namespace)

@@ -10,7 +10,7 @@ from src.deployments.core.configs.command import CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from src.deployments.core.kube_utils import dict_to_k8s_object
+from src.deployments.core.k8s_object import dict_to_k8s_object
 
 T = TypeVar("T")
 _sentinel = object()

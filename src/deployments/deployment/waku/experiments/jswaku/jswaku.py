@@ -22,13 +22,13 @@ from src.deployments.core.base_bridge import (
     get_valid_shifted_times,
     parse_events_log,
 )
-from src.deployments.core.kube_utils import dict_set
 from src.deployments.core.pod_interaction import exec_command_in_pod
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.pod_api_requester.configs import Target
 from src.deployments.pod_api_requester.pod_api_requester import request
 from src.deployments.registry import experiment
+from src.utils.dict_utils import dict_set
 
 logger = logging.getLogger(__name__)
 

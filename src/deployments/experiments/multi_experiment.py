@@ -12,10 +12,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from src.deployments.core.kube_utils import dict_set
 from src.deployments.experiments.base_experiment import ARG_NOT_SET, BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.registry import registry as experiment_registry
+from src.utils.dict_utils import dict_set
 
 logger = logging.getLogger(__name__)
 

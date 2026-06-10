@@ -19,7 +19,7 @@ from kubernetes.client import (
 )
 from pydantic import BaseModel, Field
 
-from src.deployments.core.kube_utils import (
+from src.utils.dict_utils import (
     dict_apply,
     dict_get,
     dict_partial_compare,

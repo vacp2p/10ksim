@@ -10,7 +10,7 @@ from kubernetes import client, utils
 from kubernetes.utils import FailToCreateError
 from ruamel import yaml
 
-from src.deployments.core.k8s_config import get_config_file
+from src.deployments.core.k8s_kubeconfig import get_config_file
 from src.deployments.core.k8s_object import V1Deployable, k8s_obj_to_dict
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from typing import Literal, Optional
 from kubernetes.client import ApiClient, BatchV1Api, CoreV1Api
 from kubernetes.client.rest import ApiException
 
-from src.deployments.core.k8s_config import get_config_file
+from src.deployments.core.k8s_kubeconfig import get_config_file
 from src.deployments.shadow.builders import _RUN_MOUNT, build_log_reader_pod
 
 logger = logging.getLogger(__name__)

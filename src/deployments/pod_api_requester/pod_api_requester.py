@@ -11,7 +11,7 @@ from kubernetes import client
 from pydantic import BaseModel, NonNegativeInt
 
 # Project Imports
-from src.deployments.core.k8s_config import get_node_ip
+from src.deployments.core.k8s_kubeconfig import get_node_ip
 from src.deployments.pod_api_requester.configs import Endpoint, Target
 
 logger = logging.getLogger(__name__)

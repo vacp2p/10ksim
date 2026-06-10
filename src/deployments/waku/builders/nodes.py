@@ -11,7 +11,7 @@ from kubernetes.client import (
 # Project Imports
 from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.helpers import get_container_command
+from src.deployments.core.configs.helpers.utils import get_container_command
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
 from src.deployments.libp2p.builders.helpers import readiness_probe_metrics

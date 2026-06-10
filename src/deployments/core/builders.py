@@ -17,7 +17,10 @@ from pydantic import BaseModel, Field, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
-from src.deployments.core.configs.helpers import init_container_delay, with_image_for_container
+from src.deployments.core.configs.helpers.utils import (
+    init_container_delay,
+    with_image_for_container,
+)
 from src.deployments.core.configs.pod import (
     PodConfig,
     PodSpecConfig,
@@ -79,6 +82,11 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def build(self) -> V1StatefulSet:
+        if self.config.namespace is None:
+            raise ValueError(
+                "You must set the namespace before building the StatefulSet. "
+                f"config: {self.config}"
+            )
         return build_stateful_set(self.config)
 
 
@@ -171,6 +179,10 @@ class PodSpecBuilder(BaseModel):
 
     def add_init_container(self, init_container: ContainerConfig | V1Container | dict):
         self.config.add_init_container(init_container)
+        return self
+
+    def with_service_account_name(self, name: str, *, overwrite: bool = False) -> Self:
+        self.config.with_service_account_name(name, overwrite=overwrite)
         return self
 
 

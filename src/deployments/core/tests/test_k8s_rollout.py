@@ -54,24 +54,28 @@ class TestCheckPodCondition:
         assert check_pod_condition(pod, ("Initialized", "True")) is True
         assert check_pod_condition(pod, ("Ready", "True")) is False
 
-    def test_callable_condition_is_delegated_to(self):
+    def test_callable_condition_false_is_propagated(self):
         pod = MagicMock()
-        assert check_pod_condition(pod, lambda p: True) is True
+        condition = MagicMock(return_value=False)
+        assert check_pod_condition(pod, condition) is False
+        condition.assert_called_once_with(pod)
 
 
 # --------------------------------------------------------------------------- #
 # poll_rollout_status  (reads live object via get_namespaced)
 # --------------------------------------------------------------------------- #
 class TestPollRolloutStatus:
-    def test_statefulset_all_replicas_ready_is_true(self, mocker):
-        obj = _statefulset(desired=3, ready=3)
-        mocker.patch.object(k8s_rollout, "get_namespaced", return_value=obj)
-        assert poll_rollout_status(obj) is True
+    def test_statefulset_uses_live_object(self, mocker):
+        stale = _statefulset(desired=3, ready=0)
+        live = _statefulset(desired=3, ready=3)
+        mocker.patch.object(k8s_rollout, "get_namespaced", return_value=live)
+        assert poll_rollout_status(stale) is True
 
-    def test_statefulset_missing_replicas_is_false(self, mocker):
-        obj = _statefulset(desired=3, ready=1)
-        mocker.patch.object(k8s_rollout, "get_namespaced", return_value=obj)
-        assert poll_rollout_status(obj) is False
+    def test_statefulset_uses_live_object_not_stale_object(self, mocker):
+        stale = _statefulset(desired=3, ready=3)
+        live = _statefulset(desired=3, ready=1)
+        mocker.patch.object(k8s_rollout, "get_namespaced", return_value=live)
+        assert poll_rollout_status(stale) is False
 
     def test_statefulset_mid_revision_rollout_is_false(self, mocker):
         # Counts match but revisions differ => still rolling.

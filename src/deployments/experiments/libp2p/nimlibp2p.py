@@ -25,17 +25,17 @@ Muxer = Literal["yamux", "quic", "mplex"]
 
 
 class ExpConfig(BaseModel):
-    num_nodes: NonNegativeInt = 30
-    num_messages: NonNegativeInt = 20
+    num_nodes: NonNegativeInt = 1000
+    num_messages: NonNegativeInt = 600
     message_size_bytes: NonNegativeInt = 1000
     delay_cold_start: NonNegativeFloat = 60
     delay_after_publish: NonNegativeFloat = 1
     muxer: Muxer = "yamux"
-    image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
+    image: Image = Image(repo="soutullostatus/nimlibp2p", tag="v2.0.0")
     connect_to: NonNegativeInt = 10
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
-    node_start_delay: NonNegativeInt = 60
+    start_sleep: NonNegativeInt = 180
 
 
 def build_nodes(
@@ -55,8 +55,9 @@ def build_nodes(
         .with_option(NimLibp2p.service, "nimp2p-service")
         .with_option(NimLibp2p.muxer, params.muxer)
         .with_option(NimLibp2p.connect_to, params.connect_to)
-        .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
+        .with_option(NimLibp2p.start_sleep, params.start_sleep)
         .with_readiness_probe(readiness_probe_metrics())
+        .with_pull_policy("IfNotPresent")
         .with_image(params.image)
     )
     if params.network_delay or params.network_jitter:
@@ -116,8 +117,6 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         namespace = nodes.metadata.namespace
 
         await self.deploy(deployment=nodes)
-
-        await asyncio.sleep(self.config.delay_cold_start)
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
 

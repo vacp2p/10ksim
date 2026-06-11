@@ -33,7 +33,7 @@ class Config(BaseModel):
 
     name: Optional[str] = None
     """Name of experiment to run."""
-    delay: float = 120
+    delay: float = 300
     """Delay (in seconds) between each experiment run."""
 
     def __init__(self, **data: Any):

@@ -39,41 +39,43 @@ class MultiNimlibp2p(Multiple):
                 repo="pearsonwhite/dst-nimlibp2p-logging",
                 tag="wip-4.1-1.16.0",
             ),
-            "1.15.0": Image(
-                repo="pearsonwhite/dst-nimlibp2p-logging",
-                tag="wip-5-v1.15.0",
+            "2.0.0": Image(
+                repo="soutullostatus/nimlibp2p",
+                tag="v2.0.0",
             ),
+             "1.16.0": Image(
+                 repo="soutullostatus/nimlibp2p",
+                 tag="v1.16.0",
+             ),
+             "1.15.0": Image(
+                 repo="pearsonwhite/dst-nimlibp2p-logging",
+                 tag="wip-5-v1.15.0",
+             ),
         }
         base = {
             "delay_after_publish": 1,
-            "delay_cold_start": 2 * 60,
+            "start_sleep": 1 * 60,
             "message_size_bytes": 1000,  # 1kb
-            "num_messages": 1000,
-            "node_start_delay": 5 * 60,  # 5 min,
+            "num_messages": 600,
+            "num_nodes": 1000,
+            "connect_to": 20
         }
-        version = "1.16.0"
-        base["image"] = images[version]
-        base["version"] = version
 
-        yield {
-            **base,
-            "muxer": "yamux",
-            "num_nodes": 1000,
-            "connect_to": 10,
-        }
-        yield {
-            **base,
-            "muxer": "quic",
-            "num_nodes": 1000,
-            "connect_to": 10,
-        }
+        for version, image in images.items():
+            for muxer in ["mplex", "yamux", "quic"]:
+                yield {
+                    **base,
+                    "image": image,
+                    "version": version,
+                    "muxer": muxer,
+                }
 
     def get_params_list(self) -> List[dict]:
         return [item for item in self.exp_params()]
 
     def get_name_from_params(self, params: dict) -> str:
         version = params["version"]
-        keys = ["num_nodes", "num_messages"]
+        keys = ["num_nodes", "num_messages", "muxer"]
         used_keys = filter(lambda item: item in keys, params.items())
         param_list = [f"{key}_{value}" for key, value in used_keys]
         param_list.append(f"version_{version}")

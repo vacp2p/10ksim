@@ -28,10 +28,10 @@ class TestPollNamespaceHasObjects:
         mocker.patch.object(k8s_cleanup.client, "CoreV1Api", return_value=core)
         mocker.patch.object(k8s_cleanup.client, "AppsV1Api", return_value=apps)
         mocker.patch.object(k8s_cleanup.client, "BatchV1Api", return_value=batch)
-        return core, apps
+        return core, apps, batch
 
     def test_true_when_a_statefulset_exists(self, mocker):
-        core, apps = self._patch_apis(mocker)
+        core, apps, _ = self._patch_apis(mocker)
         core.list_namespaced_pod.return_value = _list_result([])
         apps.list_namespaced_deployment.return_value = _list_result([])
         apps.list_namespaced_stateful_set.return_value = _list_result([object()])
@@ -41,19 +41,51 @@ class TestPollNamespaceHasObjects:
         assert poll_namespace_has_objects("ns", MagicMock()) is True
 
     def test_false_when_namespace_empty(self, mocker):
-        core, apps = self._patch_apis(mocker)
+        core, apps, _ = self._patch_apis(mocker)
         core.list_namespaced_pod.return_value = _list_result([])
         apps.list_namespaced_deployment.return_value = _list_result([])
         apps.list_namespaced_stateful_set.return_value = _list_result([])
         apps.list_namespaced_daemon_set.return_value = _list_result([])
         apps.list_namespaced_replica_set.return_value = _list_result([])
 
-        assert poll_namespace_has_objects("ns", MagicMock()) is False
+        result = poll_namespace_has_objects(
+            "ns",
+            MagicMock(),
+            types=["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod"],
+        )
+        assert result is False
 
-    def test_api_exception_is_swallowed(self, mocker):
-        core, _ = self._patch_apis(mocker)
-        core.list_namespaced_pod.side_effect = ApiException()
-        assert poll_namespace_has_objects("ns", MagicMock(), types=["Pod"]) is False
+    @pytest.mark.parametrize(
+        "type_name, group, method",
+        [
+            ("Pod", "core", "list_namespaced_pod"),
+            ("Service", "core", "list_namespaced_service"),
+            ("PersistentVolumeClaim", "core", "list_namespaced_persistent_volume_claim"),
+            ("ReplicationController", "core", "list_namespaced_replication_controller"),
+            ("Deployment", "apps", "list_namespaced_deployment"),
+            ("StatefulSet", "apps", "list_namespaced_stateful_set"),
+            ("ReplicaSet", "apps", "list_namespaced_replica_set"),
+            ("DaemonSet", "apps", "list_namespaced_daemon_set"),
+            ("Job", "batch", "list_namespaced_job"),
+            ("CronJob", "batch", "list_namespaced_cron_job"),
+        ],
+    )
+    def test_api_exception_is_swallowed(self, mocker, type_name, group, method):
+        mocks = dict(zip(("core", "apps", "batch"), self._patch_apis(mocker)))
+        getattr(mocks[group], method).side_effect = ApiException()
+        assert poll_namespace_has_objects("ns", MagicMock(), types=[type_name]) is False
+
+    def test_core_api_is_constructed_with_the_passed_client(self, mocker):
+        core = MagicMock()
+        core.list_namespaced_pod.return_value = _list_result([])
+        core_api = mocker.patch.object(k8s_cleanup.client, "CoreV1Api", return_value=core)
+        mocker.patch.object(k8s_cleanup.client, "AppsV1Api")
+        mocker.patch.object(k8s_cleanup.client, "BatchV1Api")
+
+        api_client = MagicMock()
+        poll_namespace_has_objects("ns", api_client, types=["Pod"])
+
+        core_api.assert_called_once_with(api_client)
 
 
 # --------------------------------------------------------------------------- #
@@ -117,3 +149,12 @@ class TestCleanupResources:
         assert names.index("apps.delete_namespaced_stateful_set") < names.index(
             "core.delete_namespaced_pod"
         )
+
+    def test_unsupported_or_missing_kinds_are_ignored(self, mocker):
+        apps_api = mocker.patch.object(k8s_cleanup.client, "AppsV1Api")
+        core_api = mocker.patch.object(k8s_cleanup.client, "CoreV1Api")
+
+        cleanup_resources({"Secret": ["s0"]}, "ns", api_client=MagicMock())  # must not raise
+
+        apps_api.assert_not_called()
+        core_api.assert_not_called()

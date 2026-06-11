@@ -272,7 +272,7 @@ def poll_namespace_has_objects(
     """
     types = types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod"]
     logger.debug(f"Checking in namespace `{namespace}` for types: `{types}`")
-    v1 = client.CoreV1Api()
+    v1 = client.CoreV1Api(api_client)
     apps_v1 = client.AppsV1Api(api_client)
     batch_v1 = client.BatchV1Api(api_client)
 

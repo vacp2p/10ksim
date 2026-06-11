@@ -74,7 +74,6 @@ class NodesBuilder(StatefulSetBuilder):
         return self
 
 
-
 def apply_container_config(
     config: ContainerConfig, container_name: str, image: Image
 ) -> ContainerConfig:

@@ -22,7 +22,7 @@ class Option:
     self_trigger = "SELFTRIGGER"
     service = "SERVICE"
     max_connections = "MAXCONNECTIONS"
-    cold_start_delay = "COLDSTARTDELAY"
+    start_sleep = "STARTSLEEP"
 
 
 class Libp2pStatefulSetBuilder(StatefulSetBuilder):

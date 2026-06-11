@@ -13,13 +13,17 @@ from typing import Any, Generic, List, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
+    V1ConfigMap,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
     V1Job,
     V1Pod,
     V1PodTemplateSpec,
+    V1Role,
+    V1RoleBinding,
     V1Service,
+    V1ServiceAccount,
     V1StatefulSet,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,6 +45,8 @@ from src.utils.dict_utils import dict_get
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
+    V1Role,
+    V1RoleBinding,
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
@@ -49,6 +55,8 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
+    V1ConfigMap,
+    V1ServiceAccount,
 ]
 
 

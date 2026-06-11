@@ -1,26 +1,18 @@
 # Python Imports
-from typing import Optional
+from typing import Optional, Self
 
 from kubernetes.client import (
     V1ContainerPort,
     V1EnvVar,
     V1EnvVarSource,
     V1ObjectFieldSelector,
-    V1PodDNSConfig,
     V1ResourceRequirements,
 )
+from pydantic import PrivateAttr
 
-
-from typing import Optional, Self
-
-from pydantic import Field
-
+from src.deployments.core.builders import StatefulSetBuilder
 
 # Project Imports
-from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
-from src.deployments.core.configs.statefulset import StatefulSetSpecConfig
-from src.deployments.core.builders import StatefulSetBuilder
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config, get_config
@@ -28,18 +20,19 @@ from src.deployments.core.configs.pod import PodSpecConfig
 
 
 class NodesBuilder(StatefulSetBuilder):
-    _service_name: str = "logos-core-service"
-    _service_account_name: str = "secret-creator"
-    _container_name: str = "logos-core-container"
-    _name: str = "logoscore"
-    _namespace: Optional[str] = None
-    _image: Image = Field(
-        default_factory=lambda: Image(repo="pearsonwhite/dst-lc-api", tag="wip2-amd")
+    _service_name: str = PrivateAttr(default="logos-core-service")
+    _service_account_name: str = PrivateAttr(default="secret-creator")
+    _container_name: str = PrivateAttr(default="logos-core-container")
+    _name: str = PrivateAttr(default="logoscore")
+    _namespace: Optional[str] = PrivateAttr(default=None)
+    _image: Image = PrivateAttr(
+        default_factory=lambda: Image(repo="pearsonwhite/dst-lc-node", tag="wip3-amd")
     )
-    _app: str = "zerotenkay-core"
+    _app: str = PrivateAttr(default="zerotenkay-core")
 
-    def with_config(self, namespace: str, name: str) -> Self:
-        self._name = name
+    def with_config(self, namespace: str, name: Optional[str] = None) -> Self:
+        if name is not None:
+            self._name = name
         self._namespace = namespace
         self._reconcile()
         return self
@@ -50,10 +43,11 @@ class NodesBuilder(StatefulSetBuilder):
         return self
 
     def _reconcile(self):
+        self.config.stateful_set_spec.with_service_name(self._service_name)
         apply_identity(self.config, self._name, self._namespace, self._app)
         self._ensure_container()
         container_config = find_container_config(self.config, self._container_name)
-        apply_container_config(container_config, self._image)
+        apply_container_config(container_config, self._container_name, self._image)
 
     def with_container_name(self, container_name: str) -> Self:
         self._ensure_container()
@@ -66,7 +60,9 @@ class NodesBuilder(StatefulSetBuilder):
         container_config = find_container_config(self.config, self._container_name, default=None)
         if not container_config:
             pod_config = get_config(self.config, PodSpecConfig)
-            pod_config.add_container(ContainerConfig(name=self._container_name))
+            pod_config.add_container(
+                ContainerConfig(name=self._container_name, image_pull_policy="IfNotPresent")
+            )
 
     def with_image(self, image: Image) -> Self:
         self._image = image
@@ -77,11 +73,11 @@ class NodesBuilder(StatefulSetBuilder):
 def apply_container_config(
     config: ContainerConfig, container_name: str, image: Image
 ) -> ContainerConfig:
-    config.name = (container_name,)
+    config.name = container_name
     config.with_image(image)
-    config.with_port(V1ContainerPort(containerPort=8645))
-    config.with_port(V1ContainerPort(containerPort=8008))
-    config.with_port(V1ContainerPort(containerPort=8080))
+    config.with_port(V1ContainerPort(container_port=8645), overwrite=True)
+    config.with_port(V1ContainerPort(container_port=8008), overwrite=True)
+    config.with_port(V1ContainerPort(container_port=8080), overwrite=True)
     config.with_resources(default_resources())
 
     # TODO: create readiness probe
@@ -110,4 +106,3 @@ def default_resources() -> V1ResourceRequirements:
         requests={"memory": "1Gi", "cpu": "500m"},
         limits={"memory": "4Gi", "cpu": "2000m"},
     )
-

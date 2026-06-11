@@ -1,8 +1,9 @@
+from collections import defaultdict
 from copy import deepcopy
+from itertools import chain
 from typing import Any, Dict, Self
 
 from kubernetes.client import (
-    V1Object,
     V1EnvVar,
     V1ObjectMeta,
     V1PodSecurityContext,
@@ -11,10 +12,7 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1RoleRef,
-    V1Service,
     V1ServiceAccount,
-    V1ServicePort,
-    V1ServiceSpec,
     V1Subject,
 )
 from pydantic import Field
@@ -23,11 +21,11 @@ from src.deployments.core.configs.container import Image
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.configs.pod import PodConfig
+from src.deployments.core.kube_utils import V1Deployable
 from src.deployments.pod_api_requester.builder import NAME, PodApiRequesterBuilder
 
 
 class LogoscorePodApiRequester(PodApiRequesterBuilder):
-    namespace: str
     dependencies: Dict[str, Any] = Field(default_factory=dict)
 
     def with_logoscore_profile(
@@ -37,37 +35,29 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
         app: str = "zerotenkay-core2",
         debug: bool = False,
     ) -> Self:
-        apply_logoscore_profile(self.config, namespace, name, app, debug)
-        self.dependencies.update(self._logoscore_dependencies())
+        apply_logoscore_profile(self.config, namespace=namespace, name=name, app=app, debug=debug)
+        self.dependencies = self._get_dependencies()
         return self
 
+    def _get_dependencies(self):
+        base_dict = super()._get_dependencies()
+        logoscore_dict = self._logoscore_dependencies()
+        deps = defaultdict(list)
+        for key, value in chain(base_dict.items(), logoscore_dict.items()):
+            deps[key].extend(value)
+        return dict(deps)
+
     def _logoscore_dependencies(self) -> dict:
-        # TODO: add normal pod-api-requester deps
         if not self.config.namespace:
             raise ValueError("Namespace must be set before building dependencies")
         return {
-            "services": [service(self.namespace)],
-            "role": [role(self.namespace)],
-            "role_binding": [role_binding(self.name)],
-            "service_account": [service_account(self.name)],
+            "roles": [role(self.config.namespace)],
+            "role_bindings": [role_binding(self.config.namespace)],
+            "service_accounts": [service_account(self.config.namespace)],
         }
 
-    def build_dependencies(self) -> Dict[str, V1Object]:
+    def build_dependencies(self) -> Dict[str, V1Deployable]:
         return deepcopy(self.dependencies)
-
-
-
-def service(namespace: str, name: str):
-    return V1Service(
-        api_version="v1",
-        kind="Service",
-        metadata=V1ObjectMeta(name=name, namespace=namespace),
-        spec=V1ServiceSpec(
-            type="NodePort",
-            selector={"app": "zerotenkay-core"},
-            ports=[V1ServicePort(protocol="TCP", port=8088, target_port=8645, node_port=30088)],
-        ),
-    )
 
 
 def service_account(namespace: str):
@@ -111,9 +101,9 @@ def apply_logoscore_profile(
     apply_identity(config, name=name, namespace=namespace, app=app)
 
     config.pod_spec_config.with_service_account_name("secret-creator")
+    config.pod_spec_config.automount_service_account_token = True
     config.pod_spec_config.with_security_context(V1PodSecurityContext(run_as_user=0, fs_group=0))
     config.pod_spec_config.with_dns_service(f"core-nodes-internal.{namespace}.svc.cluster.local")
-    config.pod_spec_config.with_dns_service(f"zerotesting-core2.{namespace}.svc.cluster.local")
 
     # TODO: change to use self._container_name when updating PodApiRequesterBuilder.
     container_config = find_container_config(config.pod_spec_config, NAME)
@@ -124,7 +114,7 @@ def apply_logoscore_profile(
             requests={"memory": "1Gi", "cpu": "500m"}, limits={"memory": "4Gi", "cpu": "2000m"}
         )
     )
-    logoscore_image = Image(repo="pearsonwhite/dst-lc-api", tag="wip2-amd")
+    logoscore_image = Image(repo="pearsonwhite/dst-lc-api", tag="wip2b-amd")
     container_config.with_image(logoscore_image, overwrite=True)
     if debug:
         container_config.with_env_var(V1EnvVar(name="LOGGING_LEVEL", value="DEBUG"), overwrite=True)

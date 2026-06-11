@@ -43,8 +43,8 @@ class ExpConfig(BaseModel):
     node_start_delay: NonNegativeInt = 60
 
 
-def build_logoscore_nodes() -> V1StatefulSet:
-    return NodesBuilder().build()
+def build_logoscore_nodes(namespace: str) -> V1StatefulSet:
+    return NodesBuilder().with_config(namespace).build()
 
 
 _LOGOSCORE_PUBLISHER = {
@@ -147,15 +147,23 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         self.log_metadata({"params": vars(config)})
 
         publisher_builder = (
-            LogoscorePodApiRequester.with_namespace(args.namespace)
+            LogoscorePodApiRequester()
+            .with_namespace(args.namespace)
             .with_mode("server")
-            .with_logoscore_profile()
-            .build()
+            .with_logoscore_profile(args.namespace)
         )
 
         dependencies = publisher_builder.build_dependencies()
-        for dep in dependencies:
-            self.deploy(api_client, stack, args, values_yaml, deployment=dep, wait_for_ready=True)
+        for _name, dep_list in dependencies.items():
+            for dep in dep_list:
+                logger.info(f"Deploying dependency: {_name}")
+                logger.info(f"{dep.metadata.namespace}")
+                logger.info(f"{dep.metadata.name}")
+                logger.info(f"{type(dep.metadata)}")
+                # import pdb; pdb.set_trace()
+                await self.deploy(
+                    api_client, stack, args, values_yaml, deployment=dep, wait_for_ready=True
+                )
 
         await self.deploy(
             api_client,
@@ -166,7 +174,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
             wait_for_ready=True,
         )
 
-        nodes = build_logoscore_nodes()
+        nodes = build_logoscore_nodes(args.namespace)
         await self.deploy(
             api_client,
             stack,
@@ -183,8 +191,6 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         self.log_event("init_logoscore_nodes")
         config.num_nodes = 2  # TODO
         for index in range(config.num_nodes):
-            # index = random.randint(0, config.num_nodes - 1)
-            # random_name = f"{name}-{index}"
             indexed_name = f"{name}-{index}"
             try:
                 await init_token(args.namespace, indexed_name)
@@ -196,12 +202,10 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         # logger.info(f"Starting publish loop for nodes in `{name}`")
         # self.log_event("start_messages")
         # for msg_index in range(config.num_messages):
+        #     index = random.randint(0, config.num_nodes - 1)
+        #     random_name = f"{name}-{index}"
         #     self.log_event({"event": "publish", "node": random_name, "index": msg_index})
         # self.log_event("publisher_messages_finished")
-
-        while True:
-            logger.info("waiting")
-            await asyncio.sleep(20)
 
         await asyncio.sleep(20)
         self.log_event("publisher_wait_finished")

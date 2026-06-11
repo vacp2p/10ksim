@@ -8,9 +8,7 @@ from kubernetes import client
 debug_env = os.environ.get("DEBUG", "").lower()
 log_level = logging.DEBUG if debug_env == "true" else logging.INFO
 
-logging.basicConfig(
-    level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 

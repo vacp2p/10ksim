@@ -1,0 +1,257 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dst-node
+  namespace: nomos-testnet
+spec:
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: nomos
+  template:
+    metadata:
+      labels:
+        app: nomos
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: nomos
+      containers:
+        - name: nomos
+          image: ghcr.io/logos-blockchain/logos-blockchain-node:0.1.3-rc.10
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "1000m"
+            limits:
+              memory: "4096Mi"
+              cpu: "2000m"
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - name: nomos-data
+              mountPath: /state
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":{"Started":"Online"}'
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo
+              ORD="${HOSTNAME##*-}"
+              BASE=31000
+              SWARM=$((BASE + 2*ORD))
+              BLEND=$((SWARM + 1))
+
+              if [ ! -f /state/user_config.yaml ]; then
+                echo "user_config.yaml not found, initializing node"
+              
+                logos-blockchain-node init-config \
+                  --net-port "${SWARM}" \
+                  --blend-addr "/ip4/0.0.0.0/udp/${BLEND}/quic-v1" \
+                  --external-address "/ip4/${HOST_IP}/udp/${SWARM}/quic-v1" \
+                    -p /ip4/65.108.203.235/udp/3000/quic-v1/p2p/12D3KooWNbZTQ86TZ9MrZ2wm6iUFFj25AFTzFLUD7i6XkZHoUzU8 \
+                    -p /ip4/65.108.203.235/udp/3001/quic-v1/p2p/12D3KooWNhXaH4XTX6Pp66NDQZxZpXYQzeruwwraMvTxojz1QXPJ \
+                    -p /ip4/65.108.203.235/udp/3002/quic-v1/p2p/12D3KooWNTLPg5uYPKgZCDvzyaWNwZNcwVKmfS2bNv52E9L9P7Hf \
+                    -p /ip4/65.108.203.235/udp/3003/quic-v1/p2p/12D3KooWMULUG8RXC2esnfLcVzGHohf6KNPSswkCKa1mdpXz4tHH
+                
+                awk '
+                  /^  metrics: None$/ {
+                    print "  metrics: !Otlp"
+                    print "    endpoint: \"http://otlp.lab.vac.dev:31317/\""
+                    print "    host_identifier: \"" ENVIRON["HOSTNAME"] "\""
+                    print "    authorization_header: \"<TOKEN>\""
+                    next
+                  }
+                  { print }
+                ' user_config.yaml > user_config.yaml.tmp && mv user_config.yaml.tmp user_config.yaml
+                
+                sed -i '/^[[:space:]]*file:[[:space:]]*$/{
+                N
+                N
+                N
+                s|^[[:space:]]*file:[[:space:]]*$\n[[:space:]]*directory: .*$\n[[:space:]]*prefix: .*$\n[[:space:]]*appender_type: .*$|    file: null|
+                }' user_config.yaml
+                
+                cp user_config.yaml /state/user_config.yaml
+                cp keystore.yaml /state/keystore.yaml
+              else
+                echo "Using existing /state/user_config.yaml"
+              fi
+
+              exec logos-blockchain-node /state/user_config.yaml
+        - name: blend-declaration
+          image: docker.io/library/alpine:3.20
+          imagePullPolicy: Always
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - name: nomos-data
+              mountPath: /state
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              apk add --no-cache curl jq
+              
+              ORD="${HOSTNAME##*-}"
+              BASE=31000
+              SWARM=$((BASE + 2*ORD))
+              BLEND=$((SWARM + 1))
+          
+              USER_CONFIG=/state/user_config.yaml
+              MARKER=/state/.blend-declaration-done
+              
+              sleep 10
+              
+              while ! curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":{"Started":"Online"}'; do
+                sleep 5
+              done
+              
+              if [ -f "$MARKER" ]; then
+                echo "Blend declaration already done, skipping"
+                exec tail -f /dev/null
+              fi
+               
+              KMS_ID="$(
+                awk '
+                  /^[[:space:]]*secret_key_kms_id:[[:space:]]*/ {
+                    print $2
+                    exit
+                  }
+                ' "$USER_CONFIG"
+              )"
+          
+              if [ -z "$KMS_ID" ]; then
+                echo "Could not find secret_key_kms_id in $USER_CONFIG"
+                exit 1
+              fi
+          
+              echo "Using KMS key: $KMS_ID"
+          
+              curl -fsS -X POST "https://devnet.blockchain.logos.co/web/faucet-backend/${KMS_ID}" >/dev/null
+              echo "Faucet request accepted for KMS key"
+              
+              FUNDING_PK="$(
+                awk '
+                  /^[[:space:]]*sdp:/ { in_sdp=1; next }
+                  in_sdp && /^[[:space:]]*wallet:/ { in_wallet=1; next }
+                  in_wallet && /^[[:space:]]*funding_pk:[[:space:]]*/ {
+                    print $2
+                    exit
+                  }
+                ' "$USER_CONFIG"
+              )"
+          
+              if [ -z "$FUNDING_PK" ]; then
+                echo "Could not find sdp.wallet.funding_pk in $USER_CONFIG"
+                exit 1
+              fi
+          
+              echo "Using funding_pk key: $FUNDING_PK"
+          
+              curl -fsS -X POST "https://devnet.blockchain.logos.co/web/faucet-backend/${FUNDING_PK}" >/dev/null
+              echo "Faucet request accepted for funding key"
+              
+              echo "Waiting 600s for wallet balance to update..."
+              sleep 600
+              
+              BALANCE_RESPONSE="$(
+                curl -fsS "http://localhost:8080/wallet/${KMS_ID}/balance"
+              )"
+              
+              NOTE_ID_HEX="$(
+                echo "$BALANCE_RESPONSE" \
+                  | jq -r '.notes | keys[1] // empty'
+              )"
+              
+              if [ -z "$NOTE_ID_HEX" ]; then
+                echo "Could not find NOTE_ID_HEX in wallet balance"
+                echo "Balance response: $BALANCE_RESPONSE"
+                exit 1
+              fi
+              
+              echo "Using NOTE_ID_HEX: $NOTE_ID_HEX"
+          
+              LOCATOR="/ip4/${HOST_IP}/udp/${BLEND}/quic-v1"
+              JOIN_PAYLOAD="$(
+                jq -nc \
+                  --arg locator "$LOCATOR" \
+                  --arg locked_note_id "$NOTE_ID_HEX" \
+                  '{locator: $locator, locked_note_id: $locked_note_id}'
+              )"
+          
+              curl -fsS -X POST "http://localhost:8080/blend/join" \
+                -H "Content-Type: application/json" \
+                --data "$JOIN_PAYLOAD" >/dev/null
+          
+              echo "Blend join request accepted for locator: $LOCATOR"
+          
+              MAX_DECLARATION_RETRIES=60
+              DECLARATION_RETRY_SECONDS=5
+              DECLARATION_CONFIRMED=false
+              ATTEMPT=1
+              
+              while [ "$ATTEMPT" -le "$MAX_DECLARATION_RETRIES" ]; do
+                DECLARATIONS_RESPONSE="$(curl -fsS "http://localhost:8080/mantle/sdp/declarations" 2>/dev/null || true)"
+              
+                if [ -z "$DECLARATIONS_RESPONSE" ]; then
+                  echo "Could not fetch declarations (attempt ${ATTEMPT}/${MAX_DECLARATION_RETRIES})"
+                  ATTEMPT=$((ATTEMPT + 1))
+                  sleep "$DECLARATION_RETRY_SECONDS"
+                  continue
+                fi
+              
+                if echo "$DECLARATIONS_RESPONSE" | jq -e --arg kms_id "$KMS_ID" '
+                  type == "array" and any(.[]; .provider_id == $kms_id)
+                ' >/dev/null 2>&1; then
+                  echo "Declaration found for KMS_ID=${KMS_ID}"
+                  DECLARATION_CONFIRMED=true
+                  break
+                fi
+              
+                echo "Declaration for KMS_ID=${KMS_ID} not found yet (attempt ${ATTEMPT}/${MAX_DECLARATION_RETRIES})"
+                ATTEMPT=$((ATTEMPT + 1))
+                sleep "$DECLARATION_RETRY_SECONDS"
+              done
+              
+              if [ "$DECLARATION_CONFIRMED" != "true" ]; then
+                echo "Timed out waiting for declaration with KMS_ID=${KMS_ID}"
+                exit 1
+              fi
+              
+              touch "$MARKER"
+          
+              exec tail -f /dev/null
+  volumeClaimTemplates:
+    - metadata:
+        name: nomos-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-nomos
+        resources:
+          requests:
+            storage: 20Gi

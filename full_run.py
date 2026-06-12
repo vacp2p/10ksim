@@ -18,10 +18,11 @@ from kubernetes import config
 from kubernetes.client import ApiClient
 
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
+from src.analysis.mesh_analysis.core import analyze_exps
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.metrics_plotter import MetricsPlotter
 from src.analysis.utils.log_utils import init_logger
-from src.deployments.core.kube_utils import set_config_file
+from src.deployments.core.k8s_kubeconfig import set_config_file
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

@@ -288,7 +288,7 @@ def poll_namespace_has_objects(
         "DaemonSet": lambda: apps_v1.list_namespaced_daemon_set(namespace).items,
         "Job": lambda: batch_v1.list_namespaced_job(namespace).items,
         "ReplicationController": lambda: v1.list_namespaced_replication_controller(namespace).items,
-        "CronJob": lambda: batch_v1.list_namespaced_cron_job(namespace),
+        "CronJob": lambda: batch_v1.list_namespaced_cron_job(namespace).items,
     }
 
     for type, check in resource_checks.items():

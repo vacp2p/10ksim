@@ -10,6 +10,7 @@ from result import Err, Ok, Result
 
 # Project Imports
 from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyzer, OnFail
+from src.analysis.mesh_analysis.analyzers.libp2p.adaptor import Nimlibp2pAnalysisAdaptor
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
 from src.analysis.utils import file_utils, path_utils
@@ -47,7 +48,7 @@ class MessageReliabilityAnalysis(BaseModel):
     reliability_result: MessageReliabilityResult
 
 
-class Nimlibp2pAnalyzer(Analyzer):
+class Nimlibp2pAnalyzer(Analyzer, Nimlibp2pAnalysisAdaptor):
     """
     Handles the analysis of Nimlibp2p message reliability from either local log files or online data.
 
@@ -59,6 +60,14 @@ class Nimlibp2pAnalyzer(Analyzer):
     """
 
     msg_hash_key: str = "msgId"
+
+    def supports(self, exp_name: str) -> Self:
+        if exp_name != "nimlibp2p":
+            raise ValueError(
+                f"Experiment type not supported by this analyzer. "
+                f"Experiment: `{exp_name}` Analyzer: `{self.__class__}`"
+            )
+        return self
 
     def with_ss_check(
         self,
@@ -404,7 +413,7 @@ class Nimlibp2pAnalyzer(Analyzer):
 
         if not peers_missing_msg:
             logger.info(f"All peers received all messages for shard {shard}")
-            return None
+            return []
 
         logger.warning(f"Nodes missed messages on shard {shard}")
         logger.warning(f"Nodes who missed messages: {peers_missing_msg}")

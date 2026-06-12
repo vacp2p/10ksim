@@ -232,7 +232,7 @@ async def main():
 
     logger.info(f"=== All Results ===\n{json.dumps(unravel(all_results), indent=2, default=str)}")
     not_passed = len(all_results) - summary["passed"]
-    logger.info(f"Passed: {summary['passed']}\nNot Passed: {not_passed}\nTotal: {len(all_results)}")
+    logger.info(f"Passed: {summary['passed']}\nNot Passed: {not_passed}\nTotal Analyzers: {len(all_results)}")
     status_str = "\n".join([f"{key}: {value}" for key, value in all_statuses.items()])
     logger.info(f"=== Statuses === \n{status_str}")
 

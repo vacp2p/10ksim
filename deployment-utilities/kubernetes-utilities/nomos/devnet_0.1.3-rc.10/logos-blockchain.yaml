@@ -225,7 +225,7 @@ spec:
                 fi
               
                 if echo "$DECLARATIONS_RESPONSE" | jq -e --arg kms_id "$KMS_ID" '
-                  type == "array" and any(.[]; .provider_id == $kms_id)
+                  type == "array" and any(.[]; .zk_id == $kms_id)
                 ' >/dev/null 2>&1; then
                   echo "Declaration found for KMS_ID=${KMS_ID}"
                   DECLARATION_CONFIRMED=true

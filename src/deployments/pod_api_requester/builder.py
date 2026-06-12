@@ -1,7 +1,10 @@
 # Python Imports
+from pathlib import Path
 from typing import List, Literal, Optional, Self
 
+import yaml
 from kubernetes.client import (
+    V1ConfigMap,
     V1ConfigMapVolumeSource,
     V1ContainerPort,
     V1ObjectMeta,
@@ -12,6 +15,9 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1RoleRef,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
     V1Volume,
     V1VolumeMount,
 )
@@ -20,8 +26,9 @@ from kubernetes.client import (
 from src.deployments.core.builders import PodBuilder
 from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.helpers import find_container_config
+from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
+from src.deployments.core.k8s_object import dict_to_k8s_object
 
 ScriptMode = Literal["server", "batch"]
 
@@ -59,7 +66,7 @@ class PodApiRequesterBuilder(PodBuilder):
             role_ref=V1RoleRef(
                 kind="Role",
                 name="pod-service-reader",
-                apiGroup="rbac.authorization.k8s.io",
+                api_group="rbac.authorization.k8s.io",
             ),
             subjects=[
                 {
@@ -68,6 +75,31 @@ class PodApiRequesterBuilder(PodBuilder):
                     "namespace": self.config.namespace,
                 },
             ],
+        )
+
+    def build_config_map(self) -> V1ConfigMap:
+        with open(Path(__file__).parent / "config.yaml", "r") as config_file:
+            config_dict = yaml.safe_load(config_file.read())
+        config_map: V1ConfigMap = dict_to_k8s_object(config_dict, "V1ConfigMap")
+        config_map.metadata.namespace = self.config.namespace
+        return config_map
+
+    def build_service(self) -> V1Service:
+        return V1Service(
+            api_version="v1",
+            kind="Service",
+            metadata=V1ObjectMeta(name="zerotesting-publisher", namespace=self.config.namespace),
+            spec=V1ServiceSpec(
+                type="NodePort",
+                selector={"app": "zerotenkay-publisher"},
+                ports=[
+                    V1ServicePort(
+                        protocol="TCP",
+                        port=8000,
+                        target_port=8645,
+                    )
+                ],
+            ),
         )
 
     def build(self) -> V1Pod:
@@ -99,6 +131,16 @@ class PodApiRequesterBuilder(PodBuilder):
     def with_debug(self) -> Self:
         self._mode = "debug"
         return self.with_command("sleep", args=["infinity"])
+
+    def _get_dependencies(self):
+        if not self.config.namespace:
+            raise ValueError("Namespace must be set before building dependencies")
+        return {
+            "services": [self.build_service()],
+            "roles": [self.build_role()],
+            "role_bindings": [self.build_rolebinding()],
+            "config_maps": [self.build_config_map()],
+        }
 
 
 def apply_command_config(config: CommandConfig, mode: ScriptMode = "server"):

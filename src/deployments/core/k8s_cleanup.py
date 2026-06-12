@@ -30,6 +30,10 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Service": [],
         "ConfigMap": [],
         "PersistentVolumeClaim": [],
+        "Role": [],
+        "RoleBinding": [],
+        "ConfigMap": [],
+        "ServiceAccount": [],
     }
     types = (
         types
@@ -42,7 +46,10 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
             "Pod",
             "Job",
             "Service",
+            "Role",
+            "RoleBinding",
             "ConfigMap",
+            "ServiceAccount",
             "PersistentVolumeClaim",
         ]
     )
@@ -87,6 +94,9 @@ def cleanup_resources(
         "Pod",
         "Service",
         "ConfigMap",
+        "RoleBinding",
+        "Role",
+        "ServiceAccount",
         "PersistentVolumeClaim",
     ]
 
@@ -124,6 +134,18 @@ def cleanup_resources(
         "PersistentVolumeClaim": lambda name: client.CoreV1Api(
             api_client
         ).delete_namespaced_persistent_volume_claim(name, namespace),
+        "ConfigMap": lambda name: client.CoreV1Api(api_client).delete_namespaced_config_map(
+            name, namespace, body=client.V1DeleteOptions()
+        ),
+        "ServiceAccount": lambda name: client.CoreV1Api(
+            api_client
+        ).delete_namespaced_service_account(name, namespace, body=client.V1DeleteOptions()),
+        "Role": lambda name: client.RbacAuthorizationV1Api(api_client).delete_namespaced_role(
+            name, namespace, body=client.V1DeleteOptions()
+        ),
+        "RoleBinding": lambda name: client.RbacAuthorizationV1Api(
+            api_client
+        ).delete_namespaced_role_binding(name, namespace, body=client.V1DeleteOptions()),
     }
 
     for kind in deletion_order:
@@ -178,6 +200,18 @@ def poll_cleanup_status(
         "Service": lambda name: client.CoreV1Api(api_client).read_namespaced_service(
             name, namespace
         ),
+        "ConfigMap": lambda name: client.CoreV1Api(api_client).read_namespaced_config_map(
+            name, namespace
+        ),
+        "ServiceAccount": lambda name: client.CoreV1Api(api_client).read_namespaced_service_account(
+            name, namespace
+        ),
+        "Role": lambda name: client.RbacAuthorizationV1Api(api_client).read_namespaced_role(
+            name, namespace
+        ),
+        "RoleBinding": lambda name: client.RbacAuthorizationV1Api(
+            api_client
+        ).read_namespaced_role_binding(name, namespace),
     }
 
     for kind, names in resources.items():

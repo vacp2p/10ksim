@@ -4,6 +4,11 @@ from typing import Any, Literal, Union
 
 from kubernetes import client
 from kubernetes.client import (
+    V1Role,
+    V1ServiceAccount,
+    V1ConfigMap,
+    V1Service,
+    V1RoleBinding,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
@@ -15,13 +20,18 @@ from kubernetes.client import (
 )
 
 V1Deployable = Union[
+    V1Role,
+    V1RoleBinding,
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
+    V1Service,
     V1StatefulSet,
     V1DaemonSet,
     V1Job,
     V1CronJob,
+    V1ConfigMap,
+    V1ServiceAccount,
 ]
 
 K8sModelStr = Literal[

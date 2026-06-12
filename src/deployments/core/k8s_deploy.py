@@ -38,6 +38,10 @@ def _kind_api_map(operation: str) -> Dict[str, Tuple[str, str]]:
         "ReplicationController": ("core", "replicationcontroller"),
         "Pod": ("core", "pod"),
         "Service": ("core", "service"),
+        "Role": ("rbac", "role"),
+        "RoleBinding": ("rbac", "role_binding"),
+        "ConfigMap": ("core", "config_map"),
+        "ServiceAccount": ("core", "service_account"),
     }
 
     template = {}
@@ -71,6 +75,7 @@ def _kubectl_operation(
         "apps": client.AppsV1Api(api_client),
         "batch": client.BatchV1Api(api_client),
         "core": client.CoreV1Api(api_client),
+        "rbac": client.RbacAuthorizationV1Api(api_client),
     }
     api = api_group_map[group]
     method = getattr(api, method_name)

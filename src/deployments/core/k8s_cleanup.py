@@ -32,7 +32,6 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "PersistentVolumeClaim": [],
         "Role": [],
         "RoleBinding": [],
-        "ConfigMap": [],
         "ServiceAccount": [],
     }
     types = (
@@ -134,9 +133,6 @@ def cleanup_resources(
         "PersistentVolumeClaim": lambda name: client.CoreV1Api(
             api_client
         ).delete_namespaced_persistent_volume_claim(name, namespace),
-        "ConfigMap": lambda name: client.CoreV1Api(api_client).delete_namespaced_config_map(
-            name, namespace, body=client.V1DeleteOptions()
-        ),
         "ServiceAccount": lambda name: client.CoreV1Api(
             api_client
         ).delete_namespaced_service_account(name, namespace, body=client.V1DeleteOptions()),

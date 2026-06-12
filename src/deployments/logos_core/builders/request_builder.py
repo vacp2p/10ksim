@@ -12,7 +12,10 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1RoleRef,
+    V1Service,
     V1ServiceAccount,
+    V1ServicePort,
+    V1ServiceSpec,
     V1Subject,
 )
 from pydantic import Field
@@ -52,8 +55,9 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
             raise ValueError("Namespace must be set before building dependencies")
         return {
             "roles": [role(self.config.namespace)],
-            "role_bindings": [role_binding(self.config.namespace)],
+            "role_bindings": role_bindings(self.config.namespace),
             "service_accounts": [service_account(self.config.namespace)],
+            "services": [service(self.config.namespace)],
         }
 
     def build_dependencies(self) -> Dict[str, V1Deployable]:
@@ -64,7 +68,7 @@ def service_account(namespace: str):
     return V1ServiceAccount(
         api_version="v1",
         kind="ServiceAccount",
-        metadata=V1ObjectMeta(name="secret-creator", namespace=namespace),
+        metadata=V1ObjectMeta(name="secret-creator2", namespace=namespace),
     )
 
 
@@ -72,21 +76,59 @@ def role(namespace: str):
     return V1Role(
         api_version="rbac.authorization.k8s.io/v1",
         kind="Role",
-        metadata=V1ObjectMeta(name="secret-creator-role", namespace=namespace),
+        metadata=V1ObjectMeta(name="secret-creator-role2", namespace=namespace),
         rules=[
             V1PolicyRule(api_groups=[""], resources=["secrets"], verbs=["create", "get", "update"])
         ],
     )
 
 
-def role_binding(namespace: str):
-    return V1RoleBinding(
+def role_bindings(namespace: str):
+    secret_role_binding = V1RoleBinding(
         api_version="rbac.authorization.k8s.io/v1",
         kind="RoleBinding",
-        metadata=V1ObjectMeta(name="secret-creator-binding", namespace=namespace),
-        subjects=[V1Subject(kind="ServiceAccount", name="secret-creator", namespace=namespace)],
+        metadata=V1ObjectMeta(name="secret-creator-binding2", namespace=namespace),
+        subjects=[V1Subject(kind="ServiceAccount", name="secret-creator2", namespace=namespace)],
         role_ref=V1RoleRef(
-            kind="Role", name="secret-creator-role", api_group="rbac.authorization.k8s.io"
+            kind="Role", name="secret-creator-role2", api_group="rbac.authorization.k8s.io"
+        ),
+    )
+    role_binding = V1RoleBinding(
+        api_version="rbac.authorization.k8s.io/v1",
+        kind="RoleBinding",
+        metadata=V1ObjectMeta(
+            name="pod-service-reader-binding-logoscore2",
+            namespace=namespace,
+        ),
+        subjects=[
+            V1Subject(
+                kind="ServiceAccount",
+                name="secret-creator2",
+                namespace=namespace,
+            )
+        ],
+        role_ref=V1RoleRef(
+            kind="Role", name="pod-service-reader", api_group="rbac.authorization.k8s.io"
+        ),
+    )
+    return [secret_role_binding, role_binding]
+
+
+def service(namespace: str) -> V1Service:
+    return V1Service(
+        api_version="v1",
+        kind="Service",
+        metadata=V1ObjectMeta(name="core-external", namespace=namespace),
+        spec=V1ServiceSpec(
+            type="NodePort",
+            selector={"app": "zerotenkay-core2"},
+            ports=[
+                V1ServicePort(
+                    protocol="TCP",
+                    port=8000,
+                    target_port=8645,
+                )
+            ],
         ),
     )
 
@@ -100,7 +142,7 @@ def apply_logoscore_profile(
 ) -> Self:
     apply_identity(config, name=name, namespace=namespace, app=app)
 
-    config.pod_spec_config.with_service_account_name("secret-creator")
+    config.pod_spec_config.with_service_account_name("secret-creator2")
     config.pod_spec_config.automount_service_account_token = True
     config.pod_spec_config.with_security_context(V1PodSecurityContext(run_as_user=0, fs_group=0))
     config.pod_spec_config.with_dns_service(f"core-nodes-internal.{namespace}.svc.cluster.local")

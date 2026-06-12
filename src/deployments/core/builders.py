@@ -45,7 +45,7 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_replicas(self, replicas: int) -> Self:
-        self.config.replicas = replicas
+        self.config.stateful_set_spec.replicas = replicas
         return self
 
     def with_label(self, key: str, value: str) -> Self:

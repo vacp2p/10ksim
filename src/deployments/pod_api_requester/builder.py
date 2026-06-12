@@ -28,7 +28,7 @@ from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
-from src.deployments.core.kube_utils import dict_to_k8s_object
+from src.deployments.core.k8s_object import dict_to_k8s_object
 
 ScriptMode = Literal["server", "batch"]
 

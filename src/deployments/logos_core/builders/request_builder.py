@@ -21,7 +21,7 @@ from src.deployments.core.configs.container import Image
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.configs.pod import PodConfig
-from src.deployments.core.kube_utils import V1Deployable
+from src.deployments.core.k8s_object import V1Deployable
 from src.deployments.pod_api_requester.builder import NAME, PodApiRequesterBuilder
 
 

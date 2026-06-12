@@ -33,8 +33,8 @@ class ExpConfig(BaseModel):
     muxer: Muxer = "yamux"
     image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
     connect_to: NonNegativeInt = 10
-    network_delay: NonNegativeInt = 0
-    network_jitter: NonNegativeInt = 0
+    network_delay: NonNegativeInt = 30
+    network_jitter: NonNegativeInt = 10
     node_start_delay: NonNegativeInt = 60
 
 

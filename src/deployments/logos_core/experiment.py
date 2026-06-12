@@ -3,14 +3,9 @@
 import asyncio
 import logging
 import traceback
-from argparse import Namespace
-from contextlib import ExitStack
-from typing import Literal, Optional
 
-from kubernetes.client import ApiClient, V1StatefulSet
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
-from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.logos_core.builders.nodes import NodesBuilder
@@ -26,25 +21,12 @@ from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)
 
-Muxer = Literal["yamux", "quic", "mplex"]
-
 
 class ExpConfig(BaseModel):
-    num_nodes: NonNegativeInt = 30
+    num_nodes: NonNegativeInt = 2
     num_messages: NonNegativeInt = 20
-    message_size_bytes: NonNegativeInt = 1000
     delay_cold_start: NonNegativeFloat = 60
     delay_after_publish: NonNegativeFloat = 1
-    muxer: Muxer = "yamux"
-    image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
-    connect_to: NonNegativeInt = 10
-    network_delay: NonNegativeInt = 0
-    network_jitter: NonNegativeInt = 0
-    node_start_delay: NonNegativeInt = 60
-
-
-def build_logoscore_nodes(namespace: str) -> V1StatefulSet:
-    return NodesBuilder().with_config(namespace).build()
 
 
 _LOGOSCORE_PUBLISHER = {
@@ -121,7 +103,7 @@ async def init_token(namespace, name_with_index):
 
 
 @experiment(name="core")
-class NimLibp2pExperiment(BaseExperiment, BaseModel):
+class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
@@ -132,25 +114,14 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
-    async def _run(
-        self,
-        api_client: ApiClient,
-        workdir: str,
-        args: Namespace,
-        values_yaml: Optional[dict],
-        stack: ExitStack,
-    ):
+    async def _run(self):
         self.log_event("run_start")
-
-        config = ExpConfig(**values_yaml)
-
-        self.log_metadata({"params": vars(config)})
 
         publisher_builder = (
             LogoscorePodApiRequester()
-            .with_namespace(args.namespace)
+            .with_namespace(self.namespace)
             .with_mode("server")
-            .with_logoscore_profile(args.namespace)
+            .with_logoscore_profile(self.namespace)
         )
 
         dependencies = publisher_builder.build_dependencies()
@@ -160,44 +131,34 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
                 logger.info(f"{dep.metadata.namespace}")
                 logger.info(f"{dep.metadata.name}")
                 logger.info(f"{type(dep.metadata)}")
-                # import pdb; pdb.set_trace()
-                await self.deploy(
-                    api_client, stack, args, values_yaml, deployment=dep, wait_for_ready=True
-                )
+                await self.deploy(deployment=dep, wait_for_ready=True)
 
-        await self.deploy(
-            api_client,
-            stack,
-            args,
-            values_yaml,
-            deployment=publisher_builder.build(),
-            wait_for_ready=True,
+        await self.deploy(deployment=publisher_builder.build(), wait_for_ready=True)
+
+        nodes_builder = (
+            NodesBuilder()
+            .with_config(namespace=self.namespace)
+            .with_replicas(self.config.num_nodes)
         )
+        nodes = nodes_builder.build()
+        await self.deploy(deployment=nodes, wait_for_ready=True)
+        nodes_deps = nodes_builder.build_dependencies()
+        for _kind, deps in nodes_deps.items():
+            for dep in deps:
+                await self.deploy(deployment=dep, wait_for_ready=True)
 
-        nodes = build_logoscore_nodes(args.namespace)
-        await self.deploy(
-            api_client,
-            stack,
-            args,
-            values_yaml,
-            deployment=nodes,
-            wait_for_ready=True,
-        )
-
-        logger.info(f"Waiting for cold_start_delay: {config.delay_cold_start}")
-        await asyncio.sleep(config.delay_cold_start)
+        logger.info(f"Waiting for cold_start_delay: {self.config.delay_cold_start}")
+        await asyncio.sleep(self.config.delay_cold_start)
 
         name = nodes.metadata.name
         self.log_event("init_logoscore_nodes")
-        config.num_nodes = 2  # TODO
-        for index in range(config.num_nodes):
+        for index in range(self.config.num_nodes):
             indexed_name = f"{name}-{index}"
             try:
-                await init_token(args.namespace, indexed_name)
+                await init_token(self.namespace, indexed_name)
             except Exception as e:
                 logger.error(f"e: {e}")
-            await init_node(args.namespace, indexed_name)
-            await asyncio.sleep(config.delay_after_publish)
+            await init_node(self.namespace, indexed_name)
 
         # logger.info(f"Starting publish loop for nodes in `{name}`")
         # self.log_event("start_messages")
@@ -205,6 +166,7 @@ class NimLibp2pExperiment(BaseExperiment, BaseModel):
         #     index = random.randint(0, config.num_nodes - 1)
         #     random_name = f"{name}-{index}"
         #     self.log_event({"event": "publish", "node": random_name, "index": msg_index})
+        #     await asyncio.sleep(self.config.delay_after_publish)
         # self.log_event("publisher_messages_finished")
 
         await asyncio.sleep(20)

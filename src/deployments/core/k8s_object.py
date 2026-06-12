@@ -4,11 +4,7 @@ from typing import Any, Literal, Union
 
 from kubernetes import client
 from kubernetes.client import (
-    V1Role,
-    V1ServiceAccount,
     V1ConfigMap,
-    V1Service,
-    V1RoleBinding,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
@@ -16,6 +12,10 @@ from kubernetes.client import (
     V1Pod,
     V1PodTemplateSpec,
     V1Probe,
+    V1Role,
+    V1RoleBinding,
+    V1Service,
+    V1ServiceAccount,
     V1StatefulSet,
 )
 

@@ -6,7 +6,11 @@ from kubernetes.client import (
     V1EnvVar,
     V1EnvVarSource,
     V1ObjectFieldSelector,
+    V1ObjectMeta,
     V1ResourceRequirements,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
 )
 from pydantic import PrivateAttr
 
@@ -42,8 +46,27 @@ class NodesBuilder(StatefulSetBuilder):
         self._reconcile()
         return self
 
+    def build_dependencies(self) -> dict:
+        service = V1Service(
+            api_version="v1",
+            kind="Service",
+            metadata=V1ObjectMeta(
+                name="core-nodes-internal",
+                namespace=self._namespace,
+            ),
+            spec=V1ServiceSpec(
+                cluster_ip="None",
+                selector={"app": "zerotenkay-core"},
+                ports=[V1ServicePort(port=8645, name="main", target_port=8645)],
+            ),
+        )
+        return {"services": [service]}
+
     def _reconcile(self):
         self.config.stateful_set_spec.with_service_name(self._service_name)
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_service_account_name(
+            "secret-creator2"
+        )
         apply_identity(self.config, self._name, self._namespace, self._app)
         self._ensure_container()
         container_config = find_container_config(self.config, self._container_name)

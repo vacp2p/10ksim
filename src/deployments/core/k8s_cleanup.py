@@ -272,7 +272,7 @@ def poll_namespace_has_objects(
     """
     types = types if types else ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Pod"]
     logger.debug(f"Checking in namespace `{namespace}` for types: `{types}`")
-    v1 = client.CoreV1Api()
+    v1 = client.CoreV1Api(api_client)
     apps_v1 = client.AppsV1Api(api_client)
     batch_v1 = client.BatchV1Api(api_client)
 
@@ -288,7 +288,7 @@ def poll_namespace_has_objects(
         "DaemonSet": lambda: apps_v1.list_namespaced_daemon_set(namespace).items,
         "Job": lambda: batch_v1.list_namespaced_job(namespace).items,
         "ReplicationController": lambda: v1.list_namespaced_replication_controller(namespace).items,
-        "CronJob": lambda: batch_v1.list_namespaced_cron_job(namespace),
+        "CronJob": lambda: batch_v1.list_namespaced_cron_job(namespace).items,
     }
 
     for type, check in resource_checks.items():

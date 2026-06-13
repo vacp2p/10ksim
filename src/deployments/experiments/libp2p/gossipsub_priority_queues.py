@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional
 
 from kubernetes.client import V1Probe, V1ResourceRequirements, V1ServicePort, V1TCPSocketAction
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image

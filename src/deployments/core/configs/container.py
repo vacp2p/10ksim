@@ -106,7 +106,6 @@ def build_container(config: ContainerConfig) -> V1Container:
         resources=deepcopy(config.resources),
         readiness_probe=deepcopy(config.readiness_probe),
         volume_mounts=deepcopy(config.volume_mounts),
-        security_context=deepcopy(config.security_context),
         command=command,
         args=args,
     )

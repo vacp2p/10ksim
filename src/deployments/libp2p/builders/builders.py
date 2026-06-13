@@ -7,12 +7,12 @@ from pydantic import PositiveInt
 # Project Imports
 from src.deployments.core.builders import StatefulSetBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.configs.helpers import init_container_bandwidth_limit
 from src.deployments.libp2p.builders.helpers import (
     LIBP2P_CONTAINER_NAME,
     find_libp2p_container_config,
 )
 from src.deployments.libp2p.builders.nodes import Nodes
-from src.deployments.core.configs.helpers import init_container_bandwidth_limit
 
 
 class Option:

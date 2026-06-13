@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import List, Optional
 
+import yaml
 from kubernetes.client import V1Probe, V1ResourceRequirements, V1ServicePort, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict
 
@@ -14,7 +15,6 @@ from src.deployments.libp2p.builders.builders import Option as NimLibp2p
 from src.deployments.libp2p.builders.helpers import find_libp2p_container_config
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.registry import experiment
-import yaml
 
 logger = logging.getLogger(__name__)
 

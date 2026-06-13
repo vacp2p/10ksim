@@ -24,7 +24,7 @@ class Option:
     service = "SERVICE"
     max_connections = "MAXCONNECTIONS"
     cold_start_delay = "COLDSTARTDELAY"
-    
+
     # NEW: GossipSub params for priority queues
     gossipsub_d = "GOSSIPSUB_D"
     gossipsub_d_low = "GOSSIPSUB_D_LOW"
@@ -80,7 +80,7 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         config = find_libp2p_container_config(self.config)
         config.image_pull_policy = policy
         return self
-    
+
     # Additional builder methods for advanced mesh configuration and priority queues
     def with_gossipsub_params(
         self,

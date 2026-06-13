@@ -81,7 +81,7 @@ class StatefulSetBuilder(BaseModel):
             delay_container, overwrite=overwrite
         )
         return self
-    
+
     def with_bandwidth_limit(
         self,
         ingress_rate: Optional[str] = None,

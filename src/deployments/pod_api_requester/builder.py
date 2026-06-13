@@ -33,7 +33,7 @@ class PodApiRequesterBuilder(PodBuilder):
     _mode: Optional[ScriptMode] = None
     """Sent to the --mode arg of the api-requester script.
     This must be set through `with_mode` prior to building."""
-    
+
     _restart_policy: Optional[Literal["Always", "OnFailure", "Never"]] = None
     """Restart policy for the pod (for batch mode)."""
 
@@ -80,18 +80,18 @@ class PodApiRequesterBuilder(PodBuilder):
             raise ValueError(
                 f"Script mode must be set using `with_mode` before building. Config: `{self.config}`"
             )
-        
+
         pod = super().build()
-        
+
         # Apply restart policy if set, or auto-set for batch mode
         if self._restart_policy:
             pod.spec.restart_policy = self._restart_policy
         elif self._mode == "batch":
             # Batch mode should not restart on completion
             pod.spec.restart_policy = "Never"
-        
+
         return pod
-    
+
     def with_image_override(self, image: Image) -> Self:
         """Allow overriding the default publisher image."""
         container = find_container_config(self.config.pod_spec_config, NAME)

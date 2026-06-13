@@ -27,7 +27,7 @@ class GossipsubPriorityQueuesAnalyzer(Analyzer):
     ) -> Self:
         """
         Add message delivery delay analysis check.
-        
+
         Args:
             stateful_sets: List of StatefulSet names (e.g., ["nimp2p", "nimp2p-slow"])
             nodes_per_ss: List of node counts per StatefulSet
@@ -205,4 +205,3 @@ class GossipsubPriorityQueuesAnalyzer(Analyzer):
         fig.savefig(path, dpi=120)
         plt.close(fig)
         logger.info(f"Saved delay boxplot: {path}")
-

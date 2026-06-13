@@ -171,7 +171,8 @@ def init_container_delay(
             f"tc qdisc add dev eth0 root netem delay {str(delay)}ms {str(jitter)}ms distribution normal",
         ],
     )
-    
+
+
 def init_container_bandwidth_limit(
     ingress_rate: Optional[str] = None,
     egress_rate: Optional[str] = None,
@@ -180,46 +181,48 @@ def init_container_bandwidth_limit(
 ) -> V1Container:
     """
     Create init container for limiting bandwidth using tc with TBF (Token Bucket Filter).
-    
+
     For ingress limiting, uses IFB device for proper queuing/buffering instead of policing.
     Requires IFB module loaded on host (modprobe ifb).
-    
+
     Args:
         ingress_rate: Download limit (e.g., "512kbit", "1mbit")
-        egress_rate: Upload limit (e.g., "512kbit", "1mbit")  
+        egress_rate: Upload limit (e.g., "512kbit", "1mbit")
         burst: Token bucket burst size
         latency: Maximum queuing delay (determines queue depth with rate)
-        
+
     Returns:
         V1Container configured to set up tc bandwidth limits with proper buffering
     """
     commands = []
-    
+
     if ingress_rate:
         # Ingress limiting with IFB for proper queuing/buffering
-        commands.extend([
-            "ip link add ifb0 type ifb",
-            "ip link set ifb0 up",
-            "tc qdisc add dev eth0 handle ffff: ingress",
-            "tc filter add dev eth0 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0",
-            f"tc qdisc add dev ifb0 root tbf rate {ingress_rate} burst {burst} latency {latency}",
-        ])
-    
+        commands.extend(
+            [
+                "ip link add ifb0 type ifb",
+                "ip link set ifb0 up",
+                "tc qdisc add dev eth0 handle ffff: ingress",
+                "tc filter add dev eth0 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0",
+                f"tc qdisc add dev ifb0 root tbf rate {ingress_rate} burst {burst} latency {latency}",
+            ]
+        )
+
     if egress_rate:
         # Egress limiting with TBF
         commands.append(
             f"tc qdisc add dev eth0 root tbf rate {egress_rate} burst {burst} latency {latency}"
         )
-    
+
     full_command = " && ".join(commands)
-    
+
     return V1Container(
         name="setup-bandwidth-limit",
         image="soutullostatus/tc-container:1",
         image_pull_policy="IfNotPresent",
         security_context=V1SecurityContext(
             privileged=True,  # Required to create virtual network devices
-            capabilities=V1Capabilities(add=["NET_ADMIN"])
+            capabilities=V1Capabilities(add=["NET_ADMIN"]),
         ),
         command=[full_command],
     )

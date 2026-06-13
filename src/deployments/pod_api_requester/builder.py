@@ -34,6 +34,9 @@ class PodApiRequesterBuilder(PodBuilder):
     """Sent to the --mode arg of the api-requester script.
     This must be set through `with_mode` prior to building."""
 
+    _restart_policy: Optional[Literal["Always", "OnFailure", "Never"]] = None
+    """Restart policy for the pod (for batch mode)."""
+
     def build_role(self) -> V1Role:
         return V1Role(
             api_version="rbac.authorization.k8s.io/v1",
@@ -59,7 +62,7 @@ class PodApiRequesterBuilder(PodBuilder):
             role_ref=V1RoleRef(
                 kind="Role",
                 name="pod-service-reader",
-                apiGroup="rbac.authorization.k8s.io",
+                api_group="rbac.authorization.k8s.io",
             ),
             subjects=[
                 {
@@ -77,7 +80,41 @@ class PodApiRequesterBuilder(PodBuilder):
             raise ValueError(
                 f"Script mode must be set using `with_mode` before building. Config: `{self.config}`"
             )
-        return super().build()
+
+        pod = super().build()
+
+        # Apply restart policy if set, or auto-set for batch mode
+        if self._restart_policy:
+            pod.spec.restart_policy = self._restart_policy
+        elif self._mode == "batch":
+            # Batch mode should not restart on completion
+            pod.spec.restart_policy = "Never"
+
+        return pod
+
+    def with_image_override(self, image: Image) -> Self:
+        """Allow overriding the default publisher image."""
+        container = find_container_config(self.config.pod_spec_config, NAME)
+        container.with_image(image, overwrite=True)
+        return self
+
+    def with_restart_policy(self, policy: Literal["Always", "OnFailure", "Never"]) -> Self:
+        """Set pod restart policy (for batch mode, use 'Never')."""
+        self._restart_policy = policy
+        return self
+
+    def with_name(self, name: str) -> Self:
+        """Set pod name."""
+        self.config.name = name
+        return self
+
+    def with_config_map(self, configmap_name: str) -> Self:
+        """Set the ConfigMap name for the api-requester config."""
+        for volume in self.config.pod_spec_config.volumes:
+            if volume.name == "api-requester-config-volume":
+                volume.config_map = V1ConfigMapVolumeSource(name=configmap_name)
+                break
+        return self
 
     def with_namespace(self, namespace: str) -> Self:
         self.config = create_pod_config(namespace=namespace)

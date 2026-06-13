@@ -17,7 +17,11 @@ from pydantic import BaseModel, Field, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
-from src.deployments.core.configs.helpers import init_container_delay, with_image_for_container
+from src.deployments.core.configs.helpers import (
+    init_container_bandwidth_limit,
+    init_container_delay,
+    with_image_for_container,
+)
 from src.deployments.core.configs.pod import (
     PodConfig,
     PodSpecConfig,
@@ -78,6 +82,27 @@ class StatefulSetBuilder(BaseModel):
         )
         return self
 
+    def with_bandwidth_limit(
+        self,
+        ingress_rate: Optional[str] = None,
+        egress_rate: Optional[str] = None,
+        burst: str = "32kbit",
+        *,
+        overwrite: bool = False,
+    ) -> Self:
+        """Add bandwidth limit via tc in init container."""
+        if not ingress_rate and not egress_rate:
+            return self
+        bw_container = init_container_bandwidth_limit(
+            ingress_rate=ingress_rate,
+            egress_rate=egress_rate,
+            burst=burst,
+        )
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
+            bw_container, overwrite=overwrite
+        )
+        return self
+
     def build(self) -> V1StatefulSet:
         return build_stateful_set(self.config)
 
@@ -116,6 +141,11 @@ class ServiceBuilder(BaseModel):
         if self.config.service_spec.ports is None:
             self.config.service_spec.ports = []
         self.config.service_spec.ports.append(port)
+        return self
+
+    def with_publish_not_ready_addresses(self, value: bool = True) -> Self:
+        """Set publishNotReadyAddresses for headless services."""
+        self.config.service_spec.publish_not_ready_addresses = value
         return self
 
     def build(self) -> V1Service:

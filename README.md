@@ -125,5 +125,11 @@ make check
 ### Running tests locally
 
 ```shell
-uv run python -m unittest discover -s src -p "test_*.py" -v
+uv run pytest
+```
+
+To include a coverage report:
+
+```shell
+uv run pytest --cov=src --cov-report=term-missing
 ```

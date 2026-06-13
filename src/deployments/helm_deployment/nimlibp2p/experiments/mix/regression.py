@@ -23,17 +23,13 @@ from src.deployments.core.base_bridge import (
     get_valid_shifted_times,
     parse_events_log,
 )
-from src.deployments.core.kube_utils import (
-    dict_get,
-    dict_set,
-    get_cleanup,
-    get_future_time,
-    kubectl_apply,
-    wait_for_time,
-)
+from src.deployments.core.k8s_cleanup import get_cleanup
+from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.helm_deployment.builders import build_deployment
 from src.deployments.registry import experiment
+from src.utils.dict_utils import dict_get, dict_set
+from src.utils.time_utils import get_future_time, wait_for_time
 
 logger = logging.getLogger(__name__)
 

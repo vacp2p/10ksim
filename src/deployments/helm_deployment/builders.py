@@ -9,7 +9,8 @@ from ruamel.yaml import YAMLObject
 from ruamel.yaml.comments import CommentedMap
 
 # Project Imports
-from src.deployments.core.kube_utils import get_values_yamls, get_YAML, helm_build_dir
+from src.utils.helm_utils import get_values_yamls, helm_build_dir
+from src.utils.yaml_utils import get_YAML
 
 logger = logging.getLogger(__name__)
 

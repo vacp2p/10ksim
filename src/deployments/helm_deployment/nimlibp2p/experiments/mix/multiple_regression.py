@@ -10,11 +10,12 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict
 
-# Project Imports
-from src.deployments.core.kube_utils import dict_get, dict_set
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.helm_deployment.nimlibp2p.experiments.mix.regression import NimMixNodes
 from src.deployments.registry import experiment
+
+# Project Imports
+from src.utils.dict_utils import dict_get, dict_set
 
 logger = logging.getLogger(__name__)
 

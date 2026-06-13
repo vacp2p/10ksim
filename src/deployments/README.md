@@ -36,8 +36,9 @@ Here we use the values.yaml already in the deployment folder, which already has 
 
 # Structure
 Essentially, this script consists of several parts:
-- `kube_utils.py` - A bunch of utilities for interacting with kubernetes
-                    and a few misc utilities as well.
+- `deployments/core/k8s_*.py` - Utilities for interacting with kubernetes
+                                (rollout, cleanup, apply, object conversion, config).
+- `utils/` - Generic helpers reusable across the repo (dict, time, yaml, helm, cli).
 - `deployment.py` - Parses common parameters, does a small amount of setup, and selects experiment type.
 - `deployments/` - Contains experiments and helm template info
 

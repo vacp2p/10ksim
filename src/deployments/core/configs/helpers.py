@@ -10,7 +10,7 @@ from src.deployments.core.configs.command import CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from src.deployments.core.kube_utils import dict_to_k8s_object
+from src.deployments.core.k8s_object import dict_to_k8s_object
 
 T = TypeVar("T")
 _sentinel = object()
@@ -127,6 +127,7 @@ def v1container_to_container_config(v1container: V1Container) -> ContainerConfig
     container_config = ContainerConfig(
         name=v1container.name,
         image=Image.from_str(v1container.image) if v1container.image else None,
+        security_context=v1container.security_context,
         ports=deepcopy(v1container.ports),
         env=deepcopy(v1container.env),
         volume_mounts=deepcopy(v1container.volume_mounts),

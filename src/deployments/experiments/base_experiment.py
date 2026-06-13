@@ -19,6 +19,8 @@ from kubernetes.client import (
     V1Job,
     V1Pod,
     V1PodTemplateSpec,
+    V1Role,
+    V1RoleBinding,
     V1Service,
     V1StatefulSet,
 )
@@ -49,6 +51,8 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
+    V1Role,
+    V1RoleBinding,
 ]
 
 

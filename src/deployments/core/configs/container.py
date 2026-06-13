@@ -7,6 +7,7 @@ from kubernetes.client import (
     V1EnvVar,
     V1Probe,
     V1ResourceRequirements,
+    V1SecurityContext,
     V1VolumeMount,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -44,6 +45,7 @@ class ContainerConfig(BaseModel):
     image: Optional[Image] = None
     ports: Optional[List[V1ContainerPort]] = None
     image_pull_policy: Literal["IfNotPresent", "Always", "Never"]
+    security_context: Optional[V1SecurityContext] = None
 
     def with_image(self, image: Image, *, overwrite: bool = False):
         if self.image is not None and not overwrite:
@@ -102,6 +104,7 @@ def build_container(config: ContainerConfig) -> V1Container:
         resources=deepcopy(config.resources),
         readiness_probe=deepcopy(config.readiness_probe),
         volume_mounts=deepcopy(config.volume_mounts),
+        security_context=deepcopy(config.security_context),
         command=command,
         args=args,
     )

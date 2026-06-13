@@ -1,5 +1,5 @@
 # Python Imports
-from typing import List, Literal, Self
+from typing import List, Literal, Optional, Self
 
 from kubernetes.client import V1EnvVar, V1Probe, V1StatefulSet
 from pydantic import PositiveInt
@@ -12,6 +12,7 @@ from src.deployments.libp2p.builders.helpers import (
     find_libp2p_container_config,
 )
 from src.deployments.libp2p.builders.nodes import Nodes
+from src.deployments.core.configs.helpers import init_container_bandwidth_limit
 
 
 class Option:
@@ -24,7 +25,7 @@ class Option:
     max_connections = "MAXCONNECTIONS"
     cold_start_delay = "COLDSTARTDELAY"
     
-    # NEW: GossipSub mesh params for pritority queues
+    # NEW: GossipSub params for priority queues
     gossipsub_d = "GOSSIPSUB_D"
     gossipsub_d_low = "GOSSIPSUB_D_LOW"
     gossipsub_d_high = "GOSSIPSUB_D_HIGH"
@@ -78,4 +79,68 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
     def with_pull_policy(self, policy: Literal["IfNotPresent", "Always", "Never"]) -> Self:
         config = find_libp2p_container_config(self.config)
         config.image_pull_policy = policy
+        return self
+    
+    # Additional builder methods for advanced mesh configuration and priority queues
+    def with_gossipsub_params(
+        self,
+        d: int,
+        d_low: int,
+        d_high: int,
+        d_out: Optional[int] = None,
+        d_lazy: Optional[int] = None,
+    ) -> Self:
+        """Configure GossipSub mesh parameters."""
+        self.with_option(Option.gossipsub_d, d)
+        self.with_option(Option.gossipsub_d_low, d_low)
+        self.with_option(Option.gossipsub_d_high, d_high)
+        if d_out is not None:
+            self.with_option(Option.gossipsub_d_out, d_out)
+        if d_lazy is not None:
+            self.with_option(Option.gossipsub_d_lazy, d_lazy)
+        return self
+
+    def with_priority_queues(
+        self,
+        high: int = 256,
+        medium: int = 32,
+        low: int = 1024,
+    ) -> Self:
+        """Configure GossipSub priority queue sizes."""
+        self.with_option(Option.max_high_priority_queue, high)
+        self.with_option(Option.max_medium_priority_queue, medium)
+        self.with_option(Option.max_low_priority_queue, low)
+        return self
+
+    def with_slow_peer_penalty(
+        self,
+        weight: float = 0.0,
+        decay: float = 0.2,
+    ) -> Self:
+        """Configure slow peer penalty parameters."""
+        self.with_option(Option.slow_peer_penalty_weight, weight)
+        self.with_option(Option.slow_peer_penalty_decay, decay)
+        return self
+
+    def with_bandwidth_limit(
+        self,
+        ingress_rate: Optional[str] = None,
+        egress_rate: Optional[str] = None,
+        burst: str = "32kbit",
+        latency: str = "400ms",
+        *,
+        overwrite: bool = False,
+    ) -> Self:
+        """Add bandwidth limit via tc in init container."""
+        if not ingress_rate and not egress_rate:
+            return self
+        bw_container = init_container_bandwidth_limit(
+            ingress_rate=ingress_rate,
+            egress_rate=egress_rate,
+            burst=burst,
+            latency=latency,
+        )
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
+            bw_container, overwrite=overwrite
+        )
         return self

@@ -7,9 +7,10 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from collections import defaultdict
 from contextlib import ExitStack
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -22,7 +23,7 @@ from kubernetes.client import (
     V1Service,
     V1StatefulSet,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
@@ -37,6 +38,7 @@ from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.core.k8s_object import k8s_obj_to_dict
 from src.deployments.core.k8s_rollout import wait_for_rollout
 from src.deployments.helm_deployment.builders import build_deployment
+from src.deployments.registry import registry as experiment_registry
 from src.utils.dict_utils import dict_get
 from src.utils.yaml_utils import get_YAML
 
@@ -70,6 +72,8 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    _type: str = PrivateAttr()
+
     out_log_path: Path = Field(default=Path("out.log"))
     events_log_path: Path = Field(default=Path("events.log"))
     metadata_log_path: Path = Field(default=Path("metadata.json"))
@@ -95,6 +99,18 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     _workdir: Optional[Path] = None
     """Path to deployment output folder. Based off of self.output_folder"""
     _stack: Optional[ExitStack]
+
+    @model_validator(mode="after")
+    def set_type(self):
+        self._type = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
+        return self
+
+    def serialize(self) -> Dict[str, Any]:
+        """Serialize this class to a dict, excluding metadata"""
+        return {
+            "_type": self._type,
+            **self.model_dump(exclude={"metadata"}),
+        }
 
     @staticmethod
     def add_args(subparser: ArgumentParser):
@@ -256,9 +272,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
         if out_path.exists():
             logger.warning(f"File already exists. Overwriting {out_path}")
-        logger.info(f"Dumping deployment. name: `{name}` path: `{out_path}`")
-        if out_path.exists():
-            logger.warning(f"File already exists. Overwriting {out_path}")
         os.makedirs(out_path.parent, exist_ok=True)
         with open(out_path, "w") as out_file:
             yaml = get_YAML()
@@ -273,9 +286,20 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     def _dump_metadata(self):
         self.metadata = self._get_metadata()
         self.log_metadata(self.metadata)
+        full_metadata = defaultdict(dict, deepcopy(self.metadata))
+        full_metadata["experiment"]["dump"] = self.serialize()
         out_path = Path(self.metadata_log_path)
         with open(out_path, "a") as out_file:
-            out_file.write(json.dumps(self.metadata, default=str))
+            out_file.write(json.dumps(full_metadata, default=str))
+
+    def _dump_initial_metadata(self):
+        self.log_metadata(
+            {
+                "experiment_name": self.__class__.name,
+                "experiment_class": self.__class__.__name__,
+                "dump": self.serialize(),
+            }
+        )
 
     def _setup_log_paths(self):
         base_out_dir = Path(__file__).parent / "out"
@@ -300,14 +324,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     async def run(self):
         self._deployed.clear()
         self._setup_log_paths()
-        self.log_event(
-            {
-                "event": "metadata",
-                "experiment_name": self.__class__.name,
-                "experiment_class": self.__class__.__name__,
-                "args": vars(self.config),
-            }
-        )
+        self._dump_initial_metadata()
 
         with log_to_path(self.out_log_path):
             with ExitStack() as self._stack:
@@ -353,3 +370,32 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         with open(out_path, "a") as out_file:
             out_file.write(self._preprocess_event(event))
             out_file.write("\n")
+
+
+def experiment_from_metadata(api_client: ApiClient, metadata: dict) -> BaseExperiment:
+    """
+    Deserialize an experiment instance from its metadata by looking up the correct
+    experiment class via the registry and validating the data.
+
+    :param metadata: Full metadata, including metadata["experiment"]["dump"] containing
+    the serialized experiment.
+
+    :rtype: Derived class based on the metadata _type.
+    :returns: An instance of the appropriate BaseExperiment subclass.
+    """
+
+    dump = metadata["experiment"]["dump"]
+    experiment_infos = experiment_registry.get_by_metadata({"type": dump["_type"]})
+    if len(experiment_infos) != 1:
+        raise ValueError(f"Ambiguous experiment type. {experiment_infos}")
+    exp_cls = experiment_infos[0].cls
+    exp = exp_cls.model_validate({"api_client": api_client, **dump})
+    exp.metadata = metadata
+    return exp
+
+
+def read_experiment(api_client: ApiClient, arg: Path | str) -> BaseExperiment:
+    path = Path(arg)
+    with open(path, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+    return experiment_from_metadata(api_client, metadata)

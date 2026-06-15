@@ -489,20 +489,6 @@ class GossipSubPriorityQueuesExperiment(BaseExperiment[ExpConfig]):
         await self.deploy(deployment=burst_publisher, wait_for_ready=False)
 
         self.log_event("dual_publisher_burst_deployed")
-        """Build headless service"""
-        return (
-            ServiceBuilder()
-            .with_name("nimp2p-service")
-            .with_namespace(self.namespace)
-            .with_cluster_ip("None")
-            .with_publish_not_ready_addresses(True)
-            .with_selector("app", "zerotenkay")
-            .with_port(V1ServicePort(name="p2p-quic", port=5000, target_port=5000, protocol="UDP"))
-            .with_port(V1ServicePort(name="p2p-tcp", port=5000, target_port=5000, protocol="TCP"))
-            .with_port(V1ServicePort(name="metrics", port=8008, target_port=8008, protocol="TCP"))
-            .with_port(V1ServicePort(name="publish", port=8645, target_port=8645, protocol="TCP"))
-            .build()
-        )
 
     def _build_normal_nodes(self, image: Image):
         """Normal nodes - no bandwidth limit"""
@@ -520,22 +506,6 @@ class GossipSubPriorityQueuesExperiment(BaseExperiment[ExpConfig]):
         builder.with_option(NimLibp2p.self_trigger, "false")
         builder.with_option(NimLibp2p.service, "nimp2p-service")
         builder.with_option(NimLibp2p.max_connections, "128")
-        builder.with_gossipsub_params(
-            d=self.config.gossipsub_d,
-            d_low=self.config.gossipsub_d_low,
-            d_high=self.config.gossipsub_d_high,
-            d_out=self.config.gossipsub_d_out,
-            d_lazy=self.config.gossipsub_d_lazy,
-        )
-        builder.with_priority_queues(
-            high=self.config.high_queue_size,
-            medium=self.config.medium_queue_size,
-            low=self.config.low_queue_size,
-        )
-        builder.with_slow_peer_penalty(
-            weight=self.config.slow_peer_penalty_weight,
-            decay=self.config.slow_peer_penalty_decay,
-        )
         builder.with_readiness_probe(
             V1Probe(
                 tcp_socket=V1TCPSocketAction(port=8645),
@@ -570,22 +540,6 @@ class GossipSubPriorityQueuesExperiment(BaseExperiment[ExpConfig]):
         builder.with_option(NimLibp2p.self_trigger, "false")
         builder.with_option(NimLibp2p.service, "nimp2p-service")
         builder.with_option(NimLibp2p.max_connections, "128")
-        builder.with_gossipsub_params(
-            d=self.config.gossipsub_d,
-            d_low=self.config.gossipsub_d_low,
-            d_high=self.config.gossipsub_d_high,
-            d_out=self.config.gossipsub_d_out,
-            d_lazy=self.config.gossipsub_d_lazy,
-        )
-        builder.with_priority_queues(
-            high=self.config.high_queue_size,
-            medium=self.config.medium_queue_size,
-            low=self.config.low_queue_size,
-        )
-        builder.with_slow_peer_penalty(
-            weight=self.config.slow_peer_penalty_weight,
-            decay=self.config.slow_peer_penalty_decay,
-        )
         builder.with_readiness_probe(
             V1Probe(
                 tcp_socket=V1TCPSocketAction(port=8645),

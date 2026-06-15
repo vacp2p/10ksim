@@ -17,6 +17,8 @@ from typing import List
 from kubernetes import config
 from kubernetes.client import ApiClient
 
+from src.analysis.mesh_analysis.analyzers.analyzer import Analyzer
+from src.analysis.mesh_analysis.analyzers.libp2p.analyzer import Nimlibp2pAnalyzer
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
 from src.analysis.mesh_analysis.core import analyze_exps
 from src.analysis.metrics.scrapper import Scrapper
@@ -24,6 +26,8 @@ from src.analysis.plotting.metrics_plotter import MetricsPlotter
 from src.analysis.utils.log_utils import init_logger
 from src.deployments.core.k8s_kubeconfig import set_config_file
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
+from src.deployments.experiments.waku import WakuExperiment
+from src.deployments.experiments.waku import ExpConfig as WakuConfig
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -128,28 +132,35 @@ def my_experiments(api_client: ApiClient, namespace: str, out_folder: str) -> Li
             api_client=api_client, config=params, namespace=namespace, output_folder=out_folder
         )
         for params in params_list
-    ]
+    ] + [WakuAnalyzer(api_client=api_client, config=WakuConfig(delay_cold_start=2))]
 
 
-async def process_experiment(metadata: dict | BaseExperiment) -> dict:
-    if isinstance(metadata, BaseExperiment):
-        metadata = metadata.metadata
+async def get_analyzer(exp: BaseExperiment) -> Analyzer:
+    exp_type = type(exp)
+    exp_name = exp.metadata["experiment"]["name"]
+    if exp_type in (NimLibp2pExperiment, WakuExperiment):
+        if isinstance(exp, WakuExperiment):
+            analyzer = WakuAnalyzer()
+        elif isinstance(exp, NimLibp2pExperiment):
+            analyzer = Nimlibp2pAnalyzer()
+        return (
+            analyzer
+            .supports(exp_name)
+            .with_vaclab()
+            .with_metadata(exp.metadata)
+            .with_ss_check_from_metadata()
+            .with_reliability_from_metadata()
+        )
+    else:
+        raise ValueError("Unknown default analyzer for experiment.")
 
-    exp_name = metadata["stack"]["name"]
+
+async def process_experiment(exp: BaseExperiment) -> dict:
+    exp_name = exp.metadata["stack"]["name"]
     logger.info(f"Processing experiment: {exp_name}\n")
-
-    analyzer = (
-        WakuAnalyzer()
-        .supports(metadata["experiment"]["name"])
-        .with_vaclab()
-        .with_metadata(metadata)
-        .with_ss_check_from_metadata()
-        .with_reliability_from_metadata()
-    )
-
-    results_dict = {"metadata": metadata}
+    analyzer = get_analyzer(exp)
+    results_dict = {"metadata": exp.metadata}
     results_dict["results"] = analyzer.run()
-
     return results_dict
 
 

@@ -173,16 +173,6 @@ def get_connmanager_analyzer(metadata) -> Analyzer:
     )
 
 
-def unravel(obj: Any) -> Any:
-    if isinstance(obj, BaseModel):
-        return unravel(obj.model_dump())
-    elif isinstance(obj, dict):
-        return {key: unravel(value) for key, value in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return type(obj)(unravel(item) for item in obj)
-    else:
-        return obj
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

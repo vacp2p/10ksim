@@ -6,9 +6,10 @@ import os
 import sys
 import traceback
 from collections import defaultdict
-from typing import Awaitable, Callable, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
-from log_multi_analysis import unravel
+from pydantic import BaseModel
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -19,6 +20,17 @@ import os
 import traceback
 
 logger = logging.getLogger(__name__)
+
+
+def unravel(obj: Any) -> Any:
+    if isinstance(obj, BaseModel):
+        return unravel(obj.model_dump())
+    elif isinstance(obj, dict):
+        return {key: unravel(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(unravel(item) for item in obj)
+    else:
+        return obj
 
 
 async def analyze_exps(actions: Iterable[Callable[[], Awaitable[dict]]]):

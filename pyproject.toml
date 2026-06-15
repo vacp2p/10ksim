@@ -16,6 +16,9 @@ dependencies = [
     "result>=0.17.0",
     "ruamel-yaml==0.17.21",
     "seaborn>=0.13.2",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "montydb>=2.5.3",
 ]
 
 [dependency-groups]

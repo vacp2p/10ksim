@@ -1,0 +1,135 @@
+# DST Explorer Configuration
+# Global datasources - defined once, referenced by all experiments
+
+datasources:
+  - name: victoria-logs
+    type: VictoriaLogs
+    url: https://vlselect.lab.vac.dev/select/logsql/query
+  
+  - name: victoria-metrics
+    type: Prometheus
+    url: https://metrics.lab.vac.dev/select/0/prometheus/api/v1/
+
+# Experiments - each experiment is a page with multiple panels
+experiments:
+  - id: gossipsub-pq-s1-2026-06-12
+    title: "GossipSub Priority Queues: Medium Queue Overflow"
+    family: libp2p/gossipsub
+    publish: true
+    
+    metadata:
+      scenario: S1
+      namespace: libp2p-lab
+      date: "2026-06-12"
+      num_normal_nodes: 1
+      num_slow_nodes: 1
+      # Stack info for data fetching (from 10ksim metadata.json)
+      statefulsets: ["nimp2p", "nimp2p-slow"]
+      nodes: [1, 1]
+    
+    datasets:
+      - name: message-delays
+        datasource: victoria-logs
+        timeRange:
+          start: "2026-06-12T17:40:30Z"
+          end: "2026-06-12T17:53:02Z"
+        query:
+          namespace: libp2p-lab
+          tracer: nimlibp2p
+          pattern: received
+        schema:
+          - name: timestamp
+            type: datetime
+          - name: pod_name
+            type: string
+          - name: delayMs
+            type: float
+      
+      - name: queue-drops
+        datasource: victoria-metrics
+        timeRange:
+          start: "2026-06-12T17:40:30Z"
+          end: "2026-06-12T17:53:02Z"
+        query:
+          expr: rate(libp2p_gossipsub_priority_queue_dropped_total{priority="medium",namespace="libp2p-lab"}[1m])
+          step: 15s
+          scrapeInterval: 10s
+        schema:
+          - name: timestamp
+            type: datetime
+          - name: instance
+            type: string
+          - name: value
+            type: float
+    
+    panels:
+      - name: delay-boxplot
+        title: Message Delivery Delay Distribution
+        type: boxplot
+        dataset: message-delays
+        publish: true
+        transform:
+          derive:
+            - name: pod_group
+              function: regex_match
+              field: pod_name
+              pattern: ".*slow.*"
+              match: slow
+              no_match: normal
+          groupBy: pod_group
+          value: delayMs
+      
+      - name: medium-queue-drops
+        title: Medium Queue Drops Over Time
+        type: timeseries
+        dataset: queue-drops
+        publish: true
+        transform:
+          x: timestamp
+          y: value
+        style:
+          yLabel: Drops/sec
+
+  - id: nimlibp2p-delay-2026-06-15
+    title: "Nimlibp2p Message Delivery Performance"
+    family: libp2p/nimlibp2p
+    publish: true
+    
+    metadata:
+      namespace: nimlibp2p
+      num_nodes: 20
+      statefulsets: ["nodes"]
+      nodes: [20]
+    
+    datasets:
+      - name: message-delays
+        datasource: victoria-logs
+        timeRange:
+          start: "2026-06-15T10:00:00Z"
+          end: "2026-06-15T10:15:00Z"
+        query:
+          namespace: nimlibp2p
+          tracer: nimlibp2p
+          pattern: received
+        schema:
+          - name: timestamp
+            type: datetime
+          - name: pod_name
+            type: string
+          - name: delayMs
+            type: float
+    
+    panels:
+      - name: delay-by-peer
+        title: Message Delivery Delay by Peer (Top 10)
+        type: boxplot
+        dataset: message-delays
+        publish: true
+        transform:
+          groupBy: pod_name
+          value: delayMs
+          top: 10
+
+
+
+

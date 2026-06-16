@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
+_sentinel = object()
+
 
 class Command(BaseModel):
     pre_command: Optional[str] = None
@@ -192,15 +194,13 @@ class CommandConfig(BaseModel):
             index = len(self.commands)
         self.commands.insert(index, Command(command=command, args=args, multiline=multiline))
 
-    _sentinel = object()
-
-    def find_command(self, command_name: str) -> Command | None:
+    def find_command(self, command_name: str, default: str | object = _sentinel) -> Command | None:
         """Finds the Command for the given command in the ContainerConfig"""
         result = next(
             (command for command in self.commands if command.command == command_name),
-            None,
+            default,
         )
-        if result is CommandConfig._sentinel:
+        if result is _sentinel:
             raise CommandNotFoundError(
                 f"Failed to find command in config. name: `{command_name}` config: `{self}`"
             )

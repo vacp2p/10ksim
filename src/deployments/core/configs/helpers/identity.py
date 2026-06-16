@@ -47,6 +47,6 @@ def apply_identity(config: HigherConfigTypes, name: str, namespace: str, app: Op
     if isinstance(config, PodConfig):
         return apply_pod_config(config, namespace=namespace, name=name, app=app)
     elif isinstance(config, PodTemplateSpecConfig):
-        return apply_pod_template_spec_config(config, namespace=namespace, app=app)
+        return apply_pod_template_spec_config(config, namespace=namespace, name=name, app=app)
 
     raise ValueError(f"Unknown config type: {type(config)}")

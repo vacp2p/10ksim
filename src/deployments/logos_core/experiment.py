@@ -9,6 +9,7 @@ from typing import List, Optional
 from kubernetes.dynamic.exceptions import ApiException
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
+from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.logos_core.builders.nodes import NodesBuilder
@@ -269,12 +270,18 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
         self.log_event("run_start")
         bootstrap_service = "core-bootstrap"
         relay_service = "core-relay"
+        service_account_name = "secret-creator2"
 
         publisher_builder = (
             LogoscorePodApiRequester()
             .with_namespace(self.namespace)
+            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="1-amd"))
             .with_mode("server")
-            .with_logoscore_profile(self.namespace)
+            .with_service_account_name(service_account_name)
+            .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
+            .with_logoscore_profile(
+                self.namespace, name="logoscore-requester", app=_LOGOSCORE_PUBLISHER["app"]
+            )
             .with_dns_search(f"{bootstrap_service}.{self.namespace}.svc.cluster.local")
             .with_dns_search(f"{relay_service}.{self.namespace}.svc.cluster.local")
         )
@@ -296,11 +303,16 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             .with_service_name(bootstrap_service)
             .with_replicas(self.config.num_nodes)
             .with_dns_service([relay_service, bootstrap_service])
+            .with_service_account_name(service_account_name)
         )
         nodes_deps = bootstrap_nodes_builder.build_dependencies()
         for _kind, deps in nodes_deps.items():
             for dep in deps:
-                await self.deploy(deployment=dep, wait_for_ready=True)
+                try:
+                    await self.deploy(deployment=dep, wait_for_ready=True)
+                except Exception as e:
+                    # Ignore duplicate dependencies between bootstrap and relay
+                    raise_unless_already_exists(e)
         bootstrap_nodes = bootstrap_nodes_builder.build()
         await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
 
@@ -331,7 +343,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             .with_service_name(relay_service)
             .with_replicas(self.config.num_nodes)
             .with_dns_service([relay_service, bootstrap_service])
-            # .with_enrs(enrs) # TODO: rm because we're sending from requester
+            .with_service_account_name(service_account_name)
         )
         nodes_deps = relay_nodes_builder.build_dependencies()
         for _kind, deps in nodes_deps.items():

@@ -41,6 +41,11 @@ class NodesBuilder(StatefulSetBuilder):
         self._reconcile()
         return self
 
+    def with_service_account_name(self, service_account_name: str) -> Self:
+        self._service_account_name = service_account_name
+        self._reconcile()
+        return self
+
     def with_dns_service(self, searches) -> Self:
         self._dns_configs.extend(searches)
         self._reconcile()
@@ -77,7 +82,7 @@ class NodesBuilder(StatefulSetBuilder):
             ),
             spec=V1ServiceSpec(
                 cluster_ip="None",
-                selector={"app": "zerotenkay-core"},
+                selector={"app": self._app},
                 ports=[V1ServicePort(port=8645, name="main", target_port=8645)],
             ),
         )
@@ -86,7 +91,7 @@ class NodesBuilder(StatefulSetBuilder):
     def _reconcile(self):
         self.config.stateful_set_spec.with_service_name(self._service_name, overwrite=True)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_service_account_name(
-            "secret-creator2", overwrite=True
+            self._service_account_name, overwrite=True
         )
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.dns_config = None
         for dns in self._dns_configs:
@@ -99,13 +104,6 @@ class NodesBuilder(StatefulSetBuilder):
         container_config = find_container_config(self.config, self._container_name)
         apply_container_config(container_config, self._container_name, self._image, self._enrs)
 
-    def with_container_name(self, container_name: str) -> Self:
-        self._ensure_container()
-        container_config = find_container_config(self.config, self._container_name)
-        self._container_name = container_name
-        container_config.name = self._container_name
-        return self
-
     def _ensure_container(self):
         container_config = find_container_config(self.config, self._container_name, default=None)
         if not container_config:
@@ -116,7 +114,9 @@ class NodesBuilder(StatefulSetBuilder):
 
     def with_image(self, image: Image) -> Self:
         self._image = image
-        self.with_image_in_container(self._container_name, self._image, overwrite=True)
+        self.with_image_in_container(
+            image=self._image, container_name=self._container_name, overwrite=True
+        )
         return self
 
 

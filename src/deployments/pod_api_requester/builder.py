@@ -21,19 +21,18 @@ from kubernetes.client import (
     V1Volume,
     V1VolumeMount,
 )
+from pydantic import PrivateAttr
 
 # Project Imports
 from src.deployments.core.builders import PodBuilder
-from src.deployments.core.configs.command import Command, CommandConfig
+from src.deployments.core.configs.command import Command, CommandConfig, CommandNotFoundError
 from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.helpers.utils import find_container_config
-from src.deployments.core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
+from src.deployments.core.configs.helpers.identity import apply_identity
+from src.deployments.core.configs.helpers.utils import find_container_config, get_config
+from src.deployments.core.configs.pod import PodConfig, PodSpecConfig
 from src.deployments.core.k8s_object import dict_to_k8s_object
 
 ScriptMode = Literal["server", "batch"]
-
-
-NAME = "pod-api-requester-container"
 
 
 class PodApiRequesterBuilder(PodBuilder):
@@ -44,17 +43,57 @@ class PodApiRequesterBuilder(PodBuilder):
     _restart_policy: Optional[Literal["Always", "OnFailure", "Never"]] = None
     """Restart policy for the pod (for batch mode)."""
 
+    _container_name: str = PrivateAttr(default="pod-api-requester-container")
+    _namespace: Optional[str] = PrivateAttr(default=None)
+    _name: Optional[str] = PrivateAttr(default=None)
+    _app: Optional[str] = PrivateAttr(default=None)
+    _pod_service_reader_role_name: str = PrivateAttr(default="pod-service-reader")
+    _pod_service_reader_binding_name: str = PrivateAttr(default="pod-service-reader-binding")
+    _image: Image = PrivateAttr(
+        default_factory=lambda: Image(
+            repo="pearsonwhite/pod-api-requester", tag="10b85bb60895fe63aa8d3f09b24b714f2abce300"
+        )
+    )
+
+    def _ensure_container(self):
+        container_config = find_container_config(self.config, self._container_name, default=None)
+        if not container_config:
+            pod_config = get_config(self.config, PodSpecConfig)
+            pod_config.add_container(
+                ContainerConfig(name=self._container_name, image_pull_policy="IfNotPresent")
+            )
+
+    def with_container_name(self, container_name: str) -> Self:
+        self._ensure_container()
+        container_config = find_container_config(self.config, self._container_name)
+        self._container_name = container_name
+        container_config.name = self._container_name
+        return self
+
+    def with_image(self, image: Image) -> Self:
+        self._ensure_container()
+        self._image = image
+        apply_pod_config(
+            namespace=self._namespace,
+            container_name=self._container_name,
+            image=self._image,
+            config=self.config,
+        )
+        return self
+
     def build_role(self) -> V1Role:
         return V1Role(
             api_version="rbac.authorization.k8s.io/v1",
             kind="Role",
             metadata=V1ObjectMeta(
-                name="pod-service-reader",
+                name=self._pod_service_reader_role_name,
                 namespace=self.config.namespace,
             ),
             rules=[
                 V1PolicyRule(
-                    api_groups=[""], resources=["pods", "services"], verbs=["get", "list", "watch"]
+                    api_groups=[""],
+                    resources=["pods", "services"],
+                    verbs=["get", "list", "watch"],
                 )
             ],
         )
@@ -64,11 +103,12 @@ class PodApiRequesterBuilder(PodBuilder):
             api_version="rbac.authorization.k8s.io/v1",
             kind="RoleBinding",
             metadata=V1ObjectMeta(
-                name="pod-service-reader-binding", namespace=self.config.namespace
+                name=self._pod_service_reader_binding_name,
+                namespace=self.config.namespace,
             ),
             role_ref=V1RoleRef(
                 kind="Role",
-                name="pod-service-reader",
+                name=self._pod_service_reader_role_name,
                 api_group="rbac.authorization.k8s.io",
             ),
             subjects=[
@@ -149,17 +189,26 @@ class PodApiRequesterBuilder(PodBuilder):
         return self
 
     def with_namespace(self, namespace: str) -> Self:
-        self.config = create_pod_config(namespace=namespace)
+        self._namespace = namespace
+        apply_identity(self.config, name=self._name, namespace=self._namespace, app=self._app)
+        self._ensure_container()
+        apply_pod_config(
+            namespace=namespace,
+            container_name=self._container_name,
+            image=self._image,
+            config=self.config,
+        )
         return self
 
     def with_mode(self, mode: ScriptMode) -> Self:
-        container = find_container_config(self.config.pod_spec_config, NAME)
+        self._ensure_container()
+        container = find_container_config(self.config.pod_spec_config, self._container_name)
         apply_command_config(container.command_config, mode=mode)
         self._mode = mode
         return self
 
     def with_command(self, command: str, args: List[str]) -> Self:
-        container_config = find_container_config(self.config.pod_spec_config, NAME)
+        container_config = find_container_config(self.config.pod_spec_config, self._container_name)
         container_config.command_config = CommandConfig(
             commands=[Command(command=command, args=args)]
         )
@@ -187,8 +236,9 @@ class PodApiRequesterBuilder(PodBuilder):
 def apply_command_config(config: CommandConfig, mode: ScriptMode = "server"):
     try:
         command = config.find_command("python")
-    except IndexError as e:
-        raise ValueError(f"pod-api-requester command not found. CommandConfig: `{config}`") from e
+    except CommandNotFoundError as e:
+        config.commands.append(Command(command="python", args=["/app/api_requester.py"]))
+        command = config.find_command("python")
 
     command.add_args(
         [
@@ -199,66 +249,79 @@ def apply_command_config(config: CommandConfig, mode: ScriptMode = "server"):
     )
 
 
-def create_container_config() -> ContainerConfig:
-    config = ContainerConfig(
-        name=NAME,
-        image=Image(
-            repo="pearsonwhite/pod-api-requester", tag="10b85bb60895fe63aa8d3f09b24b714f2abce300"
-        ),
-        image_pull_policy="Always",
-    )
-    config.ports = [
+def apply_container_config(
+    container: ContainerConfig,
+    container_name: str,
+    image: Image,
+    mode: Optional[ScriptMode] = None,
+) -> ContainerConfig:
+    container.name = container_name
+    container.with_image(image=image, overwrite=True)
+
+    container.image_pull_policy = "Always"
+    container.ports = [
         V1ContainerPort(8645),
         V1ContainerPort(8008),
         V1ContainerPort(8080),
     ]
-
-    config.with_volume_mount(V1VolumeMount(name="api-requester-config-volume", mount_path="/mount"))
-    config.command_config = CommandConfig(
-        commands=[Command(command="python", args=["/app/api_requester.py"])]
+    container.with_volume_mount(
+        V1VolumeMount(name="api-requester-config-volume", mount_path="/mount"), overwrite=True
     )
+    if mode is not None:
+        apply_command_config(container.command_config, mode)
 
-    return config
+    return container
 
 
-def create_pod_spec_config(namespace: str) -> PodSpecConfig:
-    config = PodSpecConfig(
-        container_configs=[create_container_config()],
-        dns_config=V1PodDNSConfig(
-            searches=[f"zerotesting-publisher.{namespace}.svc.cluster.local"]
-        ),
-        namespace=namespace,
+def apply_pod_spec_config(
+    namespace: str, container_name: str, image: Image, config: PodSpecConfig
+) -> PodSpecConfig:
+    container = find_container_config(config, container_name)
+    apply_container_config(container, container_name, image)
+    config.dns_config = V1PodDNSConfig(
+        searches=[f"zerotesting-publisher.{namespace}.svc.cluster.local"]
     )
     config.with_volume(
         V1Volume(
             name="api-requester-config-volume",
             config_map=V1ConfigMapVolumeSource(name="api-requester-config"),
-        )
+        ),
+        overwrite=True,
     )
     return config
 
 
-def create_pod_template_spec_config(namespace: str) -> PodTemplateSpecConfig:
-    config = PodTemplateSpecConfig(
-        pod_spec_config=create_pod_spec_config(namespace),
-        namespace=namespace,
-        name="publisher",
-    )
-    config.with_app("zerotenkay-publisher")
-    return config
+# def apply_pod_template_spec_config(
+#     namespace: str, config: PodTemplateSpecConfig
+# ) -> PodTemplateSpecConfig:
+#     config.namespace = namespace
+#     config.name = "publisher"
+#     apply_pod_spec_config(
+#         namespace=namespace,
+#         container_name="pod-api-requester-container",
+#         config=config.pod_spec_config,
+#     )
+#     config.with_app("zerotenkay-publisher")
+#     return config
 
 
-def create_pod_config(namespace: str) -> PodConfig:
-    config = PodConfig(
-        name="publisher",
+def apply_pod_config(
+    namespace: str, container_name: str, image: Image, config: PodConfig
+) -> PodConfig:
+    config.name = "publisher"
+    config.namespace = namespace
+    apply_pod_spec_config(
         namespace=namespace,
-        pod_spec_config=create_pod_spec_config(namespace=namespace),
+        container_name=container_name,
+        image=image,
+        config=config.pod_spec_config,
     )
-    config.with_app("zerotenkay-publisher")
+    config.with_app("zerotenkay-publisher", overwrite=True)
     return config
 
 
 def create_resources() -> V1ResourceRequirements:
     return V1ResourceRequirements(
-        requests={"memory": "64Mi", "cpu": "150m"}, limits={"memory": "600Mi", "cpu": "400m"}
+        requests={"memory": "64Mi", "cpu": "150m"},
+        limits={"memory": "600Mi", "cpu": "400m"},
     )

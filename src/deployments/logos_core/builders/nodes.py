@@ -1,5 +1,5 @@
 # Python Imports
-from typing import Optional, Self
+from typing import List, Optional, Self
 
 from kubernetes.client import (
     V1ContainerPort,
@@ -24,7 +24,7 @@ from src.deployments.core.configs.pod import PodSpecConfig
 
 
 class NodesBuilder(StatefulSetBuilder):
-    _service_name: str = PrivateAttr(default="logos-core-service")
+    _service_name: str = PrivateAttr(default="core-nodes-internal")
     _service_account_name: str = PrivateAttr(default="secret-creator")
     _container_name: str = PrivateAttr(default="logos-core-container")
     _name: str = PrivateAttr(default="logoscore")
@@ -32,7 +32,19 @@ class NodesBuilder(StatefulSetBuilder):
     _image: Image = PrivateAttr(
         default_factory=lambda: Image(repo="pearsonwhite/dst-lc-node", tag="wip3-amd")
     )
+    _enrs: List[str] = PrivateAttr(default_factory=list)
+    _dns_configs = PrivateAttr(default_factory=list)
     _app: str = PrivateAttr(default="zerotenkay-core")
+
+    def with_service_name(self, service_name: str) -> Self:
+        self._service_name = service_name
+        self._reconcile()
+        return self
+
+    def with_dns_service(self, searches) -> Self:
+        self._dns_configs.extend(searches)
+        self._reconcile()
+        return self
 
     def with_config(self, namespace: str, name: Optional[str] = None) -> Self:
         if name is not None:
@@ -46,12 +58,21 @@ class NodesBuilder(StatefulSetBuilder):
         self._reconcile()
         return self
 
+    def with_enrs(
+        self,
+        enrs: List[str],
+    ) -> Self:
+        self._enrs.extend(enrs)
+        self._ensure_container()
+        self._reconcile()
+        return self
+
     def build_dependencies(self) -> dict:
         service = V1Service(
             api_version="v1",
             kind="Service",
             metadata=V1ObjectMeta(
-                name="core-nodes-internal",
+                name=self._service_name,
                 namespace=self._namespace,
             ),
             spec=V1ServiceSpec(
@@ -63,14 +84,20 @@ class NodesBuilder(StatefulSetBuilder):
         return {"services": [service]}
 
     def _reconcile(self):
-        self.config.stateful_set_spec.with_service_name(self._service_name)
+        self.config.stateful_set_spec.with_service_name(self._service_name, overwrite=True)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_service_account_name(
-            "secret-creator2"
+            "secret-creator2", overwrite=True
         )
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.dns_config = None
+        for dns in self._dns_configs:
+            search = f"{dns}.{self._namespace}.svc.cluster.local"
+            self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_service(
+                search, overwrite=True
+            )
         apply_identity(self.config, self._name, self._namespace, self._app)
         self._ensure_container()
         container_config = find_container_config(self.config, self._container_name)
-        apply_container_config(container_config, self._container_name, self._image)
+        apply_container_config(container_config, self._container_name, self._image, self._enrs)
 
     def with_container_name(self, container_name: str) -> Self:
         self._ensure_container()
@@ -94,17 +121,26 @@ class NodesBuilder(StatefulSetBuilder):
 
 
 def apply_container_config(
-    config: ContainerConfig, container_name: str, image: Image
+    config: ContainerConfig, container_name: str, image: Image, enrs: List[str]
 ) -> ContainerConfig:
     config.name = container_name
-    config.with_image(image)
+    config.with_image(image, overwrite=True)
     config.with_port(V1ContainerPort(container_port=8645), overwrite=True)
     config.with_port(V1ContainerPort(container_port=8008), overwrite=True)
     config.with_port(V1ContainerPort(container_port=8080), overwrite=True)
-    config.with_resources(default_resources())
+    config.with_resources(default_resources(), overwrite=True)
 
     # TODO: create readiness probe
     # config.with_readiness_probe()
+
+    for index, enr in enumerate(enrs):
+        config.with_env_var(
+            V1EnvVar(
+                name=f"ENR{index}",
+                value=enr,
+            ),
+            overwrite=True,
+        )
 
     config.with_env_var(
         V1EnvVar(

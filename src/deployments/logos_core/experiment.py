@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 import asyncio
+import json
 import logging
 import traceback
+from typing import List, Optional
 
+from kubernetes.dynamic.exceptions import ApiException
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.experiments.base_experiment import BaseExperiment
@@ -25,7 +28,7 @@ logger = logging.getLogger(__name__)
 class ExpConfig(BaseModel):
     num_nodes: NonNegativeInt = 2
     num_messages: NonNegativeInt = 20
-    delay_cold_start: NonNegativeFloat = 60
+    delay_cold_start: NonNegativeFloat = 2
     delay_after_publish: NonNegativeFloat = 1
 
 
@@ -35,28 +38,18 @@ _LOGOSCORE_PUBLISHER = {
 }
 
 
-async def init_node(namespace, name_with_index):
-    func_params = {
-        "mode": "Core",
-        "clusterId": 42,
-        "relay": "true",
-        "tcpPort": 60000,
-        "numShardsInNetwork": 8,
-        "maxMessageSize": "150KiB",
-        "logLevel": "INFO",
-        "logFormat": "TEXT",
-    }
+async def send(namespace, name_with_index, service_name, topic, message):
     params = {
         "module": "delivery_module",
-        "function": "createNode",
-        "params": func_params,
+        "function": "send",
+        "params": [topic, message],
     }
 
     try:
         target = Target(
             name="pub",
             name_template=name_with_index,
-            service="core-nodes-internal",
+            service=service_name,
             port=8645,
         )
         return await pod_api_request(
@@ -77,12 +70,153 @@ async def init_node(namespace, name_with_index):
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
 
-async def init_token(namespace, name_with_index):
+async def subscribe(namespace, name_with_index, service_name, topic):
+    params = {
+        "module": "delivery_module",
+        "function": "subscribe",
+        "params": topic,
+    }
+
     try:
         target = Target(
             name="pub",
             name_template=name_with_index,
-            service="core-nodes-internal",
+            service=service_name,
+            port=8645,
+        )
+        return await pod_api_request(
+            namespace=namespace,
+            service_name=_LOGOSCORE_PUBLISHER["service_name"],
+            app=_LOGOSCORE_PUBLISHER["app"],
+            url_template="http://{target_ip}:{node_port}/logoscore/call",
+            data={
+                "target": wrap_arg(target),
+                "params": params,
+            },
+        )
+    except PodApiApplicationError as e:
+        logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
+    except PodApiError as e:
+        logger.error(f"PodApiError: {e} {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"Other exception: {e} {traceback.format_exc()}")
+
+
+async def start_node(namespace, name_with_index, service_name):
+    params = {
+        "module": "delivery_module",
+        "function": "start",
+        "params": None,
+    }
+
+    try:
+        target = Target(
+            name="pub",
+            name_template=name_with_index,
+            service=service_name,
+            port=8645,
+        )
+        return await pod_api_request(
+            namespace=namespace,
+            service_name=_LOGOSCORE_PUBLISHER["service_name"],
+            app=_LOGOSCORE_PUBLISHER["app"],
+            url_template="http://{target_ip}:{node_port}/logoscore/call",
+            data={
+                "target": wrap_arg(target),
+                "params": params,
+            },
+        )
+    except PodApiApplicationError as e:
+        logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
+    except PodApiError as e:
+        logger.error(f"PodApiError: {e} {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"Other exception: {e} {traceback.format_exc()}")
+
+
+async def init_node(namespace, name_with_index, service_name, enrs: Optional[List[str]] = None):
+    func_params = {
+        "mode": "Core",
+        "clusterId": 42,
+        "relay": "true",
+        "tcpPort": 60000,
+        "numShardsInNetwork": 8,
+        "maxMessageSize": "150KiB",
+        "logLevel": "INFO",
+        "logFormat": "TEXT",
+    }
+    params = {
+        "module": "delivery_module",
+        "function": "createNode",
+        "params": func_params,
+    }
+    if enrs:
+        func_params["entryNodes"] = enrs
+
+    try:
+        target = Target(
+            name="pub",
+            name_template=name_with_index,
+            service=service_name,
+            port=8645,
+        )
+        return await pod_api_request(
+            namespace=namespace,
+            service_name=_LOGOSCORE_PUBLISHER["service_name"],
+            app=_LOGOSCORE_PUBLISHER["app"],
+            url_template="http://{target_ip}:{node_port}/logoscore/call",
+            data={
+                "target": wrap_arg(target),
+                "params": params,
+            },
+        )
+    except PodApiApplicationError as e:
+        logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
+    except PodApiError as e:
+        logger.error(f"PodApiError: {e} {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"Other exception: {e} {traceback.format_exc()}")
+
+
+async def get_enr(namespace, name_with_index, bootstrap_service) -> str:
+    params = {
+        "module": "delivery_module",
+        "function": "getNodeInfo",
+        "params": "MyENR",
+    }
+    try:
+        target = Target(
+            name="pub",
+            name_template=name_with_index,
+            service=bootstrap_service,
+            port=8645,
+        )
+        request = await pod_api_request(
+            namespace=namespace,
+            service_name=_LOGOSCORE_PUBLISHER["service_name"],
+            app=_LOGOSCORE_PUBLISHER["app"],
+            url_template="http://{target_ip}:{node_port}/logoscore/call",
+            data={
+                "target": wrap_arg(target),
+                "params": params,
+            },
+        )
+        response_obj = json.loads(request["response"]["text"])
+        return response_obj["value"]
+    except PodApiApplicationError as e:
+        logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
+    except PodApiError as e:
+        logger.error(f"PodApiError: {e} {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"Other exception: {e} {traceback.format_exc()}")
+
+
+async def init_token(namespace, name_with_index, service_name):
+    try:
+        target = Target(
+            name="pub",
+            name_template=name_with_index,
+            service=service_name,
             port=8645,
         )
         return await pod_api_request(
@@ -102,8 +236,25 @@ async def init_token(namespace, name_with_index):
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
 
+def raise_unless_already_exists(e):
+    if not hasattr(e, "api_exceptions"):
+        raise e
+    all_already_exist = True
+    for api_exception in e.api_exceptions:
+        if isinstance(api_exception, ApiException):
+            if not (api_exception.status == 409 and api_exception.reason == "AlreadyExists"):
+                all_already_exist = False
+                break
+        else:
+            all_already_exist = False
+            return
+
+    if not all_already_exist:
+        raise e
+
+
 @experiment(name="core")
-class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
+class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
@@ -116,12 +267,16 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
     async def _run(self):
         self.log_event("run_start")
+        bootstrap_service = "core-bootstrap"
+        relay_service = "core-relay"
 
         publisher_builder = (
             LogoscorePodApiRequester()
             .with_namespace(self.namespace)
             .with_mode("server")
             .with_logoscore_profile(self.namespace)
+            .with_dns_search(f"{bootstrap_service}.{self.namespace}.svc.cluster.local")
+            .with_dns_search(f"{relay_service}.{self.namespace}.svc.cluster.local")
         )
 
         dependencies = publisher_builder.build_dependencies()
@@ -135,39 +290,86 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await self.deploy(deployment=publisher_builder.build(), wait_for_ready=True)
 
-        nodes_builder = (
+        bootstrap_nodes_builder = (
             NodesBuilder()
-            .with_config(namespace=self.namespace)
+            .with_config(namespace=self.namespace, name="bootstrap-nodes")
+            .with_service_name(bootstrap_service)
             .with_replicas(self.config.num_nodes)
+            .with_dns_service([relay_service, bootstrap_service])
         )
-        nodes = nodes_builder.build()
-        await self.deploy(deployment=nodes, wait_for_ready=True)
-        nodes_deps = nodes_builder.build_dependencies()
+        nodes_deps = bootstrap_nodes_builder.build_dependencies()
         for _kind, deps in nodes_deps.items():
             for dep in deps:
                 await self.deploy(deployment=dep, wait_for_ready=True)
+        bootstrap_nodes = bootstrap_nodes_builder.build()
+        await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
 
         logger.info(f"Waiting for cold_start_delay: {self.config.delay_cold_start}")
         await asyncio.sleep(self.config.delay_cold_start)
 
-        name = nodes.metadata.name
-        self.log_event("init_logoscore_nodes")
+        bootstrap_name = bootstrap_nodes.metadata.name
+        self.log_event("init_bootstrap_nodes")
         for index in range(self.config.num_nodes):
-            indexed_name = f"{name}-{index}"
+            indexed_name = f"{bootstrap_name}-{index}"
             try:
-                await init_token(self.namespace, indexed_name)
+                await init_token(self.namespace, indexed_name, bootstrap_service)
             except Exception as e:
                 logger.error(f"e: {e}")
-            await init_node(self.namespace, indexed_name)
+            await init_node(self.namespace, indexed_name, bootstrap_service)
 
-        # logger.info(f"Starting publish loop for nodes in `{name}`")
-        # self.log_event("start_messages")
-        # for msg_index in range(config.num_messages):
-        #     index = random.randint(0, config.num_nodes - 1)
-        #     random_name = f"{name}-{index}"
-        #     self.log_event({"event": "publish", "node": random_name, "index": msg_index})
-        #     await asyncio.sleep(self.config.delay_after_publish)
-        # self.log_event("publisher_messages_finished")
+        # Get bootstrap ENRs
+        enrs = []
+        for index in range(self.config.num_nodes):
+            indexed_name = f"{bootstrap_name}-{index}"
+            enr = await get_enr(self.namespace, indexed_name, bootstrap_service)
+            logger.info(f"grabbed enr: {enr}")
+            enrs.append(enr)
+
+        relay_nodes_builder = (
+            NodesBuilder()
+            .with_config(namespace=self.namespace)
+            .with_service_name(relay_service)
+            .with_replicas(self.config.num_nodes)
+            .with_dns_service([relay_service, bootstrap_service])
+            # .with_enrs(enrs) # TODO: rm because we're sending from requester
+        )
+        nodes_deps = relay_nodes_builder.build_dependencies()
+        for _kind, deps in nodes_deps.items():
+            for dep in deps:
+                try:
+                    await self.deploy(deployment=dep, wait_for_ready=True)
+                except Exception as e:
+                    # Ignore duplicate dependencies between bootstrap and relay
+                    raise_unless_already_exists(e)
+
+        self.log_event("init_relay_nodes")
+        relay_nodes = relay_nodes_builder.build()
+        relay_name = relay_nodes.metadata.name
+        await self.deploy(deployment=relay_nodes, wait_for_ready=True)
+        for index in range(self.config.num_nodes):
+            indexed_name = f"{relay_name}-{index}"
+            try:
+                await init_token(self.namespace, indexed_name, relay_service)
+            except Exception as e:
+                logger.error(f"e: {e}")
+            await init_node(self.namespace, indexed_name, relay_service, enrs)
+
+        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
+            for index in range(self.config.num_nodes):
+                indexed_name = f"{name}-{index}"
+                await start_node(self.namespace, indexed_name, relay_service)
+
+        topic = "/my-app/1/dst/proto"
+        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
+            for index in range(self.config.num_nodes):
+                indexed_name = f"{name}-{index}"
+                await subscribe(self.namespace, indexed_name, service, topic)
+
+        message = "aGVsbG8="  # Test message
+        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
+            for index in range(self.config.num_nodes):
+                indexed_name = f"{name}-{index}"
+                await send(self.namespace, indexed_name, service, topic, message)
 
         await asyncio.sleep(20)
         self.log_event("publisher_wait_finished")

@@ -156,7 +156,7 @@ def apply_logoscore_profile(
             requests={"memory": "1Gi", "cpu": "500m"}, limits={"memory": "4Gi", "cpu": "2000m"}
         )
     )
-    logoscore_image = Image(repo="pearsonwhite/dst-lc-api", tag="wip2b-amd")
+    logoscore_image = Image(repo="pearsonwhite/dst-lc-api", tag="1-amd")
     container_config.with_image(logoscore_image, overwrite=True)
     if debug:
         container_config.with_env_var(V1EnvVar(name="LOGGING_LEVEL", value="DEBUG"), overwrite=True)

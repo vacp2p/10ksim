@@ -291,20 +291,6 @@ def apply_pod_spec_config(
     return config
 
 
-# def apply_pod_template_spec_config(
-#     namespace: str, config: PodTemplateSpecConfig
-# ) -> PodTemplateSpecConfig:
-#     config.namespace = namespace
-#     config.name = "publisher"
-#     apply_pod_spec_config(
-#         namespace=namespace,
-#         container_name="pod-api-requester-container",
-#         config=config.pod_spec_config,
-#     )
-#     config.with_app("zerotenkay-publisher")
-#     return config
-
-
 def apply_pod_config(
     namespace: str, container_name: str, image: Image, config: PodConfig
 ) -> PodConfig:

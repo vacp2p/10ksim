@@ -21,7 +21,7 @@ class StatefulSetSpecConfig(BaseModel):
     replicas: Optional[int] = 1
     selector_labels: Optional[Dict[str, str]] = None
     service_name: Optional[str] = None
-    pod_template_spec_config: PodTemplateSpecConfig = PodTemplateSpecConfig()
+    pod_template_spec_config: PodTemplateSpecConfig = Field(default_factory=PodTemplateSpecConfig)
     volume_claim_templates: Optional[List[V1PersistentVolumeClaim]] = None
 
     def with_service_name(self, service_name: str, *, overwrite: bool = False):
@@ -49,7 +49,7 @@ class StatefulSetConfig(BaseModel):
     apiVersion: Optional[str] = Field(default="apps/v1")
     kind: Optional[str] = Field(default="StatefulSet")
     labels: Optional[Dict[str, str]] = None
-    stateful_set_spec: StatefulSetSpecConfig = StatefulSetSpecConfig()
+    stateful_set_spec: StatefulSetSpecConfig = Field(default_factory=StatefulSetSpecConfig)
     pod_management_policy: Optional[Literal["Parallel", "OrderedReady"]] = None
 
 

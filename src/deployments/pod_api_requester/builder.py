@@ -165,6 +165,10 @@ class PodApiRequesterBuilder(PodBuilder):
         )
         return self
 
+    def with_dns_search(self, search) -> Self:
+        self.config.pod_spec_config.with_dns_service(search)
+        return self
+
     def with_debug(self) -> Self:
         self._mode = "debug"
         return self.with_command("sleep", args=["infinity"])

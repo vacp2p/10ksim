@@ -11,7 +11,7 @@ def apply_pod_config(config: PodConfig, namespace: str, name: str, app: str):
     config.name = name
     config.namespace = namespace
     if app:
-        config.with_app(app)
+        config.with_app(app, overwrite=True)
 
 
 def apply_pod_template_spec_config(
@@ -20,14 +20,14 @@ def apply_pod_template_spec_config(
     config.name = name
     config.namespace = namespace
     if app:
-        config.with_app(app)
+        config.with_app(app, overwrite=True)
 
 
 def apply_stateful_set_spec_config(
     config: StatefulSetSpecConfig, namespace: str, name: str, app: str
 ):
     if app:
-        config.with_app(app)
+        config.with_app(app, overwrite=True)
     apply_pod_template_spec_config(config.pod_template_spec_config, namespace, name, app)
 
 

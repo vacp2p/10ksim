@@ -80,7 +80,7 @@ def find_container_config(
 
 
 def with_image_for_container(
-    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig,
+    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig | PodConfig,
     image: Image,
     container_name: str,
     *,

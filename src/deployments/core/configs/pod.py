@@ -45,12 +45,13 @@ class PodSpecConfig(BaseModel):
     def with_volume(self, volume: V1Volume, *, overwrite: bool = False):
         if self.volumes is None:
             self.volumes = []
-
-        if not overwrite and volume.name in [item.name for item in self.volumes]:
-            raise ValueError(
-                f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
-            )
-
+        current_volume = next((item for item in self.volumes if item.name == volume.name), None)
+        if current_volume:
+            if not overwrite:
+                raise ValueError(
+                    f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
+                )
+            self.volumes.remove(current_volume)
         self.volumes.append(volume)
 
     def add_init_container(

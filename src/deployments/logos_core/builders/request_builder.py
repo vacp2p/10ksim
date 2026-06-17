@@ -20,7 +20,7 @@ from kubernetes.client import (
 )
 from pydantic import Field, PrivateAttr
 
-from src.deployments.core.configs.container import ContainerConfig, Image
+from src.deployments.core.configs.container import ContainerConfig
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config, get_config
 from src.deployments.core.configs.pod import PodSpecConfig
@@ -30,7 +30,7 @@ from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 
 class LogoscorePodApiRequester(PodApiRequesterBuilder):
     dependencies: Dict[str, Any] = Field(default_factory=dict)
-    _service_account_name: Optional[str] = PrivateAttr(default=None)
+    _service_account_name: str = PrivateAttr(default="secret-creator2")
     _secret_creator_role_name: str = PrivateAttr(default="secret-creator-role2")
     _secret_creator_binding_name: str = PrivateAttr(default="secret-creator-binding2")
     _pod_service_reader_binding_name_logoscore: str = PrivateAttr(
@@ -121,7 +121,7 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
             V1PodSecurityContext(run_as_user=0, fs_group=0), overwrite=True
         )
         self.config.pod_spec_config.with_dns_service(
-            f"core-nodes-internal.{self._namespace}.svc.cluster.local", overwrite=True
+            f"{self._service_name}.{self._namespace}.svc.cluster.local", overwrite=True
         )
 
         container_config = find_container_config(
@@ -147,10 +147,6 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
                 requests={"memory": "1Gi", "cpu": "500m"},
                 limits={"memory": "4Gi", "cpu": "2000m"},
             )
-        )
-        container_config.with_image(
-            Image(repo="pearsonwhite/dst-lc-api", tag="1-amd"),
-            overwrite=True,
         )
 
         if self._debug:

@@ -7,6 +7,7 @@ from kubernetes.client import (
     V1EnvVarSource,
     V1ObjectFieldSelector,
     V1ObjectMeta,
+    V1PodSecurityContext,
     V1ResourceRequirements,
     V1Service,
     V1ServicePort,
@@ -35,6 +36,7 @@ class NodesBuilder(StatefulSetBuilder):
     _enrs: List[str] = PrivateAttr(default_factory=list)
     _dns_configs = PrivateAttr(default_factory=list)
     _app: str = PrivateAttr(default="zerotenkay-core")
+    _debug: bool = PrivateAttr(default=False)
 
     def with_service_name(self, service_name: str) -> Self:
         self._service_name = service_name
@@ -88,6 +90,11 @@ class NodesBuilder(StatefulSetBuilder):
         )
         return {"services": [service]}
 
+    def with_debug(self, is_debug: bool = True) -> Self:
+        self._debug = is_debug
+        self._reconcile()
+        return self
+
     def _reconcile(self):
         self.config.stateful_set_spec.with_service_name(self._service_name, overwrite=True)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_service_account_name(
@@ -99,6 +106,12 @@ class NodesBuilder(StatefulSetBuilder):
             self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_service(
                 search, overwrite=True
             )
+
+        if self._debug:
+            self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_security_context(
+                V1PodSecurityContext(run_as_user=0, fs_group=0), overwrite=True
+            )
+
         apply_identity(self.config, self._name, self._namespace, self._app)
         self._ensure_container()
         container_config = find_container_config(self.config, self._container_name)

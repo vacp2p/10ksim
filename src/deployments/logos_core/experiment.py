@@ -135,7 +135,9 @@ async def start_node(namespace, name_with_index, service_name):
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
 
-async def init_node(namespace, name_with_index, service_name, enrs: Optional[List[str]] = None):
+async def init_node(
+    namespace, name_with_index, service_name, entry_nodes: Optional[List[str]] = None
+):
     func_params = {
         "mode": "Core",
         "clusterId": 42,
@@ -151,8 +153,8 @@ async def init_node(namespace, name_with_index, service_name, enrs: Optional[Lis
         "function": "createNode",
         "params": func_params,
     }
-    if enrs:
-        func_params["entryNodes"] = enrs
+    if entry_nodes:
+        func_params["entryNodes"] = entry_nodes
 
     try:
         target = Target(
@@ -179,17 +181,17 @@ async def init_node(namespace, name_with_index, service_name, enrs: Optional[Lis
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
 
 
-async def get_enr(namespace, name_with_index, bootstrap_service) -> str:
+async def get_address(namespace, name_with_index, service) -> str:
     params = {
         "module": "delivery_module",
         "function": "getNodeInfo",
-        "params": "MyENR",
+        "params": "MyMultiaddresses",
     }
     try:
         target = Target(
             name="pub",
             name_template=name_with_index,
-            service=bootstrap_service,
+            service=service,
             port=8645,
         )
         request = await pod_api_request(
@@ -203,7 +205,10 @@ async def get_enr(namespace, name_with_index, bootstrap_service) -> str:
             },
         )
         response_obj = json.loads(request["response"]["text"])
-        return response_obj["value"]
+        libp2p_ip = response_obj["value"]
+        actual_ip = request["request"]["target"]["ip"]
+        ip = libp2p_ip.replace("127.0.0.1", actual_ip)
+        return ip
     except PodApiApplicationError as e:
         logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
     except PodApiError as e:
@@ -275,7 +280,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
         publisher_builder = (
             LogoscorePodApiRequester()
             .with_namespace(self.namespace)
-            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="1-amd"))
+            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="wip-amd"))
             .with_mode("server")
             .with_service_account_name(service_account_name)
             .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
@@ -330,12 +335,12 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             await init_node(self.namespace, indexed_name, bootstrap_service)
 
         # Get bootstrap ENRs
-        enrs = []
+        addresses = []
         for index in range(self.config.num_nodes):
             indexed_name = f"{bootstrap_name}-{index}"
-            enr = await get_enr(self.namespace, indexed_name, bootstrap_service)
-            logger.info(f"grabbed enr: {enr}")
-            enrs.append(enr)
+            address = await get_address(self.namespace, indexed_name, bootstrap_service)
+            addresses.append(address)
+        logger.info(f"Addresses {addresses}")
 
         relay_nodes_builder = (
             NodesBuilder()
@@ -364,24 +369,22 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                 await init_token(self.namespace, indexed_name, relay_service)
             except Exception as e:
                 logger.error(f"e: {e}")
-            await init_node(self.namespace, indexed_name, relay_service, enrs)
+            await init_node(self.namespace, indexed_name, relay_service, addresses)
 
         for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
             for index in range(self.config.num_nodes):
                 indexed_name = f"{name}-{index}"
-                await start_node(self.namespace, indexed_name, relay_service)
+                await start_node(self.namespace, indexed_name, service)
 
         topic = "/my-app/1/dst/proto"
-        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
-            for index in range(self.config.num_nodes):
-                indexed_name = f"{name}-{index}"
-                await subscribe(self.namespace, indexed_name, service, topic)
+        for index in range(self.config.num_nodes):
+            indexed_name = f"{relay_name}-{index}"
+            await subscribe(self.namespace, indexed_name, relay_service, topic)
 
         message = "aGVsbG8="  # Test message
-        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
-            for index in range(self.config.num_nodes):
-                indexed_name = f"{name}-{index}"
-                await send(self.namespace, indexed_name, service, topic, message)
+        for index in range(self.config.num_nodes):
+            indexed_name = f"{relay_name}-{index}"
+            await send(self.namespace, indexed_name, relay_service, topic, message)
 
         await asyncio.sleep(20)
         self.log_event("publisher_wait_finished")

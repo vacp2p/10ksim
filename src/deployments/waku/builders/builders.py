@@ -6,7 +6,7 @@ from pydantic import PositiveInt
 # Project imports
 from src.deployments.core.builders import StatefulSetBuilder
 from src.deployments.core.configs.container import Image
-from src.deployments.core.configs.helpers import with_container_command_args
+from src.deployments.core.configs.helpers.utils import with_container_command_args
 from src.deployments.waku.builders import bootstrap as WakuBootstrapNode
 from src.deployments.waku.builders import store as Store
 from src.deployments.waku.builders.enr_or_addr import Enr

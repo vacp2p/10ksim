@@ -46,7 +46,7 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_replicas(self, replicas: int) -> Self:
-        self.config.replicas = replicas
+        self.config.stateful_set_spec.replicas = replicas
         return self
 
     def with_label(self, key: str, value: str) -> Self:
@@ -104,6 +104,11 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def build(self) -> V1StatefulSet:
+        if self.config.namespace is None:
+            raise ValueError(
+                "You must set the namespace before building the StatefulSet. "
+                f"config: {self.config}"
+            )
         return build_stateful_set(self.config)
 
 
@@ -201,6 +206,10 @@ class PodSpecBuilder(BaseModel):
 
     def add_init_container(self, init_container: ContainerConfig | V1Container | dict):
         self.config.add_init_container(init_container)
+        return self
+
+    def with_service_account_name(self, name: str, *, overwrite: bool = False) -> Self:
+        self.config.with_service_account_name(name, overwrite=overwrite)
         return self
 
 

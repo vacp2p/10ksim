@@ -53,6 +53,22 @@ class ContainerConfig(BaseModel):
             raise ValueError("Image already exist for container.")
         self.image = image
 
+    def with_port(self, port: V1ContainerPort, *, overwrite: bool = False):
+        if self.ports is None:
+            self.ports = []
+
+        current_port = next(
+            (item for item in self.ports if item.container_port == port.container_port), None
+        )
+        if current_port:
+            if not overwrite:
+                raise ValueError(
+                    "Port already exists for container. " f"Port: `{port}` config: `{self}`"
+                )
+            self.ports.remove(current_port)
+
+        self.ports.append(port)
+
     def with_resources(self, resources: V1ResourceRequirements, *, overwrite: bool = False):
         if self.resources is not None and not overwrite:
             raise ValueError("Resources already exist for container.")
@@ -62,11 +78,14 @@ class ContainerConfig(BaseModel):
         if self.volume_mounts is None:
             self.volume_mounts = []
 
-        if not overwrite and mount.name in [item.name for item in self.volume_mounts]:
-            raise ValueError(
-                f"Volume mount already exists in {type(self)}. "
-                f"volume mount: `{mount}` config: `{self}`"
-            )
+        current_mount = next((item for item in self.volume_mounts if item.name == mount.name), None)
+        if current_mount:
+            if not overwrite:
+                raise ValueError(
+                    f"Volume mount already exists in {type(self)}. "
+                    f"volume mount: `{mount}` config: `{self}`"
+                )
+            self.volume_mounts.remove(current_mount)
 
         self.volume_mounts.append(mount)
 

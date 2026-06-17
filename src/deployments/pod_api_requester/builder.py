@@ -20,7 +20,7 @@ from kubernetes.client import (
 from src.deployments.core.builders import PodBuilder
 from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.helpers import find_container_config
+from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
 
 ScriptMode = Literal["server", "batch"]

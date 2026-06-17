@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
-from src.deployments.core.configs.helpers import (
+from src.deployments.core.configs.helpers.utils import (
     init_container_bandwidth_limit,
     init_container_delay,
     with_image_for_container,

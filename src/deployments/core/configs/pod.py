@@ -7,6 +7,7 @@ from kubernetes.client import (
     V1ObjectMeta,
     V1Pod,
     V1PodDNSConfig,
+    V1PodSecurityContext,
     V1PodSpec,
     V1PodTemplateSpec,
     V1Volume,
@@ -25,12 +26,15 @@ class PodSpecConfig(BaseModel):
     init_containers: Optional[List[ContainerConfig]] = None
     container_configs: List[ContainerConfig] = []
     dns_config: Optional[V1PodDNSConfig] = None
+    service_account_name: Optional[str] = None
+    security_context: Optional[V1PodSecurityContext] = None
+    automount_service_account_token: Optional[bool] = None
 
     def with_dns_service(self, service: str, *, overwrite: bool = False):
         if self.dns_config is None:
             self.dns_config = V1PodDNSConfig(searches=[])
 
-        if service in self.dns_config and not overwrite:
+        if service in self.dns_config.searches and not overwrite:
             raise ValueError(
                 f"The {type(self)} already has dns service. "
                 f"service: `{service}` config: `{self}`"
@@ -52,7 +56,7 @@ class PodSpecConfig(BaseModel):
     def add_init_container(
         self, init_container: ContainerConfig | V1Container | dict, *, overwrite: bool = False
     ):
-        from src.deployments.core.configs.helpers import convert_to_container_config
+        from src.deployments.core.configs.helpers.utils import convert_to_container_config
 
         container_config = convert_to_container_config(init_container)
         if self.init_containers is None:
@@ -73,7 +77,7 @@ class PodSpecConfig(BaseModel):
         order: Literal["prepend", "append"] = "append",
         overwrite: bool = False,
     ):
-        from src.deployments.core.configs.helpers import convert_to_container_config
+        from src.deployments.core.configs.helpers.utils import convert_to_container_config
 
         container_config = convert_to_container_config(container)
 
@@ -91,6 +95,22 @@ class PodSpecConfig(BaseModel):
             self.container_configs.insert(0, container_config)
         else:
             raise ValueError(f"Invalid order. order: `{order}`")
+
+    def with_service_account_name(self, name: str, *, overwrite: bool = False):
+        if self.service_account_name is not None and not overwrite:
+            raise ValueError(
+                f"service_account_name already exists in {type(self)}."
+                f"service_account_name: `{name}` config: `{self}`"
+            )
+        self.service_account_name = name
+
+    def with_security_context(self, context: V1PodSecurityContext, *, overwrite: bool = False):
+        if self.security_context is not None and not overwrite:
+            raise ValueError(
+                f"security_context already exists in {type(self)}."
+                f"security_context: `{context}` config: `{self}`"
+            )
+        self.security_context = context
 
 
 class PodTemplateSpecConfig(BaseModel):
@@ -142,6 +162,9 @@ def build_pod_spec(config: PodSpecConfig) -> V1PodSpec:
         init_containers=deepcopy(init_containers),
         volumes=deepcopy(config.volumes),
         dns_config=deepcopy(config.dns_config),
+        service_account_name=config.service_account_name,
+        security_context=config.security_context,
+        automount_service_account_token=config.automount_service_account_token,
     )
 
 

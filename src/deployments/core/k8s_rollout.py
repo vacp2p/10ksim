@@ -72,8 +72,8 @@ def poll_rollout_status(
         def default_condition(pod: V1Pod):
             return check_pod_condition(pod)
 
-    elif kind == "service":
-        # Services don't have a rollout status, they are immediately available
+    elif kind in ["service", "role", "rolebinding", "serviceaccount", "configmap"]:
+        # These deployments don't have a rollout status, they are immediately available
         return True
 
     else:

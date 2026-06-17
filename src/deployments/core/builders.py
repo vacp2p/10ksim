@@ -42,7 +42,7 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_replicas(self, replicas: int) -> Self:
-        self.config.replicas = replicas
+        self.config.stateful_set_spec.replicas = replicas
         return self
 
     def with_label(self, key: str, value: str) -> Self:
@@ -60,9 +60,9 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_volume_claim_template(self, pvc: V1PersistentVolumeClaim) -> Self:
-        if self.config.volume_claim_templates is None:
-            self.config.volume_claim_templates = []
-        self.config.volume_claim_templates.append(pvc)
+        if self.config.stateful_set_spec.volume_claim_templates is None:
+            self.config.stateful_set_spec.volume_claim_templates = []
+        self.config.stateful_set_spec.volume_claim_templates.append(pvc)
         return self
 
     def with_network_delay(

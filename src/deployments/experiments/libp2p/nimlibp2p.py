@@ -5,7 +5,7 @@ import traceback
 from typing import Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
@@ -44,6 +44,12 @@ class ExpConfig(BaseModel):
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
 
+    @model_validator(mode="after")
+    def _check_bootstrap_nodes(self):
+        if self.discovery == "kad-dht" and self.bootstrap_nodes < 1:
+            raise ValueError("kad-dht discovery requires bootstrap_nodes >= 1")
+        return self
+
 
 def bootstrap_dns(namespace: str) -> str:
     return f"{BOOTSTRAP_NAME}.{namespace}.svc.cluster.local"
@@ -69,14 +75,12 @@ def build_nodes(
         .with_image(params.image)
     )
     if params.discovery == "kad-dht":
-        # Nodes discover each other through the bootstrap node; SERVICE points at it.
         builder = (
             builder.with_option(NimLibp2p.node_role, "RoleNormal")
             .with_option(NimLibp2p.discovery, "kad-dht")
             .with_option(NimLibp2p.service, bootstrap_dns(namespace))
         )
     else:
-        # Legacy static mesh: dial CONNECTTO peers resolved from the headless service.
         builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
             NimLibp2p.connect_to, params.connect_to
         )
@@ -89,8 +93,6 @@ def build_nodes(
 
 
 def build_bootstrap_service(namespace: str):
-    # Headless service selecting only the bootstrap pods (role=bootstrap), so normal
-    # nodes can resolve them by DNS to seed their kad-dht routing tables.
     return (
         ServiceBuilder()
         .with_name(BOOTSTRAP_NAME)
@@ -104,9 +106,8 @@ def build_bootstrap_service(namespace: str):
 
 
 def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
-    # A kad-dht anchor only: no GossipSub, just answers DHT queries. Ready once the
-    # libp2p switch is accepting connections on the p2p port (no topic metrics here,
-    # so the GossipSub readiness probe can't be used).
+    # Every node holds a link to the anchor, so it must accept more than num_nodes.
+    # Probe the metrics port (always TCP, unlike the p2p port under quic).
     return (
         Libp2pStatefulSetBuilder()
         .with_libp2p_config(
@@ -116,9 +117,10 @@ def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
         .with_option(NimLibp2p.node_role, "RoleBootstrap")
         .with_option(NimLibp2p.discovery, "kad-dht")
         .with_option(NimLibp2p.muxer, params.muxer)
+        .with_option(NimLibp2p.max_connections, params.num_nodes + 100)
         .with_readiness_probe(
             V1Probe(
-                tcp_socket=V1TCPSocketAction(port=5000),
+                tcp_socket=V1TCPSocketAction(port=8008),
                 initial_delay_seconds=5,
                 period_seconds=2,
                 failure_threshold=3,

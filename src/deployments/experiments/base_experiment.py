@@ -57,8 +57,8 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
-    V1Role,
-    V1RoleBinding,
+    V1ConfigMap,
+    V1ServiceAccount,
 ]
 
 

@@ -4,7 +4,14 @@ GossipSub Priority Queues Analysis
 Analyzes message delivery delays from pod logs for GossipSub priority queues experiments.
 Uses VictoriaLogs to query pod logs and generates boxplot visualizations.
 
-For metrics (queue lengths, drops, peer scores, bandwidth), use Grafana dashboard.
+For metrics (queue lengths, drops, peer scores, SlowPeer Penalty, SlowPeer Penalty Decay, bandwidth), use Grafana dashboard for now.
+Future work: Queue lengths, drops, peer scores, bandwidth, slowPeer penalties will be analyzed 
+directly from logs once the DST test_node is modified to emit these metrics in log.
+
+Important: Current metrics analysis requires temporarily reducing the VictoriaMetrics scrape interval 
+to 5 seconds. Since SlowPeerPenalties are updated every second and peer scores/queue lengths vary at sub-second 
+timescales, the default 30-second scrape interval is too large to capture meaningful variations.
+
 
 Usage:
     python src/analysis/gossipsub_priority_queues_analysis.py \\

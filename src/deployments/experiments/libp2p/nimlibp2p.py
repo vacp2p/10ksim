@@ -4,9 +4,10 @@ import random
 import traceback
 from typing import Literal
 
-from kubernetes.client import V1StatefulSet
+from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
+from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
@@ -22,6 +23,9 @@ from src.deployments.registry import experiment
 logger = logging.getLogger(__name__)
 
 Muxer = Literal["yamux", "quic", "mplex"]
+Discovery = Literal["static", "kad-dht"]
+
+BOOTSTRAP_NAME = "bootstrap"
 
 
 class ExpConfig(BaseModel):
@@ -32,10 +36,17 @@ class ExpConfig(BaseModel):
     delay_after_publish: NonNegativeFloat = 1
     muxer: Muxer = "yamux"
     image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
+    # "kad-dht" discovers peers through a bootstrap node; "static" uses the CONNECTTO dial.
+    discovery: Discovery = "static"
     connect_to: NonNegativeInt = 10
+    bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
+
+
+def bootstrap_dns(namespace: str) -> str:
+    return f"{BOOTSTRAP_NAME}.{namespace}.svc.cluster.local"
 
 
 def build_nodes(
@@ -52,19 +63,70 @@ def build_nodes(
         )
         .with_option(NimLibp2p.peers, params.num_nodes)
         .with_option(NimLibp2p.self_trigger, True)
-        .with_option(NimLibp2p.service, "nimp2p-service")
         .with_option(NimLibp2p.muxer, params.muxer)
-        .with_option(NimLibp2p.connect_to, params.connect_to)
         .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
         .with_readiness_probe(readiness_probe_metrics())
         .with_image(params.image)
     )
+    if params.discovery == "kad-dht":
+        # Nodes discover each other through the bootstrap node; SERVICE points at it.
+        builder = (
+            builder.with_option(NimLibp2p.node_role, "RoleNormal")
+            .with_option(NimLibp2p.discovery, "kad-dht")
+            .with_option(NimLibp2p.service, bootstrap_dns(namespace))
+        )
+    else:
+        # Legacy static mesh: dial CONNECTTO peers resolved from the headless service.
+        builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
+            NimLibp2p.connect_to, params.connect_to
+        )
     if params.network_delay or params.network_jitter:
         builder = builder.with_network_delay(
             delay=params.network_delay, jitter=params.network_jitter
         )
 
     return builder.build()
+
+
+def build_bootstrap_service(namespace: str):
+    # Headless service selecting only the bootstrap pods (role=bootstrap), so normal
+    # nodes can resolve them by DNS to seed their kad-dht routing tables.
+    return (
+        ServiceBuilder()
+        .with_name(BOOTSTRAP_NAME)
+        .with_namespace(namespace)
+        .with_cluster_ip("None")
+        .with_selector("app", "zerotenkay")
+        .with_selector("role", "bootstrap")
+        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+        .build()
+    )
+
+
+def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
+    # A kad-dht anchor only: no GossipSub, just answers DHT queries. Ready once the
+    # libp2p switch is accepting connections on the p2p port (no topic metrics here,
+    # so the GossipSub readiness probe can't be used).
+    return (
+        Libp2pStatefulSetBuilder()
+        .with_libp2p_config(
+            name=BOOTSTRAP_NAME, namespace=namespace, num_nodes=params.bootstrap_nodes
+        )
+        .with_label("role", "bootstrap")
+        .with_option(NimLibp2p.node_role, "RoleBootstrap")
+        .with_option(NimLibp2p.discovery, "kad-dht")
+        .with_option(NimLibp2p.muxer, params.muxer)
+        .with_readiness_probe(
+            V1Probe(
+                tcp_socket=V1TCPSocketAction(port=5000),
+                initial_delay_seconds=5,
+                period_seconds=2,
+                failure_threshold=3,
+            )
+        )
+        .with_image(params.image)
+        .build()
+    )
 
 
 async def publish(config, namespace, random_name):
@@ -106,6 +168,17 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
         )
         await self.deploy(deployment=publisher, wait_for_ready=True)
+
+        # Bootstrap (kad-dht only): anchor node + headless discovery service. Deployed
+        # before the nodes so the mesh can form through it once the nodes wake up.
+        if self.config.discovery == "kad-dht":
+            bootstrap_service = build_bootstrap_service(self.namespace)
+            self.dump_yaml(bootstrap_service, "bootstrap-service")
+            await self.deploy(deployment=bootstrap_service)
+
+            bootstrap = build_bootstrap_nodes(namespace=self.namespace, params=self.config)
+            self.dump_yaml(bootstrap, "bootstrap")
+            await self.deploy(deployment=bootstrap, wait_for_ready=True)
 
         # Nodes
         nodes = build_nodes(

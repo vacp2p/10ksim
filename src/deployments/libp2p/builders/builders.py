@@ -23,6 +23,8 @@ class Option:
     service = "SERVICE"
     max_connections = "MAXCONNECTIONS"
     cold_start_delay = "COLDSTARTDELAY"
+    node_role = "NODE_ROLE"
+    discovery = "DISCOVERY"
 
 
 class Libp2pStatefulSetBuilder(StatefulSetBuilder):

@@ -1,7 +1,10 @@
 # Python Imports
+from pathlib import Path
 from typing import List, Literal, Optional, Self
 
+import yaml
 from kubernetes.client import (
+    V1ConfigMap,
     V1ConfigMapVolumeSource,
     V1ContainerPort,
     V1ObjectMeta,
@@ -12,12 +15,15 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1RoleRef,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
     V1Volume,
     V1VolumeMount,
 )
 
 # Project Imports
-from src.deployments.core.builders import PodBuilder
+from src.deployments.core.builders import PodBuilder, ServiceBuilder
 from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.helpers.utils import find_container_config
@@ -27,6 +33,10 @@ ScriptMode = Literal["server", "batch"]
 
 
 NAME = "pod-api-requester-container"
+PUBLISHER_SERVICE_NAME = "zerotesting-publisher"
+PUBLISHER_APP = "zerotenkay-publisher"
+CONFIGMAP_NAME = "api-requester-config"
+NODE_SERVICE_NAME = "nimp2p-service"
 
 
 class PodApiRequesterBuilder(PodBuilder):
@@ -215,4 +225,48 @@ def create_pod_config(namespace: str) -> PodConfig:
 def create_resources() -> V1ResourceRequirements:
     return V1ResourceRequirements(
         requests={"memory": "64Mi", "cpu": "150m"}, limits={"memory": "600Mi", "cpu": "400m"}
+    )
+
+
+def build_node_governance_service(namespace: str) -> V1Service:
+    """Headless service the node StatefulSets require: spec.serviceName is hardcoded to
+    NODE_SERVICE_NAME, so pods only get stable per-pod DNS through it."""
+    return (
+        ServiceBuilder()
+        .with_name(NODE_SERVICE_NAME)
+        .with_namespace(namespace)
+        .with_cluster_ip("None")
+        .with_selector("app", "zerotenkay")
+        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+        .build()
+    )
+
+
+def build_publisher_service(namespace: str) -> V1Service:
+    """NodePort service the 10ksim driver reaches the publisher pod through."""
+    return V1Service(
+        api_version="v1",
+        kind="Service",
+        metadata=V1ObjectMeta(name=PUBLISHER_SERVICE_NAME, namespace=namespace),
+        spec=V1ServiceSpec(
+            type="NodePort",
+            selector={"app": PUBLISHER_APP},
+            ports=[
+                V1ServicePort(
+                    name="http", protocol="TCP", port=8000, target_port=8645, node_port=30080
+                )
+            ],
+        ),
+    )
+
+
+def build_api_requester_configmap(namespace: str) -> V1ConfigMap:
+    """ConfigMap mounted into the publisher pod; reuses the checked-in config.yaml so the
+    api-requester script has a valid config to load (targets are passed per-request)."""
+    template = yaml.safe_load((Path(__file__).parent / "config.yaml").read_text())
+    return V1ConfigMap(
+        api_version="v1",
+        kind="ConfigMap",
+        metadata=V1ObjectMeta(name=CONFIGMAP_NAME, namespace=namespace),
+        data=template["data"],
     )

@@ -12,6 +12,12 @@ from pydantic import BaseModel, NonNegativeInt
 
 # Project Imports
 from src.deployments.core.k8s_kubeconfig import get_node_ip
+from src.deployments.pod_api_requester.builder import (
+    PodApiRequesterBuilder,
+    build_api_requester_configmap,
+    build_node_governance_service,
+    build_publisher_service,
+)
 from src.deployments.pod_api_requester.configs import Endpoint, Target
 
 logger = logging.getLogger(__name__)
@@ -73,9 +79,19 @@ def read_deployment_file(path: Path, namespace: str):
     #     return deployment_spec
 
 
-async def launch_prerequisites(namespace: str):
-    raise NotImplementedError("TODO")
-    # TODO: publisher-service, role/bind, config.yaml
+def launch_prerequisites(namespace: str) -> list:
+    """Namespace prerequisites a publisher-driven run depends on, ready to deploy
+    idempotently (`deploy(..., exist_ok=True)`): the node governance + publisher
+    Services, the api-requester ConfigMap, and the pod/service-reader Role + RoleBinding.
+    Previously these were assumed to be pre-provisioned in the namespace."""
+    builder = PodApiRequesterBuilder().with_namespace(namespace)
+    return [
+        build_node_governance_service(namespace),
+        build_publisher_service(namespace),
+        build_api_requester_configmap(namespace),
+        builder.build_role(),
+        builder.build_rolebinding(),
+    ]
 
 
 def wrap_arg(arg: Union[Target, Endpoint, str]) -> dict:

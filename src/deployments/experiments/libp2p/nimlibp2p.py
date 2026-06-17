@@ -17,7 +17,11 @@ from src.deployments.libp2p.builders.helpers import readiness_probe_metrics
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.pod_api_requester.configs import Target
 from src.deployments.pod_api_requester.nimlibp2p import libp2p_dst_node_publish
-from src.deployments.pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError
+from src.deployments.pod_api_requester.pod_api_requester import (
+    PodApiApplicationError,
+    PodApiError,
+    launch_prerequisites,
+)
 from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)
@@ -164,6 +168,11 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
     async def _run(self):
         self.log_event("run_start")
+
+        # Provision the namespace prerequisites the publisher depends on (services, the
+        # api-requester ConfigMap, RBAC). Idempotent, so it's safe across repeated runs.
+        for prereq in launch_prerequisites(self.namespace):
+            await self.deploy(deployment=prereq, wait_for_ready=False, exist_ok=True)
 
         # Publisher
         publisher = (

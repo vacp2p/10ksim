@@ -16,7 +16,7 @@ from kubernetes.client import (
     V1ServiceAccount,
     V1ServicePort,
     V1ServiceSpec,
-    V1Subject,
+    RbacV1Subject,
 )
 from pydantic import Field, PrivateAttr
 

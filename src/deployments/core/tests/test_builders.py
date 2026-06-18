@@ -33,6 +33,7 @@ from src.deployments.core.configs.container import ContainerConfig, Image
 # Helper Functions
 # --------------------------------------------------------------------------- #
 
+
 def _create_image(repo: str = "dst/test", tag: str = "v1.0.0") -> Image:
     """Create a real Image object for testing."""
     return Image(repo=repo, tag=tag)
@@ -40,17 +41,12 @@ def _create_image(repo: str = "dst/test", tag: str = "v1.0.0") -> Image:
 
 def _create_pvc(name: str = "test-pvc") -> V1PersistentVolumeClaim:
     """Create a real V1PersistentVolumeClaim object for testing."""
-    return V1PersistentVolumeClaim(
-        metadata=V1ObjectMeta(name=name)
-    )
+    return V1PersistentVolumeClaim(metadata=V1ObjectMeta(name=name))
 
 
 def _create_service_port(port: int = 8080, name: str = "http") -> V1ServicePort:
     """Create a real V1ServicePort object for testing."""
-    return V1ServicePort(
-        port=port,
-        name=name
-    )
+    return V1ServicePort(port=port, name=name)
 
 
 def _create_probe() -> V1Probe:
@@ -58,29 +54,23 @@ def _create_probe() -> V1Probe:
     return V1Probe(
         http_get=V1HTTPGetAction(path="/health", port=8008),
         initial_delay_seconds=1,
-        period_seconds=3
+        period_seconds=3,
     )
 
 
 def _create_resource_requests_and_limits() -> V1ResourceRequirements:
     """Create a real V1ResourceRequirements object for testing."""
     return V1ResourceRequirements(
-        requests={"cpu": "100m", "memory": "128Mi"},
-        limits={"cpu": "200m", "memory": "256Mi"}
+        requests={"cpu": "100m", "memory": "128Mi"}, limits={"cpu": "200m", "memory": "256Mi"}
     )
 
 
 def _create_statefulset_with_default_values() -> V1StatefulSet:
-    """Create expected default V1StatefulSet for testing.
-    """
+    """Create expected default V1StatefulSet for testing."""
     return V1StatefulSet(
         api_version="apps/v1",
         kind="StatefulSet",
-        metadata=V1ObjectMeta(
-            name=None,
-            namespace="default",
-            labels=None
-        ),
+        metadata=V1ObjectMeta(name=None, namespace="default", labels=None),
         spec=V1StatefulSetSpec(
             replicas=1,  # Default from StatefulSetSpecConfig
             service_name=None,
@@ -88,75 +78,42 @@ def _create_statefulset_with_default_values() -> V1StatefulSet:
             volume_claim_templates=None,
             selector=V1LabelSelector(match_labels=None),
             template=V1PodTemplateSpec(
-                metadata=V1ObjectMeta(
-                    name=None,
-                    namespace=None,
-                    labels=None,
-                    annotations=None
-                ),
-                spec=V1PodSpec(
-                    containers=[],
-                    init_containers=None,
-                    volumes=None,
-                    dns_config=None
-                )
-            )
-        )
+                metadata=V1ObjectMeta(name=None, namespace=None, labels=None, annotations=None),
+                spec=V1PodSpec(containers=[], init_containers=None, volumes=None, dns_config=None),
+            ),
+        ),
     )
+
 
 def _create_pod_with_default_values() -> V1Pod:
     """Create expected default V1Pod for testing."""
     return V1Pod(
         api_version="v1",
         kind="Pod",
-        metadata=V1ObjectMeta(
-            name=None,
-            namespace=None,
-            labels=None
-        ),
-        spec=V1PodSpec(
-            containers=[],
-            init_containers=None,
-            volumes=None,
-            dns_config=None
-        )
+        metadata=V1ObjectMeta(name=None, namespace=None, labels=None),
+        spec=V1PodSpec(containers=[], init_containers=None, volumes=None, dns_config=None),
     )
+
 
 def _create_service_with_default_values() -> V1Service:
     """Create expected default V1Service for testing."""
     return V1Service(
         api_version="v1",
         kind="Service",
-        metadata=V1ObjectMeta(
-            name=None,
-            namespace=None,
-            labels=None
-        ),
+        metadata=V1ObjectMeta(name=None, namespace=None, labels=None),
         spec=V1ServiceSpec(
-            cluster_ip=None,
-            selector=None,
-            ports=None,
-            type=None,
-            publish_not_ready_addresses=None
-        )
+            cluster_ip=None, selector=None, ports=None, type=None, publish_not_ready_addresses=None
+        ),
     )
+
 
 def _create_pod_template_spec_with_default_values() -> V1PodTemplateSpec:
     """Create expected default V1PodTemplateSpec for testing."""
     return V1PodTemplateSpec(
-        metadata=V1ObjectMeta(
-            name=None,
-            namespace=None,
-            labels=None,
-            annotations=None
-        ),
-        spec=V1PodSpec(
-            containers=[],
-            init_containers=None,
-            volumes=None,
-            dns_config=None
-        )
+        metadata=V1ObjectMeta(name=None, namespace=None, labels=None, annotations=None),
+        spec=V1PodSpec(containers=[], init_containers=None, volumes=None, dns_config=None),
     )
+
 
 # --------------------------------------------------------------------------- #
 # StatefulSetBuilder Tests
@@ -171,7 +128,7 @@ class TestStatefulSetBuilder:
         new_sts = builder.build()
         expected_sts = _create_statefulset_with_default_values()
         expected_sts.metadata.namespace = "default"
-        
+
         # Verify the result matches expected defaults
         assert isinstance(new_sts, V1StatefulSet)
         assert new_sts == expected_sts
@@ -186,7 +143,7 @@ class TestStatefulSetBuilder:
         assert builder.config.stateful_set_spec.pod_template_spec_config.labels == {
             "cluster": "vaclab"
         }
-        
+
     def test_with_label_returns_statefulset_builder(self):
         """Should return a StatefulSetBuilder for method chaining."""
         builder = StatefulSetBuilder()
@@ -204,14 +161,13 @@ class TestStatefulSetBuilder:
             "team": "dst",
         }
 
-
     @pytest.mark.parametrize("overwrite", [False, True])
     def test_with_image_in_container_calls_helper_with_correct_params(self, mocker, overwrite):
         """Should call with_image_for_container helper with correct arguments."""
         builder = StatefulSetBuilder()
         image = _create_image("dst/test", "v1.0.0")
         mock_with_image = mocker.patch("src.deployments.core.builders.with_image_for_container")
-        
+
         builder.with_image_in_container(image, "test-container", overwrite=overwrite)
 
         mock_with_image.assert_called_once_with(
@@ -233,7 +189,7 @@ class TestStatefulSetBuilder:
         delay_container = ContainerConfig(
             name="network-delay",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         # Patch where it's imported in builders module
         mock_init_delay = mocker.patch(
@@ -243,18 +199,33 @@ class TestStatefulSetBuilder:
 
         builder.with_network_delay("100ms", "10ms")
         mock_init_delay.assert_called_once_with("100ms", "10ms")
-    
+
     def test_with_network_delay_adds_init_container_to_pod_spec(self, mocker):
         """Should add init container to pod spec with correct delay and jitter values."""
         builder = StatefulSetBuilder()
         delay_container = ContainerConfig(
             name="network-delay",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         # Add command with delay and jitter to match what init_container_delay creates
-        delay_container.command_config.insert_command("tc", ["qdisc", "add", "dev", "eth0", "root", "netem", "delay", "100ms", "10ms", "distribution", "normal"])
-        
+        delay_container.command_config.insert_command(
+            "tc",
+            [
+                "qdisc",
+                "add",
+                "dev",
+                "eth0",
+                "root",
+                "netem",
+                "delay",
+                "100ms",
+                "10ms",
+                "distribution",
+                "normal",
+            ],
+        )
+
         mock_init_delay = mocker.patch(
             "src.deployments.core.builders.init_container_delay",
             return_value=delay_container,
@@ -262,11 +233,12 @@ class TestStatefulSetBuilder:
 
         builder.with_network_delay("100ms", "10ms")
         mock_init_delay.assert_called_once_with("100ms", "10ms")
-        init_containers = builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        init_containers = (
+            builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        )
         assert init_containers is not None
         assert len(init_containers) == 1
         assert init_containers[0] == delay_container
-    
 
     def test_with_network_delay_returns_statefulset_builder(self, mocker):
         """Test that with_network_delay returns StatefulSetBuilder for method chaining."""
@@ -274,9 +246,11 @@ class TestStatefulSetBuilder:
         delay_container = ContainerConfig(
             name="network-delay",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
-        mocker.patch("src.deployments.core.builders.init_container_delay", return_value=delay_container)
+        mocker.patch(
+            "src.deployments.core.builders.init_container_delay", return_value=delay_container
+        )
         result = builder.with_network_delay("100ms", "10ms")
         assert isinstance(result, StatefulSetBuilder)
 
@@ -286,7 +260,7 @@ class TestStatefulSetBuilder:
         bandwidth_container = ContainerConfig(
             name="bandwidth-limit",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         mock_init_bandwidth = mocker.patch(
             "src.deployments.core.builders.init_container_bandwidth_limit",
@@ -297,14 +271,14 @@ class TestStatefulSetBuilder:
         mock_init_bandwidth.assert_called_once_with(
             ingress_rate="1mbit", egress_rate="500kbit", burst="32kbit"
         )
-    
+
     def test_with_bandwidth_limit_adds_init_container_to_pod_spec(self, mocker):
         """Should add bandwidth limit init container to pod spec."""
         builder = StatefulSetBuilder()
         bandwidth_container = ContainerConfig(
             name="bandwidth-limit",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         mocker.patch(
             "src.deployments.core.builders.init_container_bandwidth_limit",
@@ -312,18 +286,20 @@ class TestStatefulSetBuilder:
         )
 
         builder.with_bandwidth_limit(ingress_rate="1mbit", egress_rate="500kbit", burst="32kbit")
-        init_containers = builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        init_containers = (
+            builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        )
         assert init_containers is not None
         assert len(init_containers) == 1
         assert init_containers[0] == bandwidth_container
-    
+
     def test_with_bandwidth_limit_returns_statefulset_builder(self, mocker):
         """Test that with_bandwidth_limit returns StatefulSetBuilder for method chaining."""
         builder = StatefulSetBuilder()
         bandwidth_container = ContainerConfig(
             name="bandwidth-limit",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         mocker.patch(
             "src.deployments.core.builders.init_container_bandwidth_limit",
@@ -335,7 +311,9 @@ class TestStatefulSetBuilder:
     def test_with_bandwidth_limit_with_no_rates_returns_without_adding_container(self, mocker):
         """Should return early when neither ingress_rate nor egress_rate is provided."""
         builder = StatefulSetBuilder()
-        mock_init_bandwidth = mocker.patch("src.deployments.core.builders.init_container_bandwidth_limit")
+        mock_init_bandwidth = mocker.patch(
+            "src.deployments.core.builders.init_container_bandwidth_limit"
+        )
 
         result = builder.with_bandwidth_limit()
 
@@ -345,25 +323,34 @@ class TestStatefulSetBuilder:
             is None
         )
         mock_init_bandwidth.assert_not_called()
-    
+
     def test_multiple_init_containers_added_correctly(self, mocker):
         """Should handle adding multiple init containers."""
         builder = StatefulSetBuilder()
         delay_container = ContainerConfig(
             name="network-delay",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
         bandwidth_container = ContainerConfig(
             name="bandwidth-limit",
             image=_create_image("busybox", "latest"),
-            image_pull_policy="IfNotPresent"
+            image_pull_policy="IfNotPresent",
         )
-        mocker.patch("src.deployments.core.builders.init_container_delay", return_value=delay_container)
-        mocker.patch("src.deployments.core.builders.init_container_bandwidth_limit", return_value=bandwidth_container)
+        mocker.patch(
+            "src.deployments.core.builders.init_container_delay", return_value=delay_container
+        )
+        mocker.patch(
+            "src.deployments.core.builders.init_container_bandwidth_limit",
+            return_value=bandwidth_container,
+        )
 
-        builder.with_network_delay("100ms", "10ms").with_bandwidth_limit(ingress_rate="1mbit", egress_rate="500kbit")
-        init_containers = builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        builder.with_network_delay("100ms", "10ms").with_bandwidth_limit(
+            ingress_rate="1mbit", egress_rate="500kbit"
+        )
+        init_containers = (
+            builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
+        )
         assert init_containers is not None
         assert len(init_containers) == 2
         assert delay_container in init_containers
@@ -374,23 +361,23 @@ class TestStatefulSetBuilder:
         builder = StatefulSetBuilder()
         result = builder.with_replicas(5)
         assert builder.config.stateful_set_spec.replicas == 5
-    
+
     def test_with_replicas_returns_statefulset_builder(self):
         """Should return a StatefulSetBuilder for method chaining."""
         builder = StatefulSetBuilder()
         result = builder.with_replicas(3)
         assert isinstance(result, StatefulSetBuilder)
-    
+
     def test_with_volume_claim_template_adds_pvc_to_templates(self):
         """Should add PVC to volume_claim_templates in stateful_set_spec."""
         builder = StatefulSetBuilder()
         pvc = _create_pvc("data")
         result = builder.with_volume_claim_template(pvc)
-        
+
         assert builder.config.stateful_set_spec.volume_claim_templates is not None
         assert len(builder.config.stateful_set_spec.volume_claim_templates) == 1
         assert builder.config.stateful_set_spec.volume_claim_templates[0] == pvc
-    
+
     def test_with_volume_claim_template_returns_statefulset_builder(self):
         """Should return a StatefulSetBuilder for method chaining."""
         builder = StatefulSetBuilder()
@@ -408,22 +395,24 @@ class TestStatefulSetBuilder:
         assert builder.config.stateful_set_spec.volume_claim_templates[0] == pvc1
         assert builder.config.stateful_set_spec.volume_claim_templates[1] == pvc2
 
-    
     def test_build_with_no_namespace_raises_exception(self):
         """Should raise ValueError if namespace is not set."""
         builder = StatefulSetBuilder()
         with pytest.raises(ValueError) as exc_info:
             builder.build()
         assert "You must set the namespace before building the StatefulSet." in str(exc_info.value)
-    
+
     def test_build_calls_build_stateful_set(self, mocker):
         """Should call build_stateful_set with the current config."""
         builder = StatefulSetBuilder()
         builder.config.namespace = "default"  # Required for build
-        mock_build_sts = mocker.patch("src.deployments.core.builders.build_stateful_set", return_value=V1StatefulSet())
+        mock_build_sts = mocker.patch(
+            "src.deployments.core.builders.build_stateful_set", return_value=V1StatefulSet()
+        )
         result = builder.build()
         mock_build_sts.assert_called_once_with(builder.config)
         assert isinstance(result, V1StatefulSet)
+
 
 # --------------------------------------------------------------------------- #
 # PodBuilder Tests
@@ -444,20 +433,23 @@ class TestPodBuilder:
         builder = PodBuilder()
         result = builder.with_app("app")
         assert isinstance(result, PodBuilder)
-    
+
     def test_with_app_sets_app_label_in_config(self):
         """Should set the app label in config."""
         builder = PodBuilder()
         builder.with_app("test-app")
         assert builder.config.labels["app"] == "test-app"
-    
+
     def test_build_calls_build_pod(self, mocker):
         """Should call build_pod"""
         builder = PodBuilder()
-        mock_build_pod = mocker.patch("src.deployments.core.builders.build_pod", return_value=V1Pod())
+        mock_build_pod = mocker.patch(
+            "src.deployments.core.builders.build_pod", return_value=V1Pod()
+        )
         result = builder.build()
         mock_build_pod.assert_called_once_with(builder.config)
         assert isinstance(result, V1Pod)
+
 
 # --------------------------------------------------------------------------- #
 # ServiceBuilder Tests
@@ -509,7 +501,7 @@ class TestServiceBuilder:
         builder = ServiceBuilder()
         result = builder.with_cluster_ip("None")
         assert isinstance(result, ServiceBuilder)
-        
+
     def test_with_selector_adds_selector(self):
         """Should add selector to the service spec."""
         builder = ServiceBuilder()
@@ -530,7 +522,7 @@ class TestServiceBuilder:
         assert builder.config.service_spec.ports is not None
         assert len(builder.config.service_spec.ports) == 1
         assert builder.config.service_spec.ports[0] == port
-    
+
     def test_with_port_returns_service_builder(self):
         """Should return a ServiceBuilder for method chaining."""
         builder = ServiceBuilder()
@@ -561,11 +553,13 @@ class TestServiceBuilder:
 
         assert isinstance(result, ServiceBuilder)
         assert builder.config.service_spec.publish_not_ready_addresses is True
-    
+
     def test_build_calls_build_service(self, mocker):
         """Should call build_service with the current config."""
         builder = ServiceBuilder()
-        mock_build_service = mocker.patch("src.deployments.core.builders.build_service", return_value=V1Service())
+        mock_build_service = mocker.patch(
+            "src.deployments.core.builders.build_service", return_value=V1Service()
+        )
         result = builder.build()
         mock_build_service.assert_called_once_with(builder.config)
         assert isinstance(result, V1Service)
@@ -579,14 +573,13 @@ class TestContainerBuilder:
 
     def test_create_builder_with_no_config_raises_exception(self):
         """
-        Should raise an exception when creating builder because of missing required fields. 
+        Should raise an exception when creating builder because of missing required fields.
         since ContainerConfig requires name, image, and image_pull_policy and doesn't have defaults.
         """
         with pytest.raises(ValueError) as exc_info:
             builder = ContainerBuilder()
         assert "validation errors for ContainerConfig" in str(exc_info.value)
-        
-        
+
     def test_build_with_custom_config_returns_container(self):
         """Should build with provided config."""
         config = ContainerConfig(name="custom", image=_create_image(), image_pull_policy="Always")
@@ -622,7 +615,7 @@ class TestContainerBuilder:
         builder = ContainerBuilder(config)
         result = builder.with_command_script(["echo test"])
         assert isinstance(result, ContainerBuilder)
-    
+
     def test_with_command_script_can_be_chained(self):
         """Should support method chaining."""
         config = ContainerConfig(name="test", image=_create_image(), image_pull_policy="Always")
@@ -660,7 +653,7 @@ class TestContainerBuilder:
         builder = ContainerBuilder(config)
         result = builder.with_resources(_create_resource_requests_and_limits())
         assert isinstance(result, ContainerBuilder)
-    
+
     def test_build_calls_build_container(self, mocker):
         """Should call build_container with the current config."""
         config = ContainerConfig(name="test", image=_create_image(), image_pull_policy="Always")
@@ -671,6 +664,7 @@ class TestContainerBuilder:
         result = builder.build()
         mock_build_container.assert_called_once_with(builder.config)
         assert isinstance(result, V1Container)
+
 
 # --------------------------------------------------------------------------- #
 # PodTemplateSpecBuilder Tests
@@ -685,16 +679,18 @@ class TestPodTemplateSpecBuilder:
         expected = _create_pod_template_spec_with_default_values()
         assert isinstance(result, V1PodTemplateSpec)
         assert result == expected
-        
+
     def test_build_calls_build_pod_template_spec(self, mocker):
         """Should call build_pod_template_spec with the current config."""
         builder = PodTemplateSpecBuilder()
         mock_build_pod_template_spec = mocker.patch(
-            "src.deployments.core.builders.build_pod_template_spec", return_value=V1PodTemplateSpec()
+            "src.deployments.core.builders.build_pod_template_spec",
+            return_value=V1PodTemplateSpec(),
         )
         result = builder.build()
         mock_build_pod_template_spec.assert_called_once_with(builder.config)
         assert isinstance(result, V1PodTemplateSpec)
+
 
 # --------------------------------------------------------------------------- #
 # PodSpecBuilder Tests
@@ -713,19 +709,26 @@ class TestPodSpecBuilder:
         """Should append new container in config."""
         builder = PodSpecBuilder()
         builder.add_container(
-            ContainerConfig(name="test1", image=_create_image(), 
-            image_pull_policy="IfNotPresent"))
+            ContainerConfig(name="test1", image=_create_image(), image_pull_policy="IfNotPresent")
+        )
         builder.add_container(
-            ContainerConfig(name="test2", image=_create_image(), 
-            image_pull_policy="Always"))
+            ContainerConfig(name="test2", image=_create_image(), image_pull_policy="Always")
+        )
         assert len(builder.config.container_configs) == 2
         assert builder.config.container_configs[0].name == "test1"
         assert builder.config.container_configs[1].name == "test2"
+
     def test_add_container_supports_dict_and_v1container(self):
         """Should support adding containers as dict or V1Container."""
         builder = PodSpecBuilder()
-        container_dict = {"name": "dict-container", "image": "busybox:latest", "imagePullPolicy": "IfNotPresent"}
-        v1_container = V1Container(name="v1-container", image="nginx:latest", image_pull_policy="Always")
+        container_dict = {
+            "name": "dict-container",
+            "image": "busybox:latest",
+            "imagePullPolicy": "IfNotPresent",
+        }
+        v1_container = V1Container(
+            name="v1-container", image="nginx:latest", image_pull_policy="Always"
+        )
         builder.add_container(container_dict)
         builder.add_container(v1_container)
         assert len(builder.config.container_configs) == 2
@@ -742,7 +745,9 @@ class TestPodSpecBuilder:
     def test_add_init_container_adds_init_container(self):
         """Should add init container in config."""
         builder = PodSpecBuilder()
-        init_container = ContainerConfig(name="init", image=_create_image(), image_pull_policy="Always")
+        init_container = ContainerConfig(
+            name="init", image=_create_image(), image_pull_policy="Always"
+        )
         builder.add_init_container(init_container)
         assert builder.config.init_containers is not None
         assert len(builder.config.init_containers) == 1
@@ -751,7 +756,9 @@ class TestPodSpecBuilder:
     def test_add_init_container_returns_pod_spec_builder(self):
         """Should return self for method chaining."""
         builder = PodSpecBuilder()
-        init_container = ContainerConfig(name="init", image=_create_image(), image_pull_policy="Always")
+        init_container = ContainerConfig(
+            name="init", image=_create_image(), image_pull_policy="Always"
+        )
         result = builder.add_init_container(init_container)
         assert isinstance(result, PodSpecBuilder)
 
@@ -759,7 +766,9 @@ class TestPodSpecBuilder:
         """Should support full method chaining."""
         builder = PodSpecBuilder()
         container = ContainerConfig(name="main", image=_create_image(), image_pull_policy="Always")
-        init_container = ContainerConfig(name="init", image=_create_image(), image_pull_policy="Always")
+        init_container = ContainerConfig(
+            name="init", image=_create_image(), image_pull_policy="Always"
+        )
         result = builder.add_container(container).add_init_container(init_container)
         assert isinstance(result, PodSpecBuilder)
         assert len(builder.config.container_configs) == 1
@@ -820,7 +829,7 @@ class TestContainerCommandBuilder:
         builder = ContainerCommandBuilder()
         builder.add_line("cat", ["file.txt"], multiline=True)
         assert builder.config.commands[0].multiline is True
-    
+
     def test_add_line_returns_container_command_builder(self):
         """Should return self for method chaining."""
         builder = ContainerCommandBuilder()
@@ -830,7 +839,9 @@ class TestContainerCommandBuilder:
     def test_add_line_supports_multiple_chaining(self):
         """Should handle multiple command lines."""
         builder = ContainerCommandBuilder()
-        builder.add_line("mkdir", ["-p","/app"]).add_line("npm", ["install"]).add_line("npm", ["start"])
+        builder.add_line("mkdir", ["-p", "/app"]).add_line("npm", ["install"]).add_line(
+            "npm", ["start"]
+        )
 
         assert len(builder.config.commands) == 3
         assert builder.config.commands[0].command == "mkdir"
@@ -839,16 +850,19 @@ class TestContainerCommandBuilder:
         assert builder.config.commands[1].args == ["install"]
         assert builder.config.commands[2].command == "npm"
         assert builder.config.commands[2].args == ["start"]
-    
+
     def test_build_calls_build_command_with_current_config(self, mocker):
         """Should call build_command with the current config."""
         builder = ContainerCommandBuilder()
         builder.add_line("echo", ["hello"])
-        mock_build_command = mocker.patch("src.deployments.core.builders.build_command", return_value=(["echo"], ["hello"]))
+        mock_build_command = mocker.patch(
+            "src.deployments.core.builders.build_command", return_value=(["echo"], ["hello"])
+        )
         command, args = builder.build()
         mock_build_command.assert_called_once_with(builder.config)
         assert command == ["echo"]
         assert args == ["hello"]
+
 
 # --------------------------------------------------------------------------- #
 # default_readiness_probe_health Tests

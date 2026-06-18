@@ -243,7 +243,9 @@ def build_node_governance_service(namespace: str) -> V1Service:
 
 
 def build_publisher_service(namespace: str) -> V1Service:
-    """NodePort service the 10ksim driver reaches the publisher pod through."""
+    """NodePort service the 10ksim driver reaches the publisher pod through. The
+    nodePort is auto-assigned (the driver reads it back from the service), so multiple
+    namespaces can each run a publisher without colliding on a fixed port."""
     return V1Service(
         api_version="v1",
         kind="Service",
@@ -251,11 +253,7 @@ def build_publisher_service(namespace: str) -> V1Service:
         spec=V1ServiceSpec(
             type="NodePort",
             selector={"app": PUBLISHER_APP},
-            ports=[
-                V1ServicePort(
-                    name="http", protocol="TCP", port=8000, target_port=8645, node_port=30080
-                )
-            ],
+            ports=[V1ServicePort(name="http", protocol="TCP", port=8000, target_port=8645)],
         ),
     )
 

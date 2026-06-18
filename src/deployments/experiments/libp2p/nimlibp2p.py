@@ -171,8 +171,14 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         # Provision the namespace prerequisites the publisher depends on (services, the
         # api-requester ConfigMap, RBAC). Idempotent, so it's safe across repeated runs.
+        # Sanitize to plain dicts first: deploy() only auto-converts V1Deployable, not
+        # types like V1ConfigMap.
         for prereq in launch_prerequisites(self.namespace):
-            await self.deploy(deployment=prereq, wait_for_ready=False, exist_ok=True)
+            await self.deploy(
+                deployment=self.api_client.sanitize_for_serialization(prereq),
+                wait_for_ready=False,
+                exist_ok=True,
+            )
 
         # Publisher
         publisher = (

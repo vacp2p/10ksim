@@ -17,11 +17,7 @@ from src.deployments.libp2p.builders.helpers import readiness_probe_metrics
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.pod_api_requester.configs import Target
 from src.deployments.pod_api_requester.nimlibp2p import libp2p_dst_node_publish
-from src.deployments.pod_api_requester.pod_api_requester import (
-    PodApiApplicationError,
-    PodApiError,
-    launch_prerequisites,
-)
+from src.deployments.pod_api_requester.pod_api_requester import PodApiApplicationError, PodApiError
 from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)
@@ -33,7 +29,7 @@ BOOTSTRAP_NAME = "bootstrap"
 
 
 class ExpConfig(BaseModel):
-    num_nodes: NonNegativeInt = 30
+    num_relay_nodes: NonNegativeInt = 30
     num_messages: NonNegativeInt = 20
     message_size_bytes: NonNegativeInt = 1000
     delay_cold_start: NonNegativeFloat = 60
@@ -68,10 +64,10 @@ def build_nodes(
         .with_libp2p_config(
             name="pod",
             namespace=namespace,
-            num_nodes=params.num_nodes,
+            num_nodes=params.num_relay_nodes,
             dns_searches=["nimp2p-service"],
         )
-        .with_option(NimLibp2p.peers, params.num_nodes)
+        .with_option(NimLibp2p.peers, params.num_relay_nodes)
         .with_option(NimLibp2p.self_trigger, True)
         .with_option(NimLibp2p.muxer, params.muxer)
         .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
@@ -110,7 +106,7 @@ def build_bootstrap_service(namespace: str):
 
 
 def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
-    # Every node holds a link to the anchor, so it must accept more than num_nodes.
+    # Every node holds a link to the anchor, so it must accept more than num_relay_nodes.
     # Probe the metrics port (always TCP, unlike the p2p port under quic).
     return (
         Libp2pStatefulSetBuilder()
@@ -121,7 +117,7 @@ def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
         .with_option(NimLibp2p.node_role, "RoleBootstrap")
         .with_option(NimLibp2p.discovery, "kad-dht")
         .with_option(NimLibp2p.muxer, params.muxer)
-        .with_option(NimLibp2p.max_connections, params.num_nodes + 100)
+        .with_option(NimLibp2p.max_connections, params.num_relay_nodes + 100)
         .with_readiness_probe(
             V1Probe(
                 tcp_socket=V1TCPSocketAction(port=8008),
@@ -169,17 +165,6 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     async def _run(self):
         self.log_event("run_start")
 
-        # Provision the namespace prerequisites the publisher depends on (services, the
-        # api-requester ConfigMap, RBAC). Idempotent, so it's safe across repeated runs.
-        # Sanitize to plain dicts first: deploy() only auto-converts V1Deployable, not
-        # types like V1ConfigMap.
-        for prereq in launch_prerequisites(self.namespace):
-            await self.deploy(
-                deployment=self.api_client.sanitize_for_serialization(prereq),
-                wait_for_ready=False,
-                exist_ok=True,
-            )
-
         # Publisher
         publisher = (
             PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
@@ -215,7 +200,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         tasks = []
         for msg_index in range(self.config.num_messages):
-            index = random.randint(0, self.config.num_nodes - 1)
+            index = random.randint(0, self.config.num_relay_nodes - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))

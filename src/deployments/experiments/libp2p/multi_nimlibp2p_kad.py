@@ -1,3 +1,4 @@
+import os
 from typing import Iterable, List, Optional
 
 from src.deployments.core.configs.container import Image
@@ -7,13 +8,27 @@ from src.deployments.experiments.multi_experiment import Multiple
 from src.deployments.registry import experiment
 
 # nim-libp2p regression matrix: each version x muxer is one full kad-dht run.
+# The sweep is env-configurable so the same experiment drives a smoke test, a
+# single-version pass (runs are sequential to keep measurements clean), or the
+# full matrix -- see REGRESSION_* below.
 IMAGES = {
     "2.0.0": Image(repo="radiken/dst-test-node-regression", tag="v2.0.0-kad"),
     "2.1.0": Image(repo="radiken/dst-test-node-regression", tag="v2.1.0-kad"),
 }
-VERSIONS = ["2.1.0", "2.0.0"]
-MUXERS = ["mplex", "yamux", "quic"]
-MESSAGE_SIZES = [1000]  # add 50_000 for the 50KB sweep
+
+
+def _env_list(name: str, default: str) -> list:
+    return [x.strip() for x in os.environ.get(name, default).split(",") if x.strip()]
+
+
+VERSIONS = _env_list("REGRESSION_VERSIONS", "2.1.0,2.0.0")
+MUXERS = _env_list("REGRESSION_MUXERS", "mplex,yamux,quic")
+MESSAGE_SIZES = [int(x) for x in _env_list("REGRESSION_SIZES", "1000")]
+NUM_NODES = int(os.environ.get("REGRESSION_NUM_NODES", "1000"))
+NUM_MESSAGES = int(os.environ.get("REGRESSION_NUM_MESSAGES", "600"))
+# delay_cold_start covers the node STARTSLEEP (~180s) + kad-dht mesh formation
+# before the publisher starts; shorten via the env var for small smoke runs.
+COLD_START = int(os.environ.get("REGRESSION_COLD_START", str(7 * 60)))
 
 
 @experiment(name="multi_nimlibp2p_kad")
@@ -34,16 +49,13 @@ class MultiNimlibp2pKad(Multiple):
         return None
 
     def exp_params(self) -> Iterable[dict]:
-        # Match the v2.0.0 regression config: 1000 nodes, 600 msgs @ 1/s.
-        # delay_cold_start covers the node STARTSLEEP (180s) + kad-dht mesh formation
-        # before the publisher starts.
         base = {
             "discovery": "kad-dht",
             "bootstrap_nodes": 1,
-            "num_nodes": 1000,
-            "num_messages": 600,
+            "num_nodes": NUM_NODES,
+            "num_messages": NUM_MESSAGES,
             "delay_after_publish": 1,  # 1 msg/s
-            "delay_cold_start": 7 * 60,
+            "delay_cold_start": COLD_START,
             "node_start_delay": 5 * 60,
         }
         for version in VERSIONS:

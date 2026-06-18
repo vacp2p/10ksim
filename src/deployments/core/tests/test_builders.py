@@ -12,9 +12,9 @@ from kubernetes.client import (
     V1ResourceRequirements,
     V1Service,
     V1ServicePort,
+    V1ServiceSpec,
     V1StatefulSet,
     V1StatefulSetSpec,
-    V1ServiceSpec,
 )
 
 from src.deployments.core.builders import (

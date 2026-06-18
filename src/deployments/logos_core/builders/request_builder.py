@@ -4,6 +4,7 @@ from itertools import chain
 from typing import Any, Dict, Optional, Self
 
 from kubernetes.client import (
+    RbacV1Subject,
     V1EnvVar,
     V1ObjectMeta,
     V1PodSecurityContext,
@@ -16,7 +17,6 @@ from kubernetes.client import (
     V1ServiceAccount,
     V1ServicePort,
     V1ServiceSpec,
-    RbacV1Subject,
 )
 from pydantic import Field, PrivateAttr
 
@@ -53,11 +53,12 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
         self._name = name
         self._app = app
         self._debug = debug
-        self.apply_logoscore_profile()
+        self._reconcile()
         return self
 
     def with_service_account_name(self, service_account_name: str) -> Self:
         self._service_account_name = service_account_name
+        self._reconcile()
         return self
 
     def with_secret_creator_role_name(self, role_name: str) -> Self:
@@ -74,6 +75,7 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
 
     def with_service_name(self, service_name: str) -> Self:
         self._service_name = service_name
+        self._reconcile()
         return self
 
     def _get_dependencies(self):
@@ -107,7 +109,7 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
         self.dependencies = self._get_dependencies()
         return deepcopy(self.dependencies)
 
-    def apply_logoscore_profile(self) -> Self:
+    def _reconcile(self) -> Self:
         if not self._namespace:
             return self
 
@@ -120,9 +122,11 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
         self.config.pod_spec_config.with_security_context(
             V1PodSecurityContext(run_as_user=0, fs_group=0), overwrite=True
         )
-        self.config.pod_spec_config.with_dns_service(
-            f"{self._service_name}.{self._namespace}.svc.cluster.local", overwrite=True
-        )
+
+        if self._service_name:
+            self.config.pod_spec_config.with_dns_service(
+                f"{self._service_name}.{self._namespace}.svc.cluster.local", overwrite=True
+            )
 
         container_config = find_container_config(
             self.config.pod_spec_config,
@@ -142,12 +146,13 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
                 self._container_name,
             )
 
-        container_config.with_resources(
-            V1ResourceRequirements(
-                requests={"memory": "1Gi", "cpu": "500m"},
-                limits={"memory": "4Gi", "cpu": "2000m"},
+        if not container_config.resources:
+            container_config.with_resources(
+                V1ResourceRequirements(
+                    requests={"memory": "1Gi", "cpu": "500m"},
+                    limits={"memory": "4Gi", "cpu": "2000m"},
+                )
             )
-        )
 
         if self._debug:
             container_config.with_env_var(
@@ -200,7 +205,7 @@ def role_bindings(
             namespace=namespace,
         ),
         subjects=[
-            V1Subject(
+            RbacV1Subject(
                 kind="ServiceAccount",
                 name=service_account_name,
                 namespace=namespace,
@@ -220,7 +225,7 @@ def role_bindings(
             namespace=namespace,
         ),
         subjects=[
-            V1Subject(
+            RbacV1Subject(
                 kind="ServiceAccount",
                 name=service_account_name,
                 namespace=namespace,

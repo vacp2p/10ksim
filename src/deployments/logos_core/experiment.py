@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import random
 import traceback
 from typing import List, Optional
 
@@ -382,7 +383,8 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             await subscribe(self.namespace, indexed_name, relay_service, topic)
 
         message = "aGVsbG8="  # Test message
-        for index in range(self.config.num_nodes):
+        for message_index in range(self.config.num_messages):
+            index = random.randrange(0, self.config.num_nodes)
             indexed_name = f"{relay_name}-{index}"
             await send(self.namespace, indexed_name, relay_service, topic, message)
 

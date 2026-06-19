@@ -64,9 +64,9 @@ class StatefulSetBuilder(BaseModel):
         return self
 
     def with_volume_claim_template(self, pvc: V1PersistentVolumeClaim) -> Self:
-        if self.config.volume_claim_templates is None:
-            self.config.volume_claim_templates = []
-        self.config.volume_claim_templates.append(pvc)
+        if self.config.stateful_set_spec.volume_claim_templates is None:
+            self.config.stateful_set_spec.volume_claim_templates = []
+        self.config.stateful_set_spec.volume_claim_templates.append(pvc)
         return self
 
     def with_network_delay(

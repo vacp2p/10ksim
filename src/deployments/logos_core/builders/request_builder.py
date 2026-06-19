@@ -1,7 +1,7 @@
 from collections import defaultdict
 from copy import deepcopy
 from itertools import chain
-from typing import Any, Dict, Optional, Self
+from typing import Any, Dict, Optional, Self, Set
 
 from kubernetes.client import (
     RbacV1Subject,
@@ -38,6 +38,7 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
     )
     _service_name: Optional[str] = PrivateAttr(default=None)
     _debug: bool = PrivateAttr(default=False)
+    _dns_searches: Set[str] = PrivateAttr(default_factory=set)
 
     def with_namespace(self, namespace: str) -> Self:
         return super().with_namespace(namespace)
@@ -75,6 +76,12 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
 
     def with_service_name(self, service_name: str) -> Self:
         self._service_name = service_name
+        self._reconcile()
+        return self
+
+    def with_dns_search(self, search) -> Self:
+        self._dns_searches.add(search)
+        super().with_dns_search(search)
         self._reconcile()
         return self
 
@@ -123,10 +130,13 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
             V1PodSecurityContext(run_as_user=0, fs_group=0), overwrite=True
         )
 
+        self.config.pod_spec_config.dns_config.searches.clear()
         if self._service_name:
-            self.config.pod_spec_config.with_dns_service(
+            super().with_dns_search(
                 f"{self._service_name}.{self._namespace}.svc.cluster.local", overwrite=True
             )
+        for search in self._dns_searches:
+            super().with_dns_search(search, overwrite=True)
 
         container_config = find_container_config(
             self.config.pod_spec_config,

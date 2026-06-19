@@ -214,8 +214,8 @@ class PodApiRequesterBuilder(PodBuilder):
         )
         return self
 
-    def with_dns_search(self, search) -> Self:
-        self.config.pod_spec_config.with_dns_service(search)
+    def with_dns_search(self, search, *, overwrite: bool = False) -> Self:
+        self.config.pod_spec_config.with_dns_service(search, overwrite=overwrite)
         return self
 
     def with_debug(self) -> Self:

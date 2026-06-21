@@ -38,6 +38,13 @@ class NodesBuilder(StatefulSetBuilder):
     _app: str = PrivateAttr(default="zerotenkay-core")
     _debug: bool = PrivateAttr(default=False)
 
+    def with_container_name(self, container_name: str) -> Self:
+        self._ensure_container()
+        container_config = find_container_config(self.config, self._container_name)
+        self._container_name = container_name
+        container_config.name = self._container_name
+        return self
+
     def with_service_name(self, service_name: str) -> Self:
         self._service_name = service_name
         self._reconcile()

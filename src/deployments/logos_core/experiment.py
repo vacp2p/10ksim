@@ -3,16 +3,14 @@
 import asyncio
 import json
 import logging
-import random
 import traceback
 from typing import List, Optional
 
 from kubernetes.dynamic.exceptions import ApiException
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PrivateAttr
 
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
-from src.deployments.libp2p.bridge import Bridge
 from src.deployments.logos_core.builders.nodes import NodesBuilder
 from src.deployments.logos_core.builders.request_builder import LogoscorePodApiRequester
 from src.deployments.pod_api_requester.configs import Target
@@ -23,13 +21,14 @@ from src.deployments.pod_api_requester.pod_api_requester import (
     wrap_arg,
 )
 from src.deployments.registry import experiment
+from src.deployments.waku.bridge import Bridge
 
 logger = logging.getLogger(__name__)
 
 
 class ExpConfig(BaseModel):
-    num_nodes: NonNegativeInt = 2
-    num_messages: NonNegativeInt = 20
+    num_relay_nodes: NonNegativeInt = 2
+    num_messages: NonNegativeInt = 2
     delay_cold_start: NonNegativeFloat = 2
     delay_after_publish: NonNegativeFloat = 1
 
@@ -264,19 +263,24 @@ def raise_unless_already_exists(e):
 class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    _container_name: Optional[str] = PrivateAttr(default=None)
+
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="nimlibp2p2 experiment")
         BaseExperiment.add_args(subparser)
 
     def _get_metadata(self) -> dict:
-        return Bridge().get_metadata(self.events_log_path)
+        metadata = Bridge().get_metadata(self.events_log_path)
+        metadata["stack"]["container_name"] = self._container_name
+        return metadata
 
     async def _run(self):
         self.log_event("run_start")
         bootstrap_service = "core-bootstrap"
         relay_service = "core-relay"
         service_account_name = "secret-creator2"
+        pod_container_name = "logoscore-0"  # All on shard 0. Eg. logoscore-0-0 logoscore-0-1
 
         publisher_builder = (
             LogoscorePodApiRequester()
@@ -305,9 +309,10 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
         bootstrap_nodes_builder = (
             NodesBuilder()
-            .with_config(namespace=self.namespace, name="bootstrap-nodes")
+            .with_container_name(pod_container_name)
+            .with_config(namespace=self.namespace, name="bootstrap-nodes-0")
             .with_service_name(bootstrap_service)
-            .with_replicas(self.config.num_nodes)
+            .with_replicas(self.config.num_relay_nodes)
             .with_dns_service([relay_service, bootstrap_service])
             .with_service_account_name(service_account_name)
         )
@@ -321,13 +326,14 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                     raise_unless_already_exists(e)
         bootstrap_nodes = bootstrap_nodes_builder.build()
         await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
+        self._container_name = bootstrap_nodes.spec.template.spec.containers[0].name
 
         logger.info(f"Waiting for cold_start_delay: {self.config.delay_cold_start}")
         await asyncio.sleep(self.config.delay_cold_start)
 
         bootstrap_name = bootstrap_nodes.metadata.name
         self.log_event("init_bootstrap_nodes")
-        for index in range(self.config.num_nodes):
+        for index in range(self.config.num_relay_nodes):
             indexed_name = f"{bootstrap_name}-{index}"
             try:
                 await init_token(self.namespace, indexed_name, bootstrap_service)
@@ -337,7 +343,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
         # Get bootstrap ENRs
         addresses = []
-        for index in range(self.config.num_nodes):
+        for index in range(self.config.num_relay_nodes):
             indexed_name = f"{bootstrap_name}-{index}"
             address = await get_address(self.namespace, indexed_name, bootstrap_service)
             addresses.append(address)
@@ -345,9 +351,10 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
         relay_nodes_builder = (
             NodesBuilder()
-            .with_config(namespace=self.namespace)
+            .with_container_name(pod_container_name)
+            .with_config(namespace=self.namespace, name="relay-nodes-0")
             .with_service_name(relay_service)
-            .with_replicas(self.config.num_nodes)
+            .with_replicas(self.config.num_relay_nodes)
             .with_dns_service([relay_service, bootstrap_service])
             .with_service_account_name(service_account_name)
         )
@@ -364,7 +371,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
         relay_nodes = relay_nodes_builder.build()
         relay_name = relay_nodes.metadata.name
         await self.deploy(deployment=relay_nodes, wait_for_ready=True)
-        for index in range(self.config.num_nodes):
+        for index in range(self.config.num_relay_nodes):
             indexed_name = f"{relay_name}-{index}"
             try:
                 await init_token(self.namespace, indexed_name, relay_service)
@@ -373,18 +380,19 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             await init_node(self.namespace, indexed_name, relay_service, addresses)
 
         for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
-            for index in range(self.config.num_nodes):
+            for index in range(self.config.num_relay_nodes):
                 indexed_name = f"{name}-{index}"
                 await start_node(self.namespace, indexed_name, service)
 
         topic = "/my-app/1/dst/proto"
-        for index in range(self.config.num_nodes):
+        for index in range(self.config.num_relay_nodes):
             indexed_name = f"{relay_name}-{index}"
             await subscribe(self.namespace, indexed_name, relay_service, topic)
 
         message = "aGVsbG8="  # Test message
-        for message_index in range(self.config.num_messages):
-            index = random.randrange(0, self.config.num_nodes)
+        for _message_index in range(self.config.num_messages):
+            # index = random.randrange(0, self.config.num_nodes)
+            index = _message_index
             indexed_name = f"{relay_name}-{index}"
             await send(self.namespace, indexed_name, relay_service, topic, message)
 

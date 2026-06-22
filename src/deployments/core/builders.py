@@ -42,7 +42,9 @@ class StatefulSetBuilder(BaseModel):
     def with_image_in_container(
         self, image: Image, container_name: str, *, overwrite: bool = False
     ) -> Self:
-        with_image_for_container(self.config, container_name, image, overwrite=overwrite)
+        with_image_for_container(
+            config=self.config, image=image, container_name=container_name, overwrite=overwrite
+        )
         return self
 
     def with_replicas(self, replicas: int) -> Self:
@@ -114,6 +116,14 @@ class StatefulSetBuilder(BaseModel):
 
 class PodBuilder(BaseModel):
     config: PodConfig = Field(default_factory=PodConfig)
+
+    def with_image_in_container(
+        self, image: Image, container_name: str, *, overwrite: bool = False
+    ) -> Self:
+        with_image_for_container(
+            config=self.config, image=image, container_name=container_name, overwrite=overwrite
+        )
+        return self
 
     def with_app(self, app: str, *, overwrite: bool = False) -> Self:
         self.config.with_app(app, overwrite=overwrite)

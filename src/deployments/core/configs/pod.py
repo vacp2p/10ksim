@@ -33,24 +33,25 @@ class PodSpecConfig(BaseModel):
     def with_dns_service(self, service: str, *, overwrite: bool = False):
         if self.dns_config is None:
             self.dns_config = V1PodDNSConfig(searches=[])
-
-        if service in self.dns_config.searches and not overwrite:
-            raise ValueError(
-                f"The {type(self)} already has dns service. "
-                f"service: `{service}` config: `{self}`"
-            )
-
+        current_service = next((item for item in self.dns_config.searches if item == service), None)
+        if current_service:
+            if not overwrite:
+                raise ValueError(
+                    f"DNS service already exists in {type(self)}. service: `{service}` config: `{self}`"
+                )
+            self.dns_config.searches.remove(current_service)
         self.dns_config.searches.append(service)
 
     def with_volume(self, volume: V1Volume, *, overwrite: bool = False):
         if self.volumes is None:
             self.volumes = []
-
-        if not overwrite and volume.name in [item.name for item in self.volumes]:
-            raise ValueError(
-                f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
-            )
-
+        current_volume = next((item for item in self.volumes if item.name == volume.name), None)
+        if current_volume:
+            if not overwrite:
+                raise ValueError(
+                    f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
+                )
+            self.volumes.remove(current_volume)
         self.volumes.append(volume)
 
     def add_init_container(

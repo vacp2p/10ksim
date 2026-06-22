@@ -1,6 +1,5 @@
 # Builders for Shadow simulator runs: config values -> kubernetes-client objects
 # and yaml dicts. Pure data, no I/O. See the "Using Shadow at DST" runbook.
-from pathlib import Path
 from typing import Optional
 
 from kubernetes.client import (
@@ -26,9 +25,10 @@ from kubernetes.client import (
 )
 from ruamel.yaml import YAML
 
-TRAFFIC_SYNC_REPO_PATH = (
-    "deployment-utilities/docker_utilities/nimlibp2p/publisher_headless/traffic_sync.py"
-)
+# The pod-api-requester app is baked into the Shadow base image; the publisher host
+# runs it in batch mode and reads its traffic config from the mounted ConfigMap.
+_REQUESTER_APP_PATH = "/app/api_requester.py"
+_PUBLISHER_CONFIG = "publisher.yaml"  # ConfigMap key == filename mounted under /sim/config
 
 # Mount targets inside the Shadow runner container.
 _BIN_MOUNT = "/sim/bin"
@@ -45,17 +45,18 @@ _SHADOW_SECURITY = V1SecurityContext(
 def render_shadow_yaml(
     *,
     num_nodes: int,
-    num_messages: int,
-    msg_size_bytes: int,
-    delay_seconds: float,
     sim_stop_time_s: int,
     publisher_start_s: int,
     connect_to: int = 2,
     muxer: str = "yamux",
     metrics_interval_s: int = 15,
+    requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
-    running `traffic_sync.py` against the peers' `/publish` endpoints (port 8645)."""
+    running the pod-api-requester in batch mode against the peers' `/publish`
+    endpoints. The traffic shape (message count, size, pacing) lives in the
+    requester's own config (see `render_publisher_config`), mounted at
+    `{_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}`."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 
@@ -85,13 +86,9 @@ def render_shadow_yaml(
             {
                 "path": "/usr/bin/python3",
                 "args": (
-                    f"{_CONFIG_MOUNT}/traffic_sync.py"
-                    f" --peer-selection id"
-                    f" -n {num_nodes}"
-                    f" -m {num_messages}"
-                    f" -s {msg_size_bytes}"
-                    f" -d {delay_seconds}"
-                    f" -p 8645"
+                    f"{requester_app_path}"
+                    f" --mode batch"
+                    f" --config {_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}"
                 ),
                 "start_time": f"{publisher_start_s}s",
             }
@@ -106,6 +103,65 @@ def render_shadow_yaml(
             "graph": {"type": "1_gbit_switch"},
         },
         "hosts": hosts,
+    }
+
+
+def render_publisher_config(
+    *,
+    num_nodes: int,
+    num_messages: int,
+    msg_size_bytes: int,
+    delay_seconds: float,
+    port: int = 8645,
+    topic: str = "test",
+) -> dict:
+    """Build the pod-api-requester batch config reproducing the legacy traffic_sync.py
+    injector: publish `num_messages` messages round-robin across pod-0..pod-(N-1),
+    `delay_seconds` apart, to each peer's `/publish` endpoint. Targets are an explicit
+    `hosts` list (pod-0..pod-(N-1)) resolved by Shadow DNS, so no Kubernetes API is
+    contacted.
+
+    `pod_count = num_messages` walks the sorted host list with wraparound, matching
+    traffic_sync's `pod-(i % num_nodes)` selection (and its `version: 1` / `msgSize`
+    JSON body)."""
+    return {
+        "targets": [
+            {
+                "name": "peers",
+                "hosts": [f"pod-{i}" for i in range(num_nodes)],
+                "port": port,
+            }
+        ],
+        "endpoints": [
+            {
+                "name": "libp2p-publish",
+                "url": "http://{node}:{port}/publish",
+                "headers": {"Content-Type": "application/json"},
+                "params": {"topic": topic, "msgSize": msg_size_bytes, "version": 1},
+                "type": "POST",
+                "paged": False,
+            }
+        ],
+        "requests": [
+            {
+                "name": "publish",
+                "endpoint": "libp2p-publish",
+                "retries": 0,
+                "retry_delay": 0,
+            }
+        ],
+        "actions": [
+            {
+                "name": "inject-traffic",
+                "requests": ["publish"],
+                "targets": ["peers"],
+                "order": "ascending",
+                "pod_start_index": 0,
+                "pod_count": num_messages,
+                "delay": delay_seconds,
+                "loop_order": "foreach_request_target_each_pod",
+            }
+        ],
     }
 
 
@@ -125,16 +181,17 @@ def build_configmap(
     namespace: str,
     name: str,
     shadow_yaml: dict,
-    traffic_sync_path: Path,
+    publisher_config: dict,
 ) -> V1ConfigMap:
-    """ConfigMap with shadow.yaml + traffic_sync.py, mounted at /sim/config/."""
+    """ConfigMap with shadow.yaml + the pod-api-requester batch config, mounted at
+    /sim/config/. The requester app itself is baked into the Shadow base image."""
     return V1ConfigMap(
         api_version="v1",
         kind="ConfigMap",
         metadata=V1ObjectMeta(name=name, namespace=namespace),
         data={
             "shadow.yaml": _dump_yaml(shadow_yaml),
-            "traffic_sync.py": traffic_sync_path.read_text(),
+            _PUBLISHER_CONFIG: _dump_yaml(publisher_config),
         },
     )
 

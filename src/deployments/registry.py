@@ -20,7 +20,7 @@ class Registry:
         self._experiments: List[ExperimentInfo] = []
         self._scan_mode: Literal["raise", "skip", "replace"] = "raise"
 
-    def get_by_metadata(self, **filters) -> List[ExperimentInfo]:
+    def get_by_metadata(self, filters: dict) -> List[ExperimentInfo]:
         return [
             experiment
             for experiment in self._experiments
@@ -109,6 +109,7 @@ registry = Registry()
 def experiment(name, **metadata):
     def decorator(cls):
         metadata["module_path"] = sys.modules[cls.__module__].__file__
+        metadata["type"] = f"{cls.__module__}.{cls.__qualname__}"
         exp_name = name if name is not None else cls.__name__
         registry.add(exp_name, cls, **metadata)
         cls.name = exp_name

@@ -9,6 +9,7 @@ class ServiceSpecConfig(BaseModel):
     cluster_ip: Optional[str] = None
     selector: Optional[Dict[str, str]] = None
     ports: Optional[List[V1ServicePort]] = None
+    publish_not_ready_addresses: Optional[bool] = None
 
     def with_selector(self, key: str, value: str):
         if self.selector is None:
@@ -35,5 +36,6 @@ def build_service(config: ServiceConfig) -> V1Service:
             cluster_ip=config.service_spec.cluster_ip,
             selector=config.service_spec.selector,
             ports=config.service_spec.ports,
+            publish_not_ready_addresses=config.service_spec.publish_not_ready_addresses,
         ),
     )

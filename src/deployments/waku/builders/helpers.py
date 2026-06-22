@@ -3,7 +3,7 @@
 # Project Imports
 from src.deployments.core.configs.command import Command, CommandConfig
 from src.deployments.core.configs.container import ContainerConfig
-from src.deployments.core.configs.helpers import (
+from src.deployments.core.configs.helpers.utils import (
     HigherConfigTypes,
     find_container_config,
     get_config,

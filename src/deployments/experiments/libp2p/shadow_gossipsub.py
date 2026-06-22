@@ -1,7 +1,6 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
 import logging
-from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
@@ -12,17 +11,15 @@ from src.analysis.metrics.shadow_metrics import scrape_run_metrics
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.shadow.builders import (
-    TRAFFIC_SYNC_REPO_PATH,
     build_configmap,
     build_pvc,
     build_shadow_job,
+    render_publisher_config,
     render_shadow_yaml,
 )
 from src.deployments.shadow.runtime import pull_shadow_logs, wait_for_job_complete
 
 logger = logging.getLogger(__name__)
-
-_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class ExpConfig(BaseModel):
@@ -76,26 +73,24 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
 
         shadow_yaml = render_shadow_yaml(
             num_nodes=cfg.num_nodes,
-            num_messages=cfg.num_messages,
-            msg_size_bytes=cfg.message_size_bytes,
-            delay_seconds=cfg.delay_seconds,
             sim_stop_time_s=cfg.sim_stop_time_s,
             publisher_start_s=cfg.publisher_start_s,
             connect_to=cfg.connect_to,
             metrics_interval_s=cfg.metrics_interval_s,
         )
-        traffic_sync_path = _REPO_ROOT / TRAFFIC_SYNC_REPO_PATH
-        if not traffic_sync_path.exists():
-            raise FileNotFoundError(
-                f"traffic_sync.py not found at expected path: {traffic_sync_path}"
-            )
+        publisher_config = render_publisher_config(
+            num_nodes=cfg.num_nodes,
+            num_messages=cfg.num_messages,
+            msg_size_bytes=cfg.message_size_bytes,
+            delay_seconds=cfg.delay_seconds,
+        )
 
         pvc = build_pvc(namespace=namespace, name=pvc_name, storage=cfg.pvc_storage)
         configmap = build_configmap(
             namespace=namespace,
             name=cm_name,
             shadow_yaml=shadow_yaml,
-            traffic_sync_path=traffic_sync_path,
+            publisher_config=publisher_config,
         )
         job = build_shadow_job(
             namespace=namespace,

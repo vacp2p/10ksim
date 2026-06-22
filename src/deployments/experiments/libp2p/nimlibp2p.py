@@ -4,9 +4,10 @@ import random
 import traceback
 from typing import Literal
 
-from kubernetes.client import V1StatefulSet
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
 
+from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
@@ -22,20 +23,36 @@ from src.deployments.registry import experiment
 logger = logging.getLogger(__name__)
 
 Muxer = Literal["yamux", "quic", "mplex"]
+Discovery = Literal["static", "kad-dht"]
+
+BOOTSTRAP_NAME = "bootstrap"
 
 
 class ExpConfig(BaseModel):
-    num_nodes: NonNegativeInt = 30
+    num_relay_nodes: NonNegativeInt = 30
     num_messages: NonNegativeInt = 20
     message_size_bytes: NonNegativeInt = 1000
     delay_cold_start: NonNegativeFloat = 60
     delay_after_publish: NonNegativeFloat = 1
     muxer: Muxer = "yamux"
     image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
+    # "kad-dht" discovers peers through a bootstrap node; "static" uses the CONNECTTO dial.
+    discovery: Discovery = "static"
     connect_to: NonNegativeInt = 10
+    bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
+
+    @model_validator(mode="after")
+    def _check_bootstrap_nodes(self):
+        if self.discovery == "kad-dht" and self.bootstrap_nodes < 1:
+            raise ValueError("kad-dht discovery requires bootstrap_nodes >= 1")
+        return self
+
+
+def bootstrap_dns(namespace: str) -> str:
+    return f"{BOOTSTRAP_NAME}.{namespace}.svc.cluster.local"
 
 
 def build_nodes(
@@ -47,24 +64,71 @@ def build_nodes(
         .with_libp2p_config(
             name="pod",
             namespace=namespace,
-            num_nodes=params.num_nodes,
+            num_nodes=params.num_relay_nodes,
             dns_searches=["nimp2p-service"],
         )
-        .with_option(NimLibp2p.peers, params.num_nodes)
+        .with_option(NimLibp2p.peers, params.num_relay_nodes)
         .with_option(NimLibp2p.self_trigger, True)
-        .with_option(NimLibp2p.service, "nimp2p-service")
         .with_option(NimLibp2p.muxer, params.muxer)
-        .with_option(NimLibp2p.connect_to, params.connect_to)
         .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
         .with_readiness_probe(readiness_probe_metrics())
         .with_image(params.image)
     )
+    if params.discovery == "kad-dht":
+        builder = (
+            builder.with_option(NimLibp2p.node_role, "RoleNormal")
+            .with_option(NimLibp2p.discovery, "kad-dht")
+            .with_option(NimLibp2p.service, bootstrap_dns(namespace))
+        )
+    else:
+        builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
+            NimLibp2p.connect_to, params.connect_to
+        )
     if params.network_delay or params.network_jitter:
         builder = builder.with_network_delay(
             delay=params.network_delay, jitter=params.network_jitter
         )
 
     return builder.build()
+
+
+def build_bootstrap_service(namespace: str):
+    return (
+        ServiceBuilder()
+        .with_name(BOOTSTRAP_NAME)
+        .with_namespace(namespace)
+        .with_cluster_ip("None")
+        .with_selector("app", "zerotenkay")
+        .with_selector("role", "bootstrap")
+        .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+        .build()
+    )
+
+
+def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
+    # Every node holds a link to the anchor, so it must accept more than num_relay_nodes.
+    # Probe the metrics port (always TCP, unlike the p2p port under quic).
+    return (
+        Libp2pStatefulSetBuilder()
+        .with_libp2p_config(
+            name=BOOTSTRAP_NAME, namespace=namespace, num_nodes=params.bootstrap_nodes
+        )
+        .with_label("role", "bootstrap")
+        .with_option(NimLibp2p.node_role, "RoleBootstrap")
+        .with_option(NimLibp2p.discovery, "kad-dht")
+        .with_option(NimLibp2p.muxer, params.muxer)
+        .with_option(NimLibp2p.max_connections, params.num_relay_nodes + 100)
+        .with_readiness_probe(
+            V1Probe(
+                tcp_socket=V1TCPSocketAction(port=8008),
+                initial_delay_seconds=5,
+                period_seconds=2,
+                failure_threshold=3,
+            )
+        )
+        .with_image(params.image)
+        .build()
+    )
 
 
 async def publish(config, namespace, random_name):
@@ -107,6 +171,17 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         )
         await self.deploy(deployment=publisher, wait_for_ready=True)
 
+        # Bootstrap (kad-dht only): anchor node + headless discovery service. Deployed
+        # before the nodes so the mesh can form through it once the nodes wake up.
+        if self.config.discovery == "kad-dht":
+            bootstrap_service = build_bootstrap_service(self.namespace)
+            self.dump_yaml(bootstrap_service, "bootstrap-service")
+            await self.deploy(deployment=bootstrap_service)
+
+            bootstrap = build_bootstrap_nodes(namespace=self.namespace, params=self.config)
+            self.dump_yaml(bootstrap, "bootstrap")
+            await self.deploy(deployment=bootstrap, wait_for_ready=True)
+
         # Nodes
         nodes = build_nodes(
             namespace=self.namespace,
@@ -125,7 +200,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         tasks = []
         for msg_index in range(self.config.num_messages):
-            index = random.randint(0, self.config.num_nodes - 1)
+            index = random.randint(0, self.config.num_relay_nodes - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))

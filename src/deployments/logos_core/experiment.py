@@ -275,6 +275,20 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
         metadata["stack"]["container_name"] = self._container_name
         return metadata
 
+    async def deploy_all(self, deployment, exist_ok: bool = False):
+        if isinstance(deployment, dict):
+            for _, dep in deployment.items():
+                await self.deploy_all(dep)
+        elif isinstance(deployment, list):
+            for dep in deployment:
+                await self.deploy_all(dep)
+        else:
+            try:
+                await self.deploy(deployment=deployment, wait_for_ready=True)
+            except Exception as e:
+                # Ignore duplicate dependencies between bootstrap and relay
+                raise_unless_already_exists(e)
+
     async def _run(self):
         self.log_event("run_start")
         bootstrap_service = "core-bootstrap"
@@ -285,26 +299,17 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
         publisher_builder = (
             LogoscorePodApiRequester()
             .with_namespace(self.namespace)
+            .with_name(name="logoscore-requester")
+            .with_app(_LOGOSCORE_PUBLISHER["app"])
             .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="wip-amd"))
             .with_mode("server")
             .with_service_account_name(service_account_name)
             .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
-            .with_logoscore_profile(
-                self.namespace, name="logoscore-requester", app=_LOGOSCORE_PUBLISHER["app"]
-            )
             .with_dns_search(f"{bootstrap_service}.{self.namespace}.svc.cluster.local")
             .with_dns_search(f"{relay_service}.{self.namespace}.svc.cluster.local")
+            .with_logoscore()
         )
-
-        dependencies = publisher_builder.build_dependencies()
-        for _name, dep_list in dependencies.items():
-            for dep in dep_list:
-                logger.info(f"Deploying dependency: {_name}")
-                logger.info(f"{dep.metadata.namespace}")
-                logger.info(f"{dep.metadata.name}")
-                logger.info(f"{type(dep.metadata)}")
-                await self.deploy(deployment=dep, wait_for_ready=True)
-
+        await self.deploy_all(publisher_builder.build_dependencies(), exist_ok=False)
         await self.deploy(deployment=publisher_builder.build(), wait_for_ready=True)
 
         bootstrap_nodes_builder = (
@@ -316,14 +321,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             .with_dns_service([relay_service, bootstrap_service])
             .with_service_account_name(service_account_name)
         )
-        nodes_deps = bootstrap_nodes_builder.build_dependencies()
-        for _kind, deps in nodes_deps.items():
-            for dep in deps:
-                try:
-                    await self.deploy(deployment=dep, wait_for_ready=True)
-                except Exception as e:
-                    # Ignore duplicate dependencies between bootstrap and relay
-                    raise_unless_already_exists(e)
+        await self.deploy_all(bootstrap_nodes_builder.build_dependencies(), exist_ok=True)
         bootstrap_nodes = bootstrap_nodes_builder.build()
         await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
         self._container_name = bootstrap_nodes.spec.template.spec.containers[0].name
@@ -358,14 +356,7 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             .with_dns_service([relay_service, bootstrap_service])
             .with_service_account_name(service_account_name)
         )
-        nodes_deps = relay_nodes_builder.build_dependencies()
-        for _kind, deps in nodes_deps.items():
-            for dep in deps:
-                try:
-                    await self.deploy(deployment=dep, wait_for_ready=True)
-                except Exception as e:
-                    # Ignore duplicate dependencies between bootstrap and relay
-                    raise_unless_already_exists(e)
+        await self.deploy_all(relay_nodes_builder.build_dependencies(), exist_ok=True)
 
         self.log_event("init_relay_nodes")
         relay_nodes = relay_nodes_builder.build()

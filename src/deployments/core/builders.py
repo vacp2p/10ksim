@@ -30,7 +30,7 @@ from src.deployments.core.configs.pod import (
     build_pod_spec,
     build_pod_template_spec,
 )
-from src.deployments.core.configs.service import ServiceConfig, build_service
+from src.deployments.core.configs.service import ServiceConfig, ServiceSpecType, build_service
 from src.deployments.core.configs.statefulset import StatefulSetConfig, build_stateful_set
 
 logger = logging.getLogger(__name__)
@@ -117,6 +117,51 @@ class StatefulSetBuilder(BaseModel):
 class PodBuilder(BaseModel):
     config: PodConfig = Field(default_factory=PodConfig)
 
+    def model_post_init(self, __context) -> None:
+        self._register_dependencies()
+
+    @property
+    def name(self) -> str | None:
+        return self.config.name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        self.config.name = value
+        self._reconcile("name")
+
+    @property
+    def namespace(self) -> str | None:
+        return self.config.namespace
+
+    @namespace.setter
+    def namespace(self, value: str) -> None:
+        self.config.namespace = value
+        self._reconcile("namespace")
+
+    @property
+    def app(self) -> str | None:
+        try:
+            return self.config.labels["app"]
+        except (TypeError, KeyError):
+            return None
+
+    @app.setter
+    def app(self, value: str) -> None:
+        self.config.with_app(value, overwrite=True)
+        self._reconcile("app")
+
+    def with_name(self, name: str) -> Self:
+        self.name = name
+        return self
+
+    def with_namespace(self, namespace: str) -> Self:
+        self.namespace = namespace
+        return self
+
+    def with_app(self, app: str, *, overwrite: bool = False) -> Self:
+        self.config.with_app(app, overwrite=overwrite)
+        return self
+
     def with_image_in_container(
         self, image: Image, container_name: str, *, overwrite: bool = False
     ) -> Self:
@@ -125,8 +170,25 @@ class PodBuilder(BaseModel):
         )
         return self
 
-    def with_app(self, app: str, *, overwrite: bool = False) -> Self:
-        self.config.with_app(app, overwrite=overwrite)
+    def _register_dependencies(self) -> None:
+        self._dependency_registry = {}
+        for cls in type(self).mro():
+            for name, maybe_method in cls.__dict__.items():
+                fields = getattr(maybe_method, "_depends_on_fields", None)
+                if fields:
+                    for field in fields:
+                        self._dependency_registry.setdefault(field, []).append(name)
+
+    def _reconcile(self, changed_field: Optional[str] = None) -> Self:
+        if changed_field is None:
+            return self
+
+        for method_name in self._dependency_registry.get(changed_field, []):
+            method = getattr(self, method_name)
+            required_fields = getattr(method, "_depends_on_fields", set())
+            if all(getattr(self, field, None) is not None for field in required_fields):
+                method()
+
         return self
 
     def build(self) -> V1Pod:
@@ -152,10 +214,12 @@ class ServiceBuilder(BaseModel):
         self.config.service_spec.with_selector(key, value)
         return self
 
-    def with_port(self, port: V1ServicePort) -> Self:
-        if self.config.service_spec.ports is None:
-            self.config.service_spec.ports = []
-        self.config.service_spec.ports.append(port)
+    def with_port(self, new_port: V1ServicePort) -> Self:
+        self.config.service_spec.with_port(new_port)
+        return self
+
+    def with_type(self, spec_type: ServiceSpecType) -> Self:
+        self.config.service_spec.spec_type = spec_type
         return self
 
     def with_publish_not_ready_addresses(self, value: bool = True) -> Self:

@@ -43,7 +43,7 @@ PROJ_ROOT = Path(__file__).parent.parent.parent
 
 
 def find_events(
-    log_path: Path,
+    log_path: Union[str, Path],
     key: Dict[str, str],
 ) -> Iterator[dict]:
     """
@@ -53,7 +53,7 @@ def find_events(
     then the event is converted to a new value using `extract(event)`
     """
     results = []
-    with log_path.open("r") as events_log:
+    with Path(log_path).open("r") as events_log:
         for line in events_log:
             event = json.loads(line)
             if dict_partial_compare(event, key):
@@ -62,8 +62,8 @@ def find_events(
 
 
 def parse_events_log(
-    log_path: Path,
-    events_list: List[Tuple[Dict[str, str], Path]],
+    log_path: Union[str, Path],
+    events_list: List[Tuple[Dict[str, str], Union[str, Path]]],
     *,
     extract: Callable[[dict], Any] | None = None,
 ) -> dict:
@@ -83,7 +83,7 @@ def parse_events_log(
     if extract is None:
         extract = lambda event: datetime.strptime(event["timestamp"], "%Y-%m-%d %H:%M:%S")
     return_dict = {}
-    with log_path.open("r") as events_log:
+    with Path(log_path).open("r") as events_log:
         for line in events_log:
             event = json.loads(line)
             for key, path in events_list:

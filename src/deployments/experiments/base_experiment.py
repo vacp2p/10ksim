@@ -10,10 +10,11 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
+    V1ConfigMap,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
@@ -23,6 +24,7 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1Service,
+    V1ServiceAccount,
     V1StatefulSet,
 )
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
@@ -39,9 +41,7 @@ from src.deployments.core.k8s_cleanup import (
 from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.core.k8s_object import k8s_obj_to_dict
 from src.deployments.core.k8s_rollout import wait_for_rollout
-from src.deployments.helm_deployment.builders import build_deployment
 from src.deployments.registry import registry as experiment_registry
-from src.utils.dict_utils import dict_get
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
@@ -55,6 +55,8 @@ V1Deployable = Union[
     V1CronJob,
     V1Role,
     V1RoleBinding,
+    V1ConfigMap,
+    V1ServiceAccount,
 ]
 
 
@@ -139,124 +141,68 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             help="The namespace for deployments.",
         )
 
-    def build(self, values_yaml, service: str, *, extra_values_paths=None):
-        yaml_obj = build_deployment(
-            deployment_dir=Path(os.path.dirname(__file__)) / ".." / "helm_deployment" / service,
-            workdir=os.path.join(self._workdir, service),
-            cli_values=values_yaml,
-            name=service,
-            extra_values_names=[],
-            extra_values_paths=extra_values_paths,
-        )
-
-        required_fields = ["metadata/namespace", "metadata/name", "kind"]
-        for field in required_fields:
-            if dict_get(yaml_obj, field) is None:
-                raise ValueError(
-                    f"Deployment yaml must have an explicit value for field. Field: `{field}`"
-                )
-
-        return yaml_obj
-
     async def deploy(
         self,
+        deployment: Optional[yaml.YAMLObject | V1Deployable],
         *,
-        values_yaml: Optional[object] = None,
-        service: Optional[str] = None,
-        deployment: Optional[yaml.YAMLObject | V1Deployable] = None,
         wait_for_ready: bool = True,
-        extra_values_paths: List[str] = None,
         exist_ok: bool = False,
         timeout=3600,
     ):
-        def given(var):
-            if isinstance(var, list):
-                return all(given(val) for val in var)
-            return var is not None
-
-        if given(deployment) == (given(service)):
-            raise ValueError(
-                "Invalid arguments. Pass one of the following: `deployment`, xor `service`."
-            )
-
         if isinstance(deployment, V1Deployable):
             deployment = self.api_client.sanitize_for_serialization(deployment)
 
-        yaml_obj = (
-            deployment
-            if deployment is not None
-            else self.build(values_yaml, service, extra_values_paths=extra_values_paths)
-        )
-
         await self.deploy_yaml(
-            values_yaml=values_yaml,
-            deployment_yaml=yaml_obj,
+            deployment_yaml=deployment,
             wait_for_ready=wait_for_ready,
-            extra_values_paths=extra_values_paths,
             exist_ok=exist_ok,
             timeout=timeout,
         )
 
     async def deploy_yaml(
         self,
+        deployment_yaml: Optional[yaml.YAMLObject],
         *,
-        values_yaml: Optional[str] = None,
-        service: Optional[str] = None,
-        deployment_yaml: Optional[yaml.YAMLObject] = None,
         wait_for_ready: bool = True,
-        extra_values_paths: List[str] = None,
         exist_ok: bool = False,
         timeout=3600,
     ):
-        yaml_obj = (
-            deployment_yaml
-            if deployment_yaml is not None
-            else self.build(values_yaml, service, extra_values_paths=extra_values_paths)
-        )
+        self.dump_yaml(deployment_yaml)
 
-        self.dump_yaml(yaml_obj)
-
-        try:
-            dry_run = self.dry_run
-        except AttributeError:
-            dry_run = False
-
-        namespace = yaml_obj["metadata"]["namespace"]
-
+        namespace = deployment_yaml["metadata"]["namespace"]
         if len(self._deployed[namespace]) == 0:
             self._wait_until_clear(
                 namespace=namespace,
                 skip_check=self.skip_check,
             )
 
-        if not dry_run:
+        if not self.dry_run:
             cleanup = get_cleanup(
                 api_client=self.api_client,
                 namespace=namespace,
-                deployments=[yaml_obj],
+                deployments=[deployment_yaml],
             )
             self._stack.callback(cleanup)
 
         deployment_metadata = {
             "event": "deployment",
-            "service": service,
             "namespace": namespace,
-            "kind": yaml_obj["kind"],
-            "name": yaml_obj["metadata"]["name"],
+            "kind": deployment_yaml["kind"],
+            "name": deployment_yaml["metadata"]["name"],
         }
-        if yaml_obj["kind"] == "StatefulSet":
-            deployment_metadata["replicas"] = yaml_obj["spec"]["replicas"]
+        if deployment_yaml["kind"] == "StatefulSet":
+            deployment_metadata["replicas"] = deployment_yaml["spec"]["replicas"]
 
         self.log_event({"phase": "start", **deployment_metadata})
-        self._deployed[namespace].append(yaml_obj)
-        kubectl_apply(yaml_obj, namespace=namespace, dry_run=dry_run, exist_ok=exist_ok)
+        self._deployed[namespace].append(deployment_yaml)
+        kubectl_apply(deployment_yaml, namespace=namespace, dry_run=self.dry_run, exist_ok=exist_ok)
 
-        if not dry_run:
+        if not self.dry_run:
             if wait_for_ready:
-                await wait_for_rollout(yaml_obj, self.api_client, timeout=timeout)
+                await wait_for_rollout(deployment_yaml, self.api_client, timeout=timeout)
         self.log_event({"phase": "finished", **deployment_metadata})
 
-        return yaml_obj
+        return deployment_yaml
 
     def _get_out_path(self, path: Path, out_dir: Optional[str]) -> Path:
         if path.is_absolute():

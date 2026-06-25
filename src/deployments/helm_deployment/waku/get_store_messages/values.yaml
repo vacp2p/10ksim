@@ -1,5 +1,0 @@
-waku:
-  getStoreMessages:
-    image: {}
-    command:
-      args: {}

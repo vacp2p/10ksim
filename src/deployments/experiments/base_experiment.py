@@ -14,6 +14,7 @@ from typing import Any, Dict, Generic, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
+    V1ConfigMap,
     V1CronJob,
     V1DaemonSet,
     V1Deployment,
@@ -23,6 +24,7 @@ from kubernetes.client import (
     V1Role,
     V1RoleBinding,
     V1Service,
+    V1ServiceAccount,
     V1StatefulSet,
 )
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
@@ -53,6 +55,8 @@ V1Deployable = Union[
     V1CronJob,
     V1Role,
     V1RoleBinding,
+    V1ConfigMap,
+    V1ServiceAccount,
 ]
 
 
@@ -157,9 +161,8 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
     async def deploy_yaml(
         self,
+        deployment_yaml: Optional[yaml.YAMLObject],
         *,
-        service: Optional[str] = None,
-        deployment_yaml: Optional[yaml.YAMLObject] = None,
         wait_for_ready: bool = True,
         exist_ok: bool = False,
         timeout=3600,
@@ -183,7 +186,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         deployment_metadata = {
             "event": "deployment",
-            "service": service,
             "namespace": namespace,
             "kind": deployment_yaml["kind"],
             "name": deployment_yaml["metadata"]["name"],

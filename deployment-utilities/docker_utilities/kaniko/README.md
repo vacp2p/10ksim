@@ -28,7 +28,24 @@ Example — a nim test node from a fix branch:
 ```
 
 The script applies a kaniko Job, streams its logs, and waits for completion. Env overrides:
-`KC` (kubeconfig, defaults to `$KUBECONFIG` or `~/.kube/config`), `BUILD_NS`, `EXCLUDE_NODE`.
+`KC` (kubeconfig, defaults to `$KUBECONFIG` or `~/.kube/config`), `BUILD_NS`, `EXCLUDE_NODE`,
+`DOCKER_SECRET` (see below).
+
+### Pushing under your own Docker Hub account
+
+The push uses the `DOCKER_SECRET` k8s secret (default `dockerhub-creds`) in `$BUILD_NS`. That
+default secret belongs to **whoever set it up** — so by default you'd push into their namespace
+under their credentials. To push under your own account, create a secret with your own token and
+point `DOCKER_SECRET` at it (and use a `<destination>` in your own namespace):
+
+```bash
+kubectl -n zerotesting-build create secret docker-registry mycreds \
+  --docker-username=<you> --docker-password=<your-dockerhub-token>
+
+DOCKER_SECRET=mycreds ./build-image.sh <repo> <ref> <subpath> <dockerfile> <you>/img:tag
+```
+
+(There is no shared team registry yet; until there is, each person builds under their own account.)
 
 ### Builds from git, not your working tree
 

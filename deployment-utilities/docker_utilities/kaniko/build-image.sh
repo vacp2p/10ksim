@@ -25,6 +25,10 @@ KC="${KC:-${KUBECONFIG:-$HOME/.kube/config}}"
 BUILD_NS="${BUILD_NS:-zerotesting-build}"
 # Avoid the master/monitoring node (it interferes with workloads).
 EXCLUDE_NODE="${EXCLUDE_NODE:-node-01.ih-eu-mda1.misc.vaclab}"
+# Docker push credentials: a dockerconfigjson secret in $BUILD_NS. Defaults to
+# `dockerhub-creds`; set this (and a matching <destination> namespace) to push under
+# your own Docker Hub account instead of whoever owns the default secret. See README.
+DOCKER_SECRET="${DOCKER_SECRET:-dockerhub-creds}"
 
 if [ "$#" -lt 5 ]; then
   sed -n '2,18p' "$0"; exit 1
@@ -39,7 +43,7 @@ BUILD_NAME="$(echo "build-${tagpart}" | cut -c1-60)"
 
 echo ">>> building $DESTINATION"
 echo "    repo=$REPO ref=$GIT_REF subpath=$SUBPATH dockerfile=$DOCKERFILE"
-echo "    job=$BUILD_NAME ns=$BUILD_NS cache=$CACHE_REPO"
+echo "    job=$BUILD_NAME ns=$BUILD_NS cache=$CACHE_REPO creds=$DOCKER_SECRET"
 
 render() {
 cat <<YAML
@@ -85,7 +89,7 @@ spec:
       volumes:
         - name: docker-config
           secret:
-            secretName: dockerhub-creds
+            secretName: ${DOCKER_SECRET}
             items:
               - { key: .dockerconfigjson, path: config.json }
 YAML

@@ -1,4 +1,5 @@
 # Python Imports
+import asyncio
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Generic, Optional, TypeVar, Union
+from typing import Any, Collection, Dict, Generic, Literal, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -42,6 +43,7 @@ from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.core.k8s_object import k8s_obj_to_dict
 from src.deployments.core.k8s_rollout import wait_for_rollout
 from src.deployments.registry import registry as experiment_registry
+from src.deployments.utils.flatten import flatten
 from src.deployments.utils.parser import _config_model_fields_to_args
 from src.utils.cli_utils import flag_exists
 from src.utils.yaml_utils import get_YAML
@@ -66,6 +68,10 @@ logger = logging.getLogger(__name__)
 
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
+
+
+def kind_of(dep):
+    return getattr(dep, "kind", None) or getattr(dep, "__class__", type(dep)).__name__
 
 
 class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
@@ -169,7 +175,36 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
     async def deploy(
         self,
-        deployment: Optional[yaml.YAMLObject | V1Deployable],
+        deployment: V1Deployable | Collection[V1Deployable] | yaml.YAMLObject,
+        *,
+        wait_for_ready: bool = True,
+        exist_ok: bool = False,
+        timeout=3600,
+        strategy: Literal["parallel", "serial"] = "parallel",
+    ):
+        async def deploy_one(dep):
+            await self._deploy(
+                deployment=dep, wait_for_ready=wait_for_ready, exist_ok=exist_ok, timeout=timeout
+            )
+
+        async def deploy_batch(items):
+            if strategy == "parallel":
+                await asyncio.gather(*(deploy_one(dep) for dep in items))
+            else:
+                for item in items:
+                    await deploy_one(item)
+
+        items = list(flatten(deployment))
+        base_deployments = {"ServiceAccount", "Role", "ConfigMap", "Service", "RoleBinding"}
+        phase_1 = [dep for dep in items if kind_of(dep) in base_deployments]
+        phase_2 = [dep for dep in items if kind_of(dep) not in base_deployments]
+
+        await deploy_batch(phase_1)
+        await deploy_batch(phase_2)
+
+    async def _deploy(
+        self,
+        deployment: Optional[yaml.YAMLObject | V1Deployable] = None,
         *,
         wait_for_ready: bool = True,
         exist_ok: bool = False,

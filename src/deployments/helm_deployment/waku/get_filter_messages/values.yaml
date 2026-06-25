@@ -1,5 +1,0 @@
-waku:
-  getFilterMessages:
-    image: {}
-    command:
-      args: {}

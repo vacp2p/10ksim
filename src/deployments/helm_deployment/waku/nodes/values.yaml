@@ -1,6 +1,0 @@
-waku:
-  command:
-    args: {}
-  container: {}
-  nodes:
-    includes: {}

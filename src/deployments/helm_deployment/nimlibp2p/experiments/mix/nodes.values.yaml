@@ -1,5 +1,0 @@
-nimlibp2p:
-  nodes:
-    image:
-      repository: soutullostatus/dst-test-node
-      tag: v1.8.0-mplex

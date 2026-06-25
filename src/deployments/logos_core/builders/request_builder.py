@@ -102,7 +102,7 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
     def logoscore_enabled(self) -> bool:
         return self._logoscore_enabled
 
-    @debug.setter
+    @logoscore_enabled.setter
     def logoscore_enabled(self, logoscore_enabled: bool) -> None:
         self._logoscore_enabled = logoscore_enabled
         self._reconcile("logoscore_enabled")

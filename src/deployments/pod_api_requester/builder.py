@@ -31,8 +31,8 @@ from src.deployments.core.configs.container import ContainerConfig, Image
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config, get_config
 from src.deployments.core.configs.pod import PodSpecConfig
-from src.deployments.core.k8s_object import dict_to_k8s_object
 from src.deployments.core.dependency_decorator import depends_on
+from src.deployments.core.k8s_object import dict_to_k8s_object
 
 ScriptMode = Literal["server", "batch", "debug"]
 
@@ -119,6 +119,7 @@ class PodApiRequesterBuilder(PodBuilder):
         "_pod_service_reader_binding_name",
         "_image",
         "_mode",
+        "service_name",
     )
     def _apply_requester_base(self):
         if not self._requester_base_enabled:

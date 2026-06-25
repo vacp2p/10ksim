@@ -158,8 +158,8 @@ class PodBuilder(BaseModel):
         self.namespace = namespace
         return self
 
-    def with_app(self, app: str, *, overwrite: bool = False) -> Self:
-        self.config.with_app(app, overwrite=overwrite)
+    def with_app(self, app: str) -> Self:
+        self.app = app
         return self
 
     def with_image_in_container(

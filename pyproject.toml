@@ -39,4 +39,4 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-addopts = "-ra"
+addopts = "-ra --import-mode=importlib"

@@ -1,5 +1,4 @@
 import logging
-from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Self
@@ -63,6 +62,7 @@ class PodApiRequesterBuilder(PodBuilder):
     _mode: Optional[ScriptMode] = None
 
     _base_requester_params: Optional[RequesterBaseParams] = None
+    _base_requester_dependencies: Dict[str, object] = PrivateAttr(default_factory=dict)
 
     # TODO: move to base class
     _restart_policy: Optional[Literal["Always", "OnFailure", "Never"]] = None
@@ -129,6 +129,7 @@ class PodApiRequesterBuilder(PodBuilder):
         self._apply_requester_base_inner(
             old_params=self._base_requester_params, new_params=new_params
         )
+        self._base_requester_dependencies = _build_requester_base_dependencies(new_params)
         self._base_requester_params = new_params
         return self
 
@@ -245,52 +246,6 @@ class PodApiRequesterBuilder(PodBuilder):
         self._mode = "debug"
         return self.with_command("sleep", args=["infinity"])
 
-    def build_role(self) -> V1Role:
-        return V1Role(
-            api_version="rbac.authorization.k8s.io/v1",
-            kind="Role",
-            metadata=V1ObjectMeta(
-                name=self._pod_service_reader_role_name,
-                namespace=self.namespace,
-            ),
-            rules=[
-                V1PolicyRule(
-                    api_groups=[""],
-                    resources=["pods", "services"],
-                    verbs=["get", "list", "watch"],
-                )
-            ],
-        )
-
-    def build_rolebinding(self) -> V1RoleBinding:
-        return V1RoleBinding(
-            api_version="rbac.authorization.k8s.io/v1",
-            kind="RoleBinding",
-            metadata=V1ObjectMeta(
-                name=self._pod_service_reader_binding_name,
-                namespace=self.namespace,
-            ),
-            role_ref=V1RoleRef(
-                kind="Role",
-                name=self._pod_service_reader_role_name,
-                api_group="rbac.authorization.k8s.io",
-            ),
-            subjects=[
-                {
-                    "kind": "ServiceAccount",
-                    "name": "default",
-                    "namespace": self.namespace,
-                },
-            ],
-        )
-
-    def build_config_map(self) -> V1ConfigMap:
-        with open(Path(__file__).parent / "config.yaml", "r") as config_file:
-            config_dict = yaml.safe_load(config_file.read())
-        config_map: V1ConfigMap = dict_to_k8s_object(config_dict, "V1ConfigMap")
-        config_map.metadata.namespace = self.namespace
-        return config_map
-
     def build(self) -> V1Pod:
         if not self.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
@@ -309,34 +264,31 @@ class PodApiRequesterBuilder(PodBuilder):
         return pod
 
     def build_dependencies(self) -> Dict[str, V1Deployable]:
-        self.dependencies = self._get_dependencies()
-        return deepcopy(self.dependencies)
+        return {"requester_base": self._base_requester_dependencies}
 
-    def _get_dependencies(self):
-        if not self.namespace:
-            raise ValueError("Namespace must be set before building dependencies")
 
-        service = (
-            ServiceBuilder()
-            .with_namespace(self.namespace)
-            .with_name(self._service_name)
-            .with_selector("app", self.app)
-            .with_type("NodePort")
-            .with_port(
-                V1ServicePort(
-                    protocol="TCP",
-                    port=8000,
-                    target_port=8645,
-                )
+def _build_requester_base_dependencies(new_params: RequesterBaseParams):
+    service = (
+        ServiceBuilder()
+        .with_namespace(new_params.namespace)
+        .with_name(new_params.service_name)
+        .with_selector("app", new_params.app)
+        .with_type("NodePort")
+        .with_port(
+            V1ServicePort(
+                protocol="TCP",
+                port=8000,
+                target_port=8645,
             )
-            .build()
         )
-        return {
-            "services": [service],
-            "roles": [self.build_role()],
-            "role_bindings": [self.build_rolebinding()],
-            "config_maps": [self.build_config_map()],
-        }
+        .build()
+    )
+    return {
+        "services": [service],
+        "roles": [build_role(new_params)],
+        "role_bindings": [build_rolebinding(new_params)],
+        "config_maps": [build_config_map(new_params.namespace)],
+    }
 
 
 def _build_requester_base_params(builder: PodApiRequesterBuilder) -> RequesterBaseParams:
@@ -353,3 +305,52 @@ def _build_requester_base_params(builder: PodApiRequesterBuilder) -> RequesterBa
         pod_service_reader_role_name=builder._pod_service_reader_role_name,
         service_name=builder.service_name,
     )
+
+
+def build_role(new_params: RequesterBaseParams) -> V1Role:
+    return V1Role(
+        api_version="rbac.authorization.k8s.io/v1",
+        kind="Role",
+        metadata=V1ObjectMeta(
+            name=new_params.pod_service_reader_role_name,
+            namespace=new_params.namespace,
+        ),
+        rules=[
+            V1PolicyRule(
+                api_groups=[""],
+                resources=["pods", "services"],
+                verbs=["get", "list", "watch"],
+            )
+        ],
+    )
+
+
+def build_rolebinding(new_params: RequesterBaseParams) -> V1RoleBinding:
+    return V1RoleBinding(
+        api_version="rbac.authorization.k8s.io/v1",
+        kind="RoleBinding",
+        metadata=V1ObjectMeta(
+            name=new_params.pod_service_reader_binding_name,
+            namespace=new_params.namespace,
+        ),
+        role_ref=V1RoleRef(
+            kind="Role",
+            name=new_params.pod_service_reader_role_name,
+            api_group="rbac.authorization.k8s.io",
+        ),
+        subjects=[
+            {
+                "kind": "ServiceAccount",
+                "name": "default",
+                "namespace": new_params.namespace,
+            },
+        ],
+    )
+
+
+def build_config_map(namespace: str) -> V1ConfigMap:
+    with open(Path(__file__).parent / "config.yaml", "r") as config_file:
+        config_dict = yaml.safe_load(config_file.read())
+    config_map: V1ConfigMap = dict_to_k8s_object(config_dict, "V1ConfigMap")
+    config_map.metadata.namespace = namespace
+    return config_map

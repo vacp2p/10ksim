@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Self
 
@@ -17,10 +18,11 @@ from pydantic import Field, PrivateAttr
 
 from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config
+from src.deployments.core.dependency_decorator import depends_on
+from src.deployments.experiments.base_experiment import V1Deployable
 from src.deployments.pod_api_requester.builder import (
     PodApiRequesterBuilder,
 )
-from src.deployments.core.dependency_decorator import depends_on
 
 
 @dataclass
@@ -204,10 +206,10 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
 
         return self
 
-    def _get_dependencies(self):
-        base_dict = super()._get_dependencies()
-        base_dict["logoscore"] = self._logoscore_dependencies
-        return base_dict
+    def build_dependencies(self) -> Dict[str, V1Deployable]:
+        deps = super().build_dependencies()
+        deps["logoscore"] = self._logoscore_dependencies
+        return deepcopy(deps)
 
 
 def role(namespace: str, role_name: str):

@@ -62,7 +62,7 @@ def find_events(
 
 
 def parse_events_log(
-    log_path: str,
+    log_path: Union[str, Path],
     events_list: List[Tuple[Dict[str, str], Union[str, Path]]],
     *,
     extract: Callable[[dict], Any] | None = None,
@@ -83,7 +83,7 @@ def parse_events_log(
     if extract is None:
         extract = lambda event: datetime.strptime(event["timestamp"], "%Y-%m-%d %H:%M:%S")
     return_dict = {}
-    with open(log_path, "r") as events_log:
+    with Path(log_path).open("r") as events_log:
         for line in events_log:
             event = json.loads(line)
             for key, path in events_list:
@@ -175,7 +175,7 @@ class BaseBridge(BaseModel):
     nodes_key: str = "nodes_per_statefulset"
 
     def _get_metadata_from_events_list(
-        self, events_log_path: str, events_list: List[EventMapping]
+        self, events_log_path: Path, events_list: List[EventMapping]
     ) -> dict:
         """Extract events in from a given event log."""
         # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].

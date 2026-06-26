@@ -11,7 +11,7 @@ from src.utils.dict_utils import dict_partial_compare, dict_set
 def find_events(
     log_path: Union[str, Path],
     key: Dict[str, str],
-) -> Iterator[dict]:
+) -> List[dict]:
     """
     Return a list of all events where all keys match `key`.
     Each line in `log_path` is converted to an event (dict).
@@ -24,6 +24,7 @@ def find_events(
             event = json.loads(line)
             if dict_partial_compare(event, key):
                 results.append(event)
+
     return results
 
 

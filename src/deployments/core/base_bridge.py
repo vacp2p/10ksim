@@ -1,11 +1,12 @@
+# Python Imports
 import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import List
 
-# Project Imports
 from pydantic import BaseModel
 
+# Project Imports
 from src.deployments.core.event_log import find_events, parse_events_log
 from src.deployments.core.event_mapping import EventMapping
 from src.deployments.core.metadata_times import (

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: relay-nodes-0
-  namespace: zerotesting-pwhite
+  namespace: ns
 spec:
   replicas: 2
   selector:
@@ -14,7 +14,7 @@ spec:
       labels:
         app: zerotenkay-core
       name: relay-nodes-0
-      namespace: zerotesting-pwhite
+      namespace: ns
     spec:
       containers:
         - env:
@@ -42,6 +42,6 @@ spec:
               cpu: 500m
       dnsConfig:
         searches:
-          - core-relay.zerotesting-pwhite.svc.cluster.local
-          - core-bootstrap.zerotesting-pwhite.svc.cluster.local
+          - core-relay.ns.svc.cluster.local
+          - core-bootstrap.ns.svc.cluster.local
       serviceAccountName: secret-creator2

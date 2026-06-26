@@ -70,4 +70,4 @@ data:
 kind: ConfigMap
 metadata:
   name: api-requester-config
-  namespace: zerotesting-pwhite
+  namespace: ns

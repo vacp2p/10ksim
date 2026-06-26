@@ -41,7 +41,7 @@ def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict)
 
     filtered = {}
 
-    def filter(path, obj):
+    def collect_valid_interval(path, obj):
         try:
             start_dt = obj["start"]
             end_dt = obj["end"]
@@ -52,7 +52,7 @@ def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict)
         except (KeyError, TypeError):
             pass
 
-    dict_visit(shifted, filter)
+    dict_visit(shifted, collect_valid_interval)
 
     return filtered
 

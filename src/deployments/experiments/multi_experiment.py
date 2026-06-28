@@ -12,9 +12,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from src.deployments.experiments.base_experiment import ARG_NOT_SET, BaseExperiment
+from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.registry import registry as experiment_registry
+from src.deployments.utils.parser import ARG_NOT_SET
 from src.utils.dict_utils import dict_set
 
 logger = logging.getLogger(__name__)
@@ -56,11 +57,11 @@ class Multiple(BaseExperiment[Config]):
         subparser = subparsers.add_parser(
             cls.name, help="Run an experiment multiple times with different parameters."
         )
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
 
     @classmethod
-    def add_args(cls, subparser) -> None:
+    def add_base_args(cls, subparser) -> None:
         subparser.add_argument(
             "--name", type=str, required=False, help="Name of the experiment to run."
         )

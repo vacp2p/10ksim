@@ -211,7 +211,7 @@ class JsWakuNodes(BaseExperiment, BaseModel):
             cls.name,
             help="Run an experiment with lightpush nodes that are disconnected/reconnected.",
         )
-        BaseExperiment.add_args(subparser)
+        BaseExperiment.add_base_args(subparser)
 
     def _preprocess_event(self, event: Any) -> Any:
         if isinstance(event, str):

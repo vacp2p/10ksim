@@ -120,7 +120,7 @@ class ConnManagerExperiment(BaseExperiment[ExpConfig]):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="Connection manager experiment")
-        BaseExperiment.add_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     def _get_metadata(self) -> dict:
@@ -701,8 +701,8 @@ class ConnManagerAScale(Multiple):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="Run A at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:
@@ -733,8 +733,8 @@ class ConnManagerEScale(Multiple):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="Run E at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:
@@ -762,8 +762,8 @@ class ConnManagerGScale(Multiple):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="Run G at scale steps")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:
@@ -792,8 +792,8 @@ class ConnManagerHubScale(Multiple):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="Run A with varying hub counts")
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:

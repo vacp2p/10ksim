@@ -29,6 +29,8 @@ BOOTSTRAP_NAME = "bootstrap"
 
 
 class ExpConfig(BaseModel):
+    model_config = ConfigDict(use_attribute_docstrings=True)
+
     num_relay_nodes: NonNegativeInt = 30
     num_messages: NonNegativeInt = 20
     message_size_bytes: NonNegativeInt = 1000
@@ -36,9 +38,10 @@ class ExpConfig(BaseModel):
     delay_after_publish: NonNegativeFloat = 1
     muxer: Muxer = "yamux"
     image: Image = Image(repo="pearsonwhite/dst-nimlibp2p-logging", tag="wip-4.2-1.16.0-amd")
-    # "kad-dht" discovers peers through a bootstrap node; "static" uses the CONNECTTO dial.
     discovery: Discovery = "static"
+    """ "kad-dht" discovers peers through a bootstrap node; "static" uses the CONNECTTO dial."""
     connect_to: NonNegativeInt = 10
+    """Number of nodes to try to connect to for each node when starting up"""
     bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
@@ -153,11 +156,6 @@ async def publish(config, namespace, random_name):
 @experiment(name="nimlibp2p")
 class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="nimlibp2p2 experiment")
-        BaseExperiment.add_args(subparser)
 
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)

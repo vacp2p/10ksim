@@ -30,7 +30,7 @@ class KadDHTExperiment(BaseExperiment[ExpConfig]):
     @classmethod
     def add_parser(cls, subparsers) -> None:
         subparser = subparsers.add_parser(cls.name, help="KAD DHT experiment")
-        BaseExperiment.add_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="nimlibp2p")
 
     async def _run(self):

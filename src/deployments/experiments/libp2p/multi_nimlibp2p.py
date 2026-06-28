@@ -26,8 +26,8 @@ class MultiNimlibp2p(Multiple):
         subparser = subparsers.add_parser(
             cls.name, help="Run nimlibp2p multiple times with different parameters."
         )
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
 
     def get_params_paths(self) -> Optional[dict]:
         """Return dict mapping keys to values.yaml paths"""

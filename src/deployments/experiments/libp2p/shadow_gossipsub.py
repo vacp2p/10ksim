@@ -58,7 +58,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         subparser = subparsers.add_parser(
             cls.name, help="Run a GossipSub mesh + publisher inside the Shadow simulator."
         )
-        BaseExperiment.add_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="zerotesting-shadow")
 
     async def _run(self):

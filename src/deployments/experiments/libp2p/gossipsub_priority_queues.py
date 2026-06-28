@@ -8,13 +8,14 @@ from pydantic import BaseModel, ConfigDict
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
-from src.deployments.experiments.base_experiment import ARG_NOT_SET, BaseExperiment
+from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge as Libp2pBridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.libp2p.builders.builders import Option as NimLibp2p
 from src.deployments.libp2p.builders.helpers import find_libp2p_container_config
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.registry import experiment
+from src.deployments.utils.parser import ARG_NOT_SET
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class GossipSubPriorityQueuesExperiment(BaseExperiment[ExpConfig]):
     @classmethod
     def add_parser(cls, subparsers):
         subparser = subparsers.add_parser(cls.name, help="GossipSub Priority Queue Load Testing")
-        BaseExperiment.add_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="libp2p-lab")
 
         # Scenario

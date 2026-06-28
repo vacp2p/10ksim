@@ -81,11 +81,6 @@ class ExpConfig(BaseModel):
 class WakuExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Dummy experiment to run and test things.")
-        BaseExperiment.add_args(subparser)
-
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 

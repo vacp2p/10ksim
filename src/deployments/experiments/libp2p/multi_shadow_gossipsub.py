@@ -20,8 +20,8 @@ class MultiShadowGossipsub(Multiple):
         subparser = subparsers.add_parser(
             cls.name, help="Run shadow-gossipsub multiple times at different scales."
         )
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
+        Multiple.add_base_args(subparser)
+        BaseExperiment.add_base_args(subparser)
         subparser.set_defaults(namespace="zerotesting-shadow")
 
     def get_params_list(self) -> List[dict]:

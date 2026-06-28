@@ -42,6 +42,7 @@ from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.core.k8s_object import k8s_obj_to_dict
 from src.deployments.core.k8s_rollout import wait_for_rollout
 from src.deployments.registry import registry as experiment_registry
+from src.deployments.utils.parser import _config_model_fields_to_args
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
@@ -62,7 +63,6 @@ V1Deployable = Union[
 
 logger = logging.getLogger(__name__)
 
-ARG_NOT_SET = object()
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
 
@@ -118,8 +118,19 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             **self.model_dump(exclude={"metadata"}),
         }
 
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        subparser = subparsers.add_parser(cls.name, help=cls.__doc__)
+        cls.add_base_args(subparser)
+        cls.add_config_args(subparser)
+        cls.add_args(subparser)
+
+    @classmethod
+    def add_args(cls, subparser) -> None:
+        pass
+
     @staticmethod
-    def add_args(subparser: ArgumentParser):
+    def add_base_args(subparser: ArgumentParser):
         subparser.add_argument(
             "--skip-check",
             action="store_true",
@@ -138,8 +149,15 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             type=str,
             required=False,
             default="zerotesting",
+            metavar="(str)",
             help="The namespace for deployments.",
         )
+
+    @classmethod
+    def add_config_args(cls, subparser: ArgumentParser) -> None:
+        config_model = cls.model_fields["config"].annotation
+        for flag, kwargs in _config_model_fields_to_args(config_model):
+            subparser.add_argument(flag, **kwargs)
 
     async def deploy(
         self,

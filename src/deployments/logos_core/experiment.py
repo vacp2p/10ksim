@@ -3,8 +3,9 @@
 import asyncio
 import json
 import logging
+import random
 import traceback
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from kubernetes.dynamic.exceptions import ApiException
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PrivateAttr
@@ -31,12 +32,177 @@ class ExpConfig(BaseModel):
     num_messages: NonNegativeInt = 2
     delay_cold_start: NonNegativeFloat = 2
     delay_after_publish: NonNegativeFloat = 1
+    num_bootstrap_nodes: NonNegativeInt = 2
 
 
 _LOGOSCORE_PUBLISHER = {
     "service_name": "core-external",
     "app": "zerotenkay-core2",
 }
+
+
+def raise_unless_already_exists(e):
+    if not hasattr(e, "api_exceptions"):
+        raise e
+    all_already_exist = True
+    for api_exception in e.api_exceptions:
+        if isinstance(api_exception, ApiException):
+            if not (api_exception.status == 409 and api_exception.reason == "AlreadyExists"):
+                all_already_exist = False
+                break
+        else:
+            all_already_exist = False
+            return
+
+    if not all_already_exist:
+        raise e
+
+
+@experiment(name="core")
+class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    bootstrap_service: str = "core-bootstrap"
+    relay_service: str = "core-relay"
+    service_account_name: str = "secret-creator2"
+    pod_container_name: str = "logoscore-0"  # All on shard 0. Eg. logoscore-0-0 logoscore-0-1
+
+    _container_name: Optional[str] = PrivateAttr(default=None)
+
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        subparser = subparsers.add_parser(cls.name, help="nimlibp2p2 experiment")
+        BaseExperiment.add_args(subparser)
+
+    def _get_metadata(self) -> dict:
+        metadata = Bridge().get_metadata(self.events_log_path)
+        metadata["stack"]["container_name"] = self._container_name
+        return metadata
+
+    def build_publisher(self):
+        builder = (
+            LogoscorePodApiRequester()
+            .with_namespace(self.namespace)
+            .with_name("logoscore-requester")
+            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="wip-amd"))
+            .with_mode("server")
+            .with_service_account_name(self.service_account_name)
+            .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
+            .with_app(_LOGOSCORE_PUBLISHER["app"])
+            .with_logoscore()
+            .with_dns_search(f"{self.bootstrap_service}.{self.namespace}.svc.cluster.local")
+            .with_dns_search(f"{self.relay_service}.{self.namespace}.svc.cluster.local")
+        )
+        return {"pod": builder.build(), **builder.build_dependencies()}
+
+    def build_node_deployments(self, type: Literal["relay", "bootstrap"]):
+        if type == "relay":
+            name = "relay-nodes-0"
+            service = self.relay_service
+            replicas = self.config.num_relay_nodes
+        else:
+            name = "bootstrap-nodes-0"
+            service = self.bootstrap_service
+            replicas = self.config.num_bootstrap_nodes
+        builder = (
+            NodesBuilder()
+            .with_container_name(self.pod_container_name)
+            .with_config(namespace=self.namespace, name=name)
+            .with_service_name(service)
+            .with_replicas(replicas)
+            .with_dns_service([self.relay_service, self.bootstrap_service])
+            .with_service_account_name(self.service_account_name)
+        )
+        return {"stateful_set": builder.build(), **builder.build_dependencies()}
+
+    async def deploy_all(self, deployment, exist_ok: bool = False):
+        if isinstance(deployment, dict):
+            for _, dep in deployment.items():
+                await self.deploy_all(dep)
+        elif isinstance(deployment, list):
+            for dep in deployment:
+                await self.deploy_all(dep)
+        else:
+            try:
+                await self.deploy(deployment=deployment, wait_for_ready=True)
+            except Exception as e:
+                # Ignore duplicate dependencies between bootstrap and relay
+                raise_unless_already_exists(e)
+
+    async def _run(self):
+        self.log_event("run_start")
+
+        publisher_deployments = self.build_publisher()
+        publisher_pod = publisher_deployments["pod"]
+        del publisher_deployments["pod"]
+        publisher_deps = publisher_deployments
+        await self.deploy_all(publisher_deps, exist_ok=False)
+        await self.deploy(deployment=publisher_pod, wait_for_ready=True, exist_ok=True)
+
+        bootstrap_deployments = self.build_node_deployments("bootstrap")
+        bootstrap_ss = bootstrap_deployments["stateful_set"]
+        del bootstrap_deployments["stateful_set"]
+        await self.deploy_all(bootstrap_deployments, exist_ok=False)
+        await self.deploy(deployment=bootstrap_ss, exist_ok=True)
+
+        logger.info(f"Waiting for cold_start_delay: {self.config.delay_cold_start}")
+        await asyncio.sleep(self.config.delay_cold_start)
+
+        bootstrap_name = bootstrap_ss.metadata.name
+        self.log_event("init_bootstrap_nodes")
+        for index in range(self.config.num_bootstrap_nodes):
+            indexed_name = f"{bootstrap_name}-{index}"
+            try:
+                await init_token(self.namespace, indexed_name, self.bootstrap_service)
+            except Exception as e:
+                logger.error(f"e: {e}")
+            await init_node(self.namespace, indexed_name, self.bootstrap_service)
+
+        # Get bootstrap addresses
+        addresses = []
+        for index in range(self.config.num_bootstrap_nodes):
+            indexed_name = f"{bootstrap_name}-{index}"
+            address = await get_address(self.namespace, indexed_name, self.bootstrap_service)
+            addresses.append(address)
+        logger.info(f"Addresses {addresses}")
+
+        relay_deployments = self.build_node_deployments("relay")
+        relay_ss = relay_deployments["stateful_set"]
+        del relay_deployments["stateful_set"]
+        await self.deploy_all(relay_deployments, exist_ok=False)
+        await self.deploy(deployment=relay_ss, wait_for_ready=True)
+
+        self.log_event("init_relay_nodes")
+        relay_name = relay_ss.metadata.name
+        for index in range(self.config.num_relay_nodes):
+            indexed_name = f"{relay_name}-{index}"
+            try:
+                await init_token(self.namespace, indexed_name, self.relay_service)
+            except Exception as e:
+                logger.error(f"e: {e}")
+            await init_node(self.namespace, indexed_name, self.relay_service, addresses)
+
+        for name, service in zip(
+            [bootstrap_name, relay_name], [self.bootstrap_service, self.relay_service]
+        ):
+            for index in range(self.config.num_relay_nodes):
+                indexed_name = f"{name}-{index}"
+                await start_node(self.namespace, indexed_name, service)
+
+        topic = "/my-app/1/dst/proto"
+        for index in range(self.config.num_relay_nodes):
+            indexed_name = f"{relay_name}-{index}"
+            await subscribe(self.namespace, indexed_name, self.relay_service, topic)
+
+        message = "aGVsbG8="  # Test message
+        for _message_index in range(self.config.num_messages):
+            index = random.randrange(0, self.config.num_relay_nodes)
+            indexed_name = f"{relay_name}-{index}"
+            await send(self.namespace, indexed_name, self.relay_service, topic, message)
+
+        await asyncio.sleep(20)
+        self.log_event("publisher_wait_finished")
+        self.log_event("internal_run_finished")
 
 
 async def send(namespace, name_with_index, service_name, topic, message):
@@ -240,162 +406,3 @@ async def init_token(namespace, name_with_index, service_name):
         logger.error(f"PodApiError: {e} {traceback.format_exc()}")
     except Exception as e:
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
-
-
-def raise_unless_already_exists(e):
-    if not hasattr(e, "api_exceptions"):
-        raise e
-    all_already_exist = True
-    for api_exception in e.api_exceptions:
-        if isinstance(api_exception, ApiException):
-            if not (api_exception.status == 409 and api_exception.reason == "AlreadyExists"):
-                all_already_exist = False
-                break
-        else:
-            all_already_exist = False
-            return
-
-    if not all_already_exist:
-        raise e
-
-
-@experiment(name="core")
-class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    _container_name: Optional[str] = PrivateAttr(default=None)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="nimlibp2p2 experiment")
-        BaseExperiment.add_args(subparser)
-
-    def _get_metadata(self) -> dict:
-        metadata = Bridge().get_metadata(self.events_log_path)
-        metadata["stack"]["container_name"] = self._container_name
-        return metadata
-
-    async def _run(self):
-        self.log_event("run_start")
-        bootstrap_service = "core-bootstrap"
-        relay_service = "core-relay"
-        service_account_name = "secret-creator2"
-        pod_container_name = "logoscore-0"  # All on shard 0. Eg. logoscore-0-0 logoscore-0-1
-
-        publisher_builder = (
-            LogoscorePodApiRequester()
-            .with_namespace(self.namespace)
-            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="wip-amd"))
-            .with_mode("server")
-            .with_service_account_name(service_account_name)
-            .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
-            .with_logoscore_profile(
-                self.namespace, name="logoscore-requester", app=_LOGOSCORE_PUBLISHER["app"]
-            )
-            .with_dns_search(f"{bootstrap_service}.{self.namespace}.svc.cluster.local")
-            .with_dns_search(f"{relay_service}.{self.namespace}.svc.cluster.local")
-        )
-
-        dependencies = publisher_builder.build_dependencies()
-        for _name, dep_list in dependencies.items():
-            for dep in dep_list:
-                logger.info(f"Deploying dependency: {_name}")
-                logger.info(f"{dep.metadata.namespace}")
-                logger.info(f"{dep.metadata.name}")
-                logger.info(f"{type(dep.metadata)}")
-                await self.deploy(deployment=dep, wait_for_ready=True)
-
-        await self.deploy(deployment=publisher_builder.build(), wait_for_ready=True)
-
-        bootstrap_nodes_builder = (
-            NodesBuilder()
-            .with_container_name(pod_container_name)
-            .with_config(namespace=self.namespace, name="bootstrap-nodes-0")
-            .with_service_name(bootstrap_service)
-            .with_replicas(self.config.num_relay_nodes)
-            .with_dns_service([relay_service, bootstrap_service])
-            .with_service_account_name(service_account_name)
-        )
-        nodes_deps = bootstrap_nodes_builder.build_dependencies()
-        for _kind, deps in nodes_deps.items():
-            for dep in deps:
-                try:
-                    await self.deploy(deployment=dep, wait_for_ready=True)
-                except Exception as e:
-                    # Ignore duplicate dependencies between bootstrap and relay
-                    raise_unless_already_exists(e)
-        bootstrap_nodes = bootstrap_nodes_builder.build()
-        await self.deploy(deployment=bootstrap_nodes, wait_for_ready=True)
-        self._container_name = bootstrap_nodes.spec.template.spec.containers[0].name
-
-        logger.info(f"Waiting for cold_start_delay: {self.config.delay_cold_start}")
-        await asyncio.sleep(self.config.delay_cold_start)
-
-        bootstrap_name = bootstrap_nodes.metadata.name
-        self.log_event("init_bootstrap_nodes")
-        for index in range(self.config.num_relay_nodes):
-            indexed_name = f"{bootstrap_name}-{index}"
-            try:
-                await init_token(self.namespace, indexed_name, bootstrap_service)
-            except Exception as e:
-                logger.error(f"e: {e}")
-            await init_node(self.namespace, indexed_name, bootstrap_service)
-
-        # Get bootstrap ENRs
-        addresses = []
-        for index in range(self.config.num_relay_nodes):
-            indexed_name = f"{bootstrap_name}-{index}"
-            address = await get_address(self.namespace, indexed_name, bootstrap_service)
-            addresses.append(address)
-        logger.info(f"Addresses {addresses}")
-
-        relay_nodes_builder = (
-            NodesBuilder()
-            .with_container_name(pod_container_name)
-            .with_config(namespace=self.namespace, name="relay-nodes-0")
-            .with_service_name(relay_service)
-            .with_replicas(self.config.num_relay_nodes)
-            .with_dns_service([relay_service, bootstrap_service])
-            .with_service_account_name(service_account_name)
-        )
-        nodes_deps = relay_nodes_builder.build_dependencies()
-        for _kind, deps in nodes_deps.items():
-            for dep in deps:
-                try:
-                    await self.deploy(deployment=dep, wait_for_ready=True)
-                except Exception as e:
-                    # Ignore duplicate dependencies between bootstrap and relay
-                    raise_unless_already_exists(e)
-
-        self.log_event("init_relay_nodes")
-        relay_nodes = relay_nodes_builder.build()
-        relay_name = relay_nodes.metadata.name
-        await self.deploy(deployment=relay_nodes, wait_for_ready=True)
-        for index in range(self.config.num_relay_nodes):
-            indexed_name = f"{relay_name}-{index}"
-            try:
-                await init_token(self.namespace, indexed_name, relay_service)
-            except Exception as e:
-                logger.error(f"e: {e}")
-            await init_node(self.namespace, indexed_name, relay_service, addresses)
-
-        for name, service in zip([bootstrap_name, relay_name], [bootstrap_service, relay_service]):
-            for index in range(self.config.num_relay_nodes):
-                indexed_name = f"{name}-{index}"
-                await start_node(self.namespace, indexed_name, service)
-
-        topic = "/my-app/1/dst/proto"
-        for index in range(self.config.num_relay_nodes):
-            indexed_name = f"{relay_name}-{index}"
-            await subscribe(self.namespace, indexed_name, relay_service, topic)
-
-        message = "aGVsbG8="  # Test message
-        for _message_index in range(self.config.num_messages):
-            # index = random.randrange(0, self.config.num_nodes)
-            index = _message_index
-            indexed_name = f"{relay_name}-{index}"
-            await send(self.namespace, indexed_name, relay_service, topic, message)
-
-        await asyncio.sleep(20)
-        self.log_event("publisher_wait_finished")
-        self.log_event("internal_run_finished")

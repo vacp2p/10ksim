@@ -110,7 +110,7 @@ class NodesBuilder(StatefulSetBuilder):
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.dns_config = None
         for dns in self._dns_configs:
             search = f"{dns}.{self._namespace}.svc.cluster.local"
-            self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_service(
+            self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_search(
                 search, overwrite=True
             )
 

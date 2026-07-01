@@ -51,15 +51,9 @@ class ExpConfig(BaseModel):
 
 @experiment(name="shadow-gossipsub")
 class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Run a GossipSub mesh + publisher inside the Shadow simulator."""
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(
-            cls.name, help="Run a GossipSub mesh + publisher inside the Shadow simulator."
-        )
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="zerotesting-shadow")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def _run(self):
         self.log_event("run_start")

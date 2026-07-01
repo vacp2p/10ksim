@@ -7,9 +7,6 @@ from pydantic.fields import FieldInfo
 ARG_NOT_SET = object()
 
 
-from typing import Any, Literal, Union, get_args, get_origin
-
-
 def _annotation_display(annotation) -> str:
     annotation = _unwrap_optional(annotation)
     origin = get_origin(annotation)

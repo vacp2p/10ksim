@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Collection, Dict, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Literal, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -149,7 +149,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
     async def deploy(
         self,
-        deployment: V1Deployable | Collection[V1Deployable] | yaml.YAMLObject,
+        deployment: V1Deployable | list | dict | set | yaml.YAMLObject,
         *,
         wait_for_ready: bool = True,
         exist_ok: bool = False,

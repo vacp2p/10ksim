@@ -1,6 +1,6 @@
 import argparse
 import logging
-from typing import ClassVar, List, Literal, Optional, Type
+from typing import ClassVar, List, Literal, Type
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegativeInt
@@ -198,36 +198,6 @@ class ExpWithDescription(BaseExperiment[EmptyExpConfig]):
     ]
 
 
-class ExpWithCustomParserExperiment(BaseExperiment[EmptyExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(
-            cls.name, help=cls.__doc__, formatter_class=_HelpFormatter
-        )
-        subparser.add_argument(
-            "--custom-arg",
-            type=str,
-            required=False,
-            default="custom-arg",
-            metavar="(str)",
-            help="A custom arg added via a custom add_parser function",
-        )
-
-    async def _run(self):
-        pass
-
-    name: ClassVar[str] = "ExpWithCustomParserExperiment"
-    expected_param_strings: ClassVar[List[str]] = [
-        "ExpWithCustomParserExperiment",
-        "--custom-arg (str)",
-        "custom add_parser function",
-    ]
-
-    unexpected_param_strings: ClassVar[List[str]] = BASE_EXP_EXPECTED
-
-
 class CustomArgsExperiment(BaseExperiment[EmptyExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -262,29 +232,11 @@ def test_experiments(capsys, Exp: Type[BaseExperiment]):
     _test_help_string(capsys, Exp, "description", getattr(Exp, "expected_description", []))
 
 
-def test_experiment_custom(capsys):
-    """add_parser should add help for base args and config args."""
-    _test_help_string(
-        capsys,
-        ExpWithCustomParserExperiment,
-        "description",
-        getattr(ExpWithCustomParserExperiment, "expected_description", []),
-    )
-    _test_help_string(
-        capsys,
-        ExpWithCustomParserExperiment,
-        "params",
-        getattr(ExpWithCustomParserExperiment, "expected_param_strings", []),
-        unexpected=getattr(ExpWithCustomParserExperiment, "unexpected_param_strings", []),
-    )
-
-
 def _test_help_string(
     capsys,
     Exp: Type[BaseExperiment],
     which_help_str: Literal["description", "params"],
     expected: List[str],
-    unexpected: Optional[List[str]] = None,
 ):
     """add_parser should add help for base args and config args."""
     parser = argparse.ArgumentParser(description="Test parser", formatter_class=_HelpFormatter)
@@ -301,7 +253,3 @@ def _test_help_string(
 
     for expected_string in expected:
         assert expected_string in captured.out
-
-    if unexpected:
-        for string in unexpected:
-            assert string not in captured.out

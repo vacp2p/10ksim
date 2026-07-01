@@ -15,7 +15,6 @@ from src.deployments.libp2p.builders.builders import Option as NimLibp2p
 from src.deployments.libp2p.builders.helpers import find_libp2p_container_config
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.registry import experiment
-from src.deployments.utils.parser import ARG_NOT_SET
 
 logger = logging.getLogger(__name__)
 
@@ -88,62 +87,6 @@ class ExpConfig(BaseModel):
 @experiment(name="gossipsub-priority-queues")
 class GossipSubPriorityQueuesExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @classmethod
-    def add_parser(cls, subparsers):
-        subparser = subparsers.add_parser(cls.name, help="GossipSub Priority Queue Load Testing")
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="libp2p-lab")
-
-        # Scenario
-        subparser.add_argument("--scenario", type=str, default=ARG_NOT_SET)
-
-        # Node counts
-        subparser.add_argument("--num-normal-nodes", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--num-slow-nodes", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--total-peers", type=int, default=ARG_NOT_SET)
-
-        # Connection
-        subparser.add_argument("--connect-to", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--muxer", type=str, choices=["yamux", "quic"], default=ARG_NOT_SET)
-
-        # GossipSub mesh
-        subparser.add_argument("--gossipsub-d", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--gossipsub-d-low", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--gossipsub-d-high", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--gossipsub-d-out", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--gossipsub-d-lazy", type=int, default=ARG_NOT_SET)
-
-        # Queues
-        subparser.add_argument("--high-queue-size", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--medium-queue-size", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--low-queue-size", type=int, default=ARG_NOT_SET)
-
-        # Penalty
-        subparser.add_argument("--slow-peer-penalty-weight", type=float, default=ARG_NOT_SET)
-        subparser.add_argument("--slow-peer-penalty-decay", type=float, default=ARG_NOT_SET)
-
-        # Bandwidth
-        subparser.add_argument("--slow-ingress-bandwidth", type=str, default=ARG_NOT_SET)
-        subparser.add_argument("--slow-egress-bandwidth", type=str, default=ARG_NOT_SET)
-
-        # Publisher
-        subparser.add_argument("--num-messages", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--message-size-bytes", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--message-rate-per-sec", type=float, default=ARG_NOT_SET)
-        subparser.add_argument(
-            "--publish-from-role", type=str, choices=["normal", "slow", "all"], default=ARG_NOT_SET
-        )
-
-        # Timing
-        subparser.add_argument("--delay-cold-start", type=int, default=ARG_NOT_SET)
-        subparser.add_argument("--run-duration-s", type=int, default=ARG_NOT_SET)
-
-        # Images
-        subparser.add_argument("--image-repo", type=str, default=ARG_NOT_SET)
-        subparser.add_argument("--image-tag", type=str, default=ARG_NOT_SET)
-        subparser.add_argument("--publisher-image-repo", type=str, default=ARG_NOT_SET)
-        subparser.add_argument("--publisher-image-tag", type=str, default=ARG_NOT_SET)
 
     def _get_metadata(self) -> dict:
         return Libp2pBridge().get_metadata(self.events_log_path)

@@ -253,3 +253,21 @@ def _test_help_string(
 
     for expected_string in expected:
         assert expected_string in captured.out
+
+
+def test_cannot_override_params():
+    parser = argparse.ArgumentParser(description="Test parser", formatter_class=_HelpFormatter)
+    subparsers = parser.add_subparsers(dest="experiment", required=True)
+    with pytest.raises(TypeError):
+
+        class NoOverrideParamExp(BaseExperiment[EmptyExpConfig]):
+            model_config = ConfigDict(use_attribute_docstrings=True)
+
+            name: ClassVar[str] = "NoOverrideParamExp"
+
+            @classmethod
+            def add_parser(cls, subparsers) -> None:
+                subparser = subparsers.add_parser(cls.name, help=cls.__doc__)
+
+        NoOverrideParamExp.add_parser(subparsers)
+        _exp = NoOverrideParamExp()

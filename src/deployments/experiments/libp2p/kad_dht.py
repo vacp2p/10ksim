@@ -25,13 +25,9 @@ class ExpConfig(BaseModel):
 
 @experiment(name="kad-dht")
 class KadDHTExperiment(BaseExperiment[ExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """KAD DHT experiment"""
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="KAD DHT experiment")
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def _run(self):
         self.log_event("run_start")

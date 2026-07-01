@@ -50,18 +50,12 @@ class Config(BaseModel):
 
 @experiment(name="multi")
 class Multiple(BaseExperiment[Config]):
+    """Run an experiment multiple times with different parameters."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(
-            cls.name, help="Run an experiment multiple times with different parameters."
-        )
-        Multiple.add_base_args(subparser)
-        BaseExperiment.add_base_args(subparser)
-
-    @classmethod
-    def add_base_args(cls, subparser) -> None:
+    def add_args(cls, subparser) -> None:
         subparser.add_argument(
             "--name", type=str, required=False, help="Name of the experiment to run."
         )

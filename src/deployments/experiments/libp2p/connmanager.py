@@ -115,13 +115,9 @@ class ExpConfig(BaseModel):
 
 @experiment(name="connmanager")
 class ConnManagerExperiment(BaseExperiment[ExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Connection manager experiment"""
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Connection manager experiment")
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_metadata(self) -> dict:
         return Libp2pBridge().get_metadata(self.events_log_path)
@@ -698,13 +694,6 @@ class ConnManagerAScale(Multiple):
         self.config.delay = 15
         super().model_post_init(__context)
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run A at scale steps")
-        Multiple.add_base_args(subparser)
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
-
     def get_params_list(self) -> list[dict]:
         return [
             {
@@ -730,13 +719,6 @@ class ConnManagerEScale(Multiple):
         self.config.delay = 15
         super().model_post_init(__context)
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run E at scale steps")
-        Multiple.add_base_args(subparser)
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
-
     def get_params_list(self) -> list[dict]:
         return [
             {
@@ -758,13 +740,6 @@ class ConnManagerGScale(Multiple):
         self.config.name = "connmanager"
         self.config.delay = 15
         super().model_post_init(__context)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run G at scale steps")
-        Multiple.add_base_args(subparser)
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:
         return [
@@ -788,13 +763,6 @@ class ConnManagerHubScale(Multiple):
         self.config.name = "connmanager"
         self.config.delay = 15
         super().model_post_init(__context)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Run A with varying hub counts")
-        Multiple.add_base_args(subparser)
-        BaseExperiment.add_base_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
 
     def get_params_list(self) -> list[dict]:
         return [{"run": "A", "num_hubs": n} for n in HUB_SCALE_STEPS]

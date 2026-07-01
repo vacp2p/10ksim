@@ -131,7 +131,6 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
 
     def with_debug(self, debug: bool = True) -> Self:
         self.debug = debug
-        self._reconcile("debug")
         return self
 
     @depends_on(

@@ -64,6 +64,7 @@ def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any
         choices = get_args(annotation)
         if choices:
             kwargs["type"] = type(choices[0])
+            kwargs["choices"] = choices
 
     if field.description:
         kwargs["help"] = field.description

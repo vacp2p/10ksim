@@ -40,9 +40,9 @@ async def test_deploy_orders_base_resources_before_workloads(strategy):
         DeploymentObj("StatefulSet", "sts1"),
         DeploymentObj("ServiceAccount", "sa1"),
         DeploymentObj("Service", "s"),
-        DeploymentObj("DaemonSet,", "ds"),
-        DeploymentObj("Job,", "j"),
-        DeploymentObj("CronJob,", "cj"),
+        DeploymentObj("DaemonSet", "ds"),
+        DeploymentObj("Job", "j"),
+        DeploymentObj("CronJob", "cj"),
         DeploymentObj("Role", "role1"),
         DeploymentObj("ConfigMap", "cm1"),
     ]

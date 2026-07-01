@@ -106,6 +106,9 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     """Path to deployment output folder. Based off of self.output_folder"""
     _stack: Optional[ExitStack]
 
+    def _run_analysis(self) -> None:
+        pass
+
     @model_validator(mode="after")
     def set_type(self):
         self._type = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
@@ -286,6 +289,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         self.log_event("run_finished")
         self._dump_metadata()
+        self._run_analysis()
 
     @abstractmethod
     async def _run(self):

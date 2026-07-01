@@ -20,9 +20,7 @@ from src.deployments.core.configs.helpers.identity import apply_identity
 from src.deployments.core.configs.helpers.utils import find_container_config
 from src.deployments.core.dependency_decorator import depends_on
 from src.deployments.experiments.base_experiment import V1Deployable
-from src.deployments.pod_api_requester.builder import (
-    PodApiRequesterBuilder,
-)
+from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 
 
 @dataclass
@@ -170,7 +168,6 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
         if old_params and old_params.service_name and old_params.namespace:
             old_search = f"{old_params.service_name}.{old_params.namespace}.svc.cluster.local"
             pod_spec.remove_dns_search(old_search, missing_ok=True)
-
         new_search = f"{new_params.service_name}.{new_params.namespace}.svc.cluster.local"
         pod_spec.with_dns_search(new_search, overwrite=True)
 

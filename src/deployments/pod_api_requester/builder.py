@@ -11,7 +11,6 @@ from kubernetes.client import (
     V1EnvVar,
     V1ObjectMeta,
     V1Pod,
-    V1PodDNSConfig,
     V1PolicyRule,
     V1ResourceRequirements,
     V1Role,
@@ -142,9 +141,14 @@ class PodApiRequesterBuilder(PodBuilder):
             config, name=new_params.name, namespace=new_params.namespace, app=new_params.app
         )
         pod_spec_config = config.pod_spec_config
-        pod_spec_config.dns_config = V1PodDNSConfig(
-            searches=[f"{new_params.service_name}.{new_params.namespace}.svc.cluster.local"]
+
+        if old_params and old_params.service_name and old_params.namespace:
+            old_search = f"{old_params.service_name}.{old_params.namespace}.svc.cluster.local"
+            pod_spec_config.remove_dns_search(old_search, missing_ok=True)
+        pod_spec_config.with_dns_search(
+            f"{new_params.service_name}.{new_params.namespace}.svc.cluster.local", overwrite=True
         )
+
         pod_spec_config.with_volume(
             V1Volume(
                 name=DEFAULT_REQUESTER_VOLUME_NAME,
@@ -247,7 +251,7 @@ class PodApiRequesterBuilder(PodBuilder):
         return self.with_command("sleep", args=["infinity"])
 
     def build(self) -> V1Pod:
-        if not self.name:
+        if not self.namespace:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
         if not self._mode:
             raise ValueError(

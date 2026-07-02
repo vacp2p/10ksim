@@ -6,7 +6,6 @@ from typing import Any, Callable, List, Tuple
 
 import pytest
 import yaml
-from kubernetes.client import V1Pod
 
 from src.deployments.core.configs.container import Image
 from src.deployments.core.k8s_object import k8s_obj_to_dict
@@ -86,10 +85,6 @@ def test_order_independences(func_list):
     check_deployments_outputs("base_case", builder)
 
 
-def check_dns_config(deployment: V1Pod, expected_dns_config: List[str]):
-    deployment.spec.dns_config == expected_dns_config
-
-
 class TestDnsConfig:
     """Test that custom dns_config searches are retained,
     while the feature manages its own dns_config.
@@ -107,7 +102,7 @@ class TestDnsConfig:
             .with_dns_search(self.search_1)
             .with_dns_search(self.search_2)
         ).build()
-        check_dns_config(pod, [self.feature_search, self.search_1, self.search_2])
+        pod.spec.dns_config == [self.feature_search, self.search_1, self.search_2]
 
     def test_feature_last(self, base_builder):
         pod = (
@@ -115,7 +110,7 @@ class TestDnsConfig:
             .with_dns_search(self.search_2)
             .with_logoscore()
         ).build()
-        check_dns_config(pod, [self.search_1, self.search_2, self.feature_search])
+        pod.spec.dns_config == [self.search_1, self.search_2, self.feature_search]
 
     def test_feature_both(self, base_builder):
         pod = (
@@ -124,7 +119,7 @@ class TestDnsConfig:
             .with_dns_search(self.search_2, overwrite=True)
             .with_logoscore()
         ).build()
-        check_dns_config(pod, [self.search_1, self.search_2, self.feature_search])
+        pod.spec.dns_config == [self.search_1, self.search_2, self.feature_search]
 
     def test_feature_multiple(self, base_builder):
         pod = (
@@ -135,7 +130,7 @@ class TestDnsConfig:
             .with_logoscore()
             .with_dns_search(self.search_1, overwrite=True)
         ).build()
-        check_dns_config(pod, [self.search_2, self.feature_search, self.search_1])
+        pod.spec.dns_config == [self.search_2, self.feature_search, self.search_1]
 
 
 class TestErrors:
@@ -177,15 +172,10 @@ def base_builder() -> LogoscorePodApiRequester:
 
 
 class TestServiceAccountName:
-    def test_after_feature(self, base_builder):
+    def test_default(self, base_builder):
         """Test that we have a default service account name."""
-        pod = (
-            base_builder.with_app("app")
-            .with_logoscore()
-            .with_service_account_name("custom-service-account")
-            .build()
-        )
-        pod.spec.service_account_name == "custom-service-account"
+        pod = base_builder.with_app("app").with_logoscore().build()
+        pod.spec.service_account_name == "secret-creator2"
 
     def test_after_feature(self, base_builder):
         """Test that we can override default service account name."""

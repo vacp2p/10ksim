@@ -1,16 +1,11 @@
 # Python Import
 import json
 from datetime import timedelta
-from typing import Dict
 
 import pytest
 
 # Project Import
-from src.deployments.core.event_window_bridge import (
-    EventWindowBridge,
-    EventWindowEndpoint,
-    event_window,
-)
+import src.deployments.core.event_window_bridge as event_window_bridge
 from src.deployments.libp2p.bridge import Bridge as Libp2pBridge
 from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 from src.deployments.waku.bridge import Bridge as WakuBridge
@@ -23,38 +18,40 @@ def write_events_log(tmp_path, events):
     return log_path
 
 
-class ExampleWindowBridge(EventWindowBridge):
+class ExampleWindowBridge(event_window_bridge.EventWindowBridge):
     interval: str = "stable"
     container_name: str = "example-container"
-    event_windows: Dict[str, Dict[str, EventWindowEndpoint]] = {
-        "complete": {
-            "start": event_window("experiment_started"),
-            "end": event_window("experiment_finished", timedelta(seconds=30)),
-        },
-        "stable": {
-            "start": event_window(
-                {"event": "messages_started", "role": "publisher"}, timedelta(minutes=3)
+
+    def event_windows(self):
+        return [
+            event_window_bridge.EventWindow(
+                key="complete",
+                start=event_window_bridge.EventBound("experiment_started"),
+                end=event_window_bridge.EventBound("experiment_finished", timedelta(seconds=30)),
             ),
-            "end": event_window("messages_finished", timedelta(seconds=-30)),
-        },
-    }
+            event_window_bridge.EventWindow(
+                key="stable",
+                start=event_window_bridge.EventBound(
+                    {"event": "messages_started", "role": "publisher"}, timedelta(minutes=3)
+                ),
+                end=event_window_bridge.EventBound("messages_finished", timedelta(seconds=-30)),
+            ),
+        ]
 
 
-def test_event_window_builds_endpoint_from_string_event():
-    endpoint = event_window("experiment_started", timedelta(seconds=5))
+def test_event_bound_builds_key_from_string_event():
+    bound = event_window_bridge.EventBound("experiment_started", timedelta(seconds=5))
 
-    assert endpoint == EventWindowEndpoint(
-        key={"event": "experiment_started"}, time_shift=timedelta(seconds=5)
-    )
+    assert bound == event_window_bridge.EventBound("experiment_started", timedelta(seconds=5))
+    assert bound.key == {"event": "experiment_started"}
+    assert bound.time_shift == timedelta(seconds=5)
 
 
-def test_event_window_builds_endpoint_from_dict_event():
-    endpoint = event_window({"event": "messages_started", "role": "publisher"})
+def test_event_bound_uses_dict_event_as_key():
+    bound = event_window_bridge.EventBound({"event": "messages_started", "role": "publisher"})
 
-    assert endpoint == EventWindowEndpoint(
-        key={"event": "messages_started", "role": "publisher"},
-        time_shift=timedelta(0),
-    )
+    assert bound.key == {"event": "messages_started", "role": "publisher"}
+    assert bound.time_shift == timedelta(0)
 
 
 def test_event_window_bridge_extracts_results_and_selected_interval(tmp_path):
@@ -98,6 +95,7 @@ def test_event_window_bridge_extracts_results_and_selected_interval(tmp_path):
     assert metadata["stack"]["container_name"] == "example-container"
     assert metadata["stack"]["stateful_sets"] == ["publisher"]
     assert metadata["experiment"]["name"] == "window-demo"
+    assert "event_windows" not in metadata["experiment"]["bridge_class"]
 
 
 def test_event_window_bridge_raises_when_selected_interval_is_missing(tmp_path):
@@ -138,22 +136,17 @@ def test_protocol_bridges_define_complete_and_stable_event_windows(bridge_cls, c
 
     assert bridge.interval == "complete"
     assert bridge.container_name == container_name
-    assert bridge.event_windows == {
-        "complete": {
-            "start": EventWindowEndpoint(
-                key={"event": "wait_for_clear_finished"}, time_shift=timedelta(0)
+    assert bridge.event_windows() == [
+        event_window_bridge.EventWindow(
+            key="complete",
+            start=event_window_bridge.EventBound("wait_for_clear_finished"),
+            end=event_window_bridge.EventBound("internal_run_finished", timedelta(seconds=30)),
+        ),
+        event_window_bridge.EventWindow(
+            key="stable",
+            start=event_window_bridge.EventBound("start_messages", timedelta(minutes=3)),
+            end=event_window_bridge.EventBound(
+                "publisher_messages_finished", timedelta(seconds=-30)
             ),
-            "end": EventWindowEndpoint(
-                key={"event": "internal_run_finished"}, time_shift=timedelta(seconds=30)
-            ),
-        },
-        "stable": {
-            "start": EventWindowEndpoint(
-                key={"event": "start_messages"}, time_shift=timedelta(minutes=3)
-            ),
-            "end": EventWindowEndpoint(
-                key={"event": "publisher_messages_finished"},
-                time_shift=timedelta(seconds=-30),
-            ),
-        },
-    }
+        ),
+    ]

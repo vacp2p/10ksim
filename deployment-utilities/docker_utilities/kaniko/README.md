@@ -74,9 +74,16 @@ rm /tmp/dcj.json
 ### Verifying the right thing got built
 
 A registry cache can serve a stale layer, so for compiled nodes confirm the binary really
-contains the intended commit before trusting a run — pull it and grep for a symbol unique to
-that commit:
+contains the intended commit before trusting a run. `verify-image.sh` does this in-cluster
+(native amd64, no local pull): it greps the image binary for markers that must be present
+and/or absent, and fails if any assertion does not hold.
 ```bash
-docker create --name t <image>; docker cp t:/node/main /tmp/main; docker rm t
-strings /tmp/main | grep -c <symbol-unique-to-the-commit>
+deployment-utilities/docker_utilities/kaniko/verify-image.sh <image> \
+  [--binary PATH] [--require SYMS] [--forbid SYMS]
+
+# e.g. confirm a ping-off, quic-enabled node:
+.../kaniko/verify-image.sh radiken/dst-test-node-regression:v2.1.0-rerun2 \
+  --require lsquic --forbid pingMeshLoop
 ```
+
+`--require`/`--forbid` are comma-separated marker strings. Same env overrides as `build-image.sh`.

@@ -42,6 +42,8 @@ from src.deployments.core.k8s_deploy import kubectl_apply
 from src.deployments.core.k8s_object import k8s_obj_to_dict
 from src.deployments.core.k8s_rollout import wait_for_rollout
 from src.deployments.registry import registry as experiment_registry
+from src.deployments.utils.parser import _config_model_fields_to_args
+from src.utils.cli_utils import flag_exists
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
@@ -62,7 +64,6 @@ V1Deployable = Union[
 
 logger = logging.getLogger(__name__)
 
-ARG_NOT_SET = object()
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
 
@@ -72,7 +73,6 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
     How to use:
         - Inherit from this class.
-        - Call `BaseExperiment.add_args` in the child class's `add_parser`
         - Implement `_run` in the child class.
     """
 
@@ -118,8 +118,25 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
             **self.model_dump(exclude={"metadata"}),
         }
 
+    def __init_subclass__(cls, **kwargs):
+        """Ensure add_parser is not overridden."""
+        super().__init_subclass__(**kwargs)
+        if cls.add_parser.__func__ is not BaseExperiment.add_parser.__func__:
+            raise TypeError("Cannot override add_parser method")
+
+    @classmethod
+    def add_parser(cls, subparsers) -> None:
+        subparser = subparsers.add_parser(cls.name, help=cls.__doc__)
+        cls.add_args(subparser)
+        cls.add_base_args(subparser)
+        cls.add_config_args(subparser)
+
+    @classmethod
+    def add_args(cls, subparser) -> None:
+        pass
+
     @staticmethod
-    def add_args(subparser: ArgumentParser):
+    def add_base_args(subparser: ArgumentParser):
         subparser.add_argument(
             "--skip-check",
             action="store_true",
@@ -136,10 +153,19 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         subparser.add_argument(
             "--namespace",
             type=str,
-            required=False,
-            default="zerotesting",
+            required=True,
+            metavar="(str)",
             help="The namespace for deployments.",
         )
+
+    @classmethod
+    def add_config_args(cls, subparser: ArgumentParser) -> None:
+        config_model = cls.model_fields["config"].annotation
+        for flag, kwargs in _config_model_fields_to_args(config_model):
+            if flag_exists(subparser, flag):
+                # Do not generate config flag if it already exists.
+                continue
+            subparser.add_argument(flag, **kwargs)
 
     async def deploy(
         self,

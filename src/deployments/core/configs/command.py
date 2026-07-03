@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
+_sentinel = object()
+
 
 class Command(BaseModel):
     pre_command: Optional[str] = None
@@ -162,13 +164,13 @@ class CommandConfig(BaseModel):
         *,
         index: Optional[SupportsIndex] = None,
     ):
-        """Insert multiple commands starting at a given index.
+        """Insert multiple commands before the given index.
 
         :param commands: List of commands to insert. `str` commands are assumed to have no args.
 
         :param index: Starting position. If None, appends all commands to the end."""
         indices = (
-            [position for position in range(index, len(commands))]
+            [position for position in range(index, len(commands) + 1)]
             if index is not None
             else [None for _ in range(len(commands))]
         )
@@ -189,18 +191,16 @@ class CommandConfig(BaseModel):
         if args is None:
             args = []
         if index is None:
-            index = len(self.commands)
+            index = len(self.commands) + 1
         self.commands.insert(index, Command(command=command, args=args, multiline=multiline))
 
-    _sentinel = object()
-
-    def find_command(self, command_name: str) -> Command | None:
+    def find_command(self, command_name: str, default: str | object = _sentinel) -> Command | None:
         """Finds the Command for the given command in the ContainerConfig"""
         result = next(
             (command for command in self.commands if command.command == command_name),
-            None,
+            default,
         )
-        if result is CommandConfig._sentinel:
+        if result is _sentinel:
             raise CommandNotFoundError(
                 f"Failed to find command in config. name: `{command_name}` config: `{self}`"
             )

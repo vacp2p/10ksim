@@ -95,7 +95,7 @@ class ContainerConfig(BaseModel):
         index = next(
             iter([index for index, item in enumerate(self.env) if item.name == var.name]), None
         )
-        if index:
+        if index is not None:
             if not overwrite:
                 raise ValueError(
                     f"Attempt to add duplicate environment variable to {type(self)}. "

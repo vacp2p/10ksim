@@ -8,7 +8,7 @@ from pydantic import NonNegativeInt
 # Project Imports
 from src.deployments.core.configs.command import CommandConfig
 from src.deployments.core.configs.container import ContainerConfig, Image
-from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
+from src.deployments.core.configs.pod import PodConfig, PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
 from src.deployments.core.k8s_object import dict_to_k8s_object
 
@@ -21,7 +21,7 @@ class ContainerNotFoundError(ValueError):
 
 
 HigherConfigTypes = (
-    StatefulSetConfig | StatefulSetSpecConfig | PodTemplateSpecConfig | PodSpecConfig
+    StatefulSetConfig | StatefulSetSpecConfig | PodConfig | PodTemplateSpecConfig | PodSpecConfig
 )
 
 
@@ -51,6 +51,9 @@ def get_config(config: HigherConfigTypes, target: Type[T]) -> T:
         if isinstance(config, StatefulSetSpecConfig):
             config = config.pod_template_spec_config
         check_done()
+        if isinstance(config, PodConfig):
+            config = config.pod_spec_config
+        check_done()
         if isinstance(config, PodTemplateSpecConfig):
             config = config.pod_spec_config
         check_done()
@@ -77,7 +80,7 @@ def find_container_config(
 
 
 def with_image_for_container(
-    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig,
+    config: StatefulSetSpecConfig | StatefulSetConfig | PodTemplateSpecConfig | PodConfig,
     image: Image,
     container_name: str,
     *,

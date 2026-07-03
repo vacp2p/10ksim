@@ -49,6 +49,8 @@ from src.utils.cli_utils import flag_exists
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
+    V1Role,
+    V1RoleBinding,
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
@@ -57,8 +59,8 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
-    V1Role,
-    V1RoleBinding,
+    V1ConfigMap,
+    V1ServiceAccount,
     V1ConfigMap,
     V1ServiceAccount,
 ]

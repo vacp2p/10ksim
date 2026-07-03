@@ -28,6 +28,7 @@ from src.deployments.core.builders import (
     default_readiness_probe_health,
 )
 from src.deployments.core.configs.container import ContainerConfig, Image
+from src.deployments.core.dependency_decorator import depends_on
 
 # --------------------------------------------------------------------------- #
 # Helper Functions
@@ -171,7 +172,7 @@ class TestStatefulSetBuilder:
         builder.with_image_in_container(image, "test-container", overwrite=overwrite)
 
         mock_with_image.assert_called_once_with(
-            builder.config, "test-container", image, overwrite=overwrite
+            config=builder.config, image=image, container_name="test-container", overwrite=overwrite
         )
 
     def test_with_image_in_container_returns_statefulset_builder(self, mocker):
@@ -449,6 +450,17 @@ class TestPodBuilder:
         result = builder.build()
         mock_build_pod.assert_called_once_with(builder.config)
         assert isinstance(result, V1Pod)
+
+    def test_dependency_reconciles_on_field_change(self, mocker):
+        class ChildBuilder(PodBuilder):
+            @depends_on("name")
+            def _touch(self):
+                pass
+        child_builder = ChildBuilder()
+        touch_func = mocker.patch.object(ChildBuilder, "_touch", autospec=True)
+        child_builder.with_name("x")
+        touch_func.assert_called_once_with(child_builder)
+
 
 
 # --------------------------------------------------------------------------- #

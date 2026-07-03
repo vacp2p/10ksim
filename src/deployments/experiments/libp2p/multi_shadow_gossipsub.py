@@ -39,4 +39,5 @@ class MultiShadowGossipsub(Multiple):
                 yield {"num_nodes": size, "muxer": muxer, "discovery": DISCOVERY}
 
     def get_name_from_params(self, params: dict) -> str:
-        return f"nodes_{params['num_nodes']}__muxer_{params['muxer']}__disc_{params['discovery']}"
+        disc = "kad" if params["discovery"] == "kad-dht" else params["discovery"]
+        return f"n{params['num_nodes']}-{params['muxer']}-{disc}"

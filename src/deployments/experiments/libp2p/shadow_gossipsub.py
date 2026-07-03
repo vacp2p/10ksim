@@ -62,8 +62,10 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         self.log_event("run_start")
         cfg = self.config
         namespace = self.namespace
-        # unique per run (output folder name carries a random suffix)
-        run_id = self.output_folder.name.lower().replace("_", "-")[:50].strip("-")
+        # unique per run (output folder name carries a random suffix). Cap the length
+        # so the derived `shadow-<run_id>-reader` log-reader pod stays within the k8s
+        # 63-char name limit.
+        run_id = self.output_folder.name.lower().replace("_", "-")[:45].strip("-")
         cm_name = f"shadow-{run_id}"
         job_name = f"shadow-{run_id}"
         pvc_name = f"shadow-{run_id}-data"

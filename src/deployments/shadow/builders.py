@@ -105,6 +105,9 @@ def render_shadow_yaml(
                         "MUXER": muxer,
                         "DISCOVERY": "kad-dht",
                         "NODE_ROLE": "RoleBootstrap",
+                        # the single anchor must accept every node's bootstrap dial,
+                        # so lift its cap above the network size (default is 250).
+                        "MAXCONNECTIONS": str(num_nodes + 100),
                         "STARTSLEEP": str(start_sleep),
                         "METRICS_INTERVAL_S": str(metrics_interval_s),
                     },

@@ -31,6 +31,9 @@ class ExpConfig(BaseModel):
     message_size_bytes: NonNegativeInt = 1000
     delay_seconds: NonNegativeFloat = 2.0
     connect_to: NonNegativeInt = 2
+    muxer: str = "yamux"  # yamux | mplex | quic
+    discovery: str = "static"  # static (CONNECTTO dial) | kad-dht (bootstrap anchor)
+    start_sleep: NonNegativeInt = 60  # node STARTSLEEP before mesh formation
     # Timing (simulated seconds). Publisher starts after the mesh forms (~60s).
     publisher_start_s: NonNegativeInt = 90
     sim_stop_time_s: NonNegativeInt = 180
@@ -70,6 +73,9 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             sim_stop_time_s=cfg.sim_stop_time_s,
             publisher_start_s=cfg.publisher_start_s,
             connect_to=cfg.connect_to,
+            muxer=cfg.muxer,
+            discovery=cfg.discovery,
+            start_sleep=cfg.start_sleep,
             metrics_interval_s=cfg.metrics_interval_s,
         )
         publisher_config = render_publisher_config(

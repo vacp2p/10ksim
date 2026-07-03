@@ -49,6 +49,8 @@ def render_shadow_yaml(
     publisher_start_s: int,
     connect_to: int = 2,
     muxer: str = "yamux",
+    discovery: str = "static",
+    start_sleep: int = 60,
     metrics_interval_s: int = 15,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
@@ -56,7 +58,11 @@ def render_shadow_yaml(
     running the pod-api-requester in batch mode against the peers' `/publish`
     endpoints. The traffic shape (message count, size, pacing) lives in the
     requester's own config (see `render_publisher_config`), mounted at
-    `{_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}`."""
+    `{_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}`.
+
+    discovery selects mesh formation: "static" dials CONNECTTO peers by pod-N
+    hostname; "kad-dht" adds a `bootstrap-0` anchor host that peers discover
+    through (Shadow resolves it by hostname, so no k8s Service is needed)."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 
@@ -65,8 +71,13 @@ def render_shadow_yaml(
         "CONNECTTO": str(connect_to),
         "SHADOWENV": "true",  # env.nim requires the literal string "true"
         "MUXER": muxer,
+        "DISCOVERY": discovery,
+        "STARTSLEEP": str(start_sleep),
         "METRICS_INTERVAL_S": str(metrics_interval_s),
     }
+    if discovery == "kad-dht":
+        peer_env["NODE_ROLE"] = "RoleNormal"
+        peer_env["SERVICE"] = "bootstrap-0"
     peer_process = {
         "path": "./main",
         "start_time": "5s",
@@ -80,6 +91,26 @@ def render_shadow_yaml(
         }
         for i in range(num_nodes)
     }
+    if discovery == "kad-dht":
+        hosts["bootstrap-0"] = {
+            "network_node_id": 0,
+            "processes": [
+                {
+                    "path": "./main",
+                    "start_time": "5s",
+                    "expected_final_state": "running",
+                    "environment": {
+                        "PEERS": str(num_nodes),
+                        "SHADOWENV": "true",
+                        "MUXER": muxer,
+                        "DISCOVERY": "kad-dht",
+                        "NODE_ROLE": "RoleBootstrap",
+                        "STARTSLEEP": str(start_sleep),
+                        "METRICS_INTERVAL_S": str(metrics_interval_s),
+                    },
+                }
+            ],
+        }
     hosts["publisher"] = {
         "network_node_id": 0,
         "processes": [

@@ -46,6 +46,9 @@ class ExpConfig(BaseModel):
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
+    wait_nodes_ready: bool = True
+    """Gate publishing on a ready rollout; set False for sparse meshes (static,
+    quic) whose readiness probe flaps and never reaches a stable 100%."""
 
     @model_validator(mode="after")
     def _check_bootstrap_nodes(self):
@@ -104,6 +107,24 @@ def build_bootstrap_service(namespace: str):
         .with_selector("app", "zerotenkay")
         .with_selector("role", "bootstrap")
         .with_port(V1ServicePort(name="p2p", port=5000, target_port=5000))
+        .build()
+    )
+
+
+def build_static_service(namespace: str):
+    # Headless DNS for the static dial; publish_not_ready_addresses lets nodes
+    # resolve each other before any is ready, else the mesh can't bootstrap.
+    return (
+        ServiceBuilder()
+        .with_name("nimp2p-service")
+        .with_namespace(namespace)
+        .with_cluster_ip("None")
+        .with_publish_not_ready_addresses(True)
+        .with_selector("app", "zerotenkay")
+        .with_port(V1ServicePort(name="p2p-quic", port=5000, target_port=5000, protocol="UDP"))
+        .with_port(V1ServicePort(name="p2p-tcp", port=5000, target_port=5000, protocol="TCP"))
+        .with_port(V1ServicePort(name="metrics", port=8008, target_port=8008, protocol="TCP"))
+        .with_port(V1ServicePort(name="publish", port=8645, target_port=8645, protocol="TCP"))
         .build()
     )
 
@@ -179,6 +200,11 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             bootstrap = build_bootstrap_nodes(namespace=self.namespace, params=self.config)
             self.dump_yaml(bootstrap, "bootstrap")
             await self.deploy(deployment=bootstrap, wait_for_ready=True)
+        else:
+            # Static discovery resolves peers via this service, so deploy it first.
+            static_service = build_static_service(self.namespace)
+            self.dump_yaml(static_service, "static-service")
+            await self.deploy(deployment=static_service, exist_ok=True)
 
         # Nodes
         nodes = build_nodes(
@@ -188,7 +214,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         name = nodes.metadata.name
         namespace = nodes.metadata.namespace
 
-        await self.deploy(deployment=nodes)
+        await self.deploy(deployment=nodes, wait_for_ready=self.config.wait_nodes_ready)
 
         await asyncio.sleep(self.config.delay_cold_start)
 

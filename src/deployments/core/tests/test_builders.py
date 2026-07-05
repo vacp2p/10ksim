@@ -456,11 +456,11 @@ class TestPodBuilder:
             @depends_on("name")
             def _touch(self):
                 pass
+
         child_builder = ChildBuilder()
         touch_func = mocker.patch.object(ChildBuilder, "_touch", autospec=True)
         child_builder.with_name("x")
         touch_func.assert_called_once_with(child_builder)
-
 
 
 # --------------------------------------------------------------------------- #

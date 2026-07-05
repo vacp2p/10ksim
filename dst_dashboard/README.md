@@ -15,7 +15,7 @@ uvicorn dst_dashboard.main:app --reload
 ## Environment Variables
 
 ```bash
-export EMBEDDED_DB_PATH=~/.cache/dst_dashboard  # Optional, default location
+export DST_DB_PATH=~/.cache/dst_dashboard  # Optional, default location
 ```
 
 ## Structure
@@ -24,11 +24,7 @@ export EMBEDDED_DB_PATH=~/.cache/dst_dashboard  # Optional, default location
 dst_dashboard/
 ├── main.py                        # FastAPI app entry
 ├── experiment_descriptors/        # YAML config models
-├── processors/                    # Data fetching/transformation (skeleton)
+├── processors/                    # Data fetching/transformation
 ├── storage/                       # MontyDB cache
 └── api/                           # FastAPI REST endpoints
 ```
-
-## Status
-
-🚧 Skeleton implementation - reuses 10ksim classes (DataPuller, Scrapper, DataHandler)

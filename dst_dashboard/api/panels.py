@@ -1,27 +1,220 @@
 """Panel API routes."""
-from typing import Any, Dict
-from fastapi import APIRouter, HTTPException
+
+import logging
+from typing import List, Dict, Any
+
+from fastapi import APIRouter, HTTPException, Request, Body
+
+from dst_dashboard.config.data_structures import PanelConfig, ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
 
 router = APIRouter(prefix="/experiments/{experiment_id}/panels", tags=["panels"])
-db = DSTDatabase()
+logger = logging.getLogger(__name__)
 
-@router.get("", response_model=Dict[str, Any])
-async def list_panels(experiment_id: str):
-    """List all panels for an experiment."""
-    # TODO: Implement panel listing
-    panels = db.list_panels(experiment_id)
-    if panels is None:
-        raise HTTPException(status_code=404, detail="Panels not found")
-    return panels
 
-@router.get("/{panel_name}", response_model=Dict[str, Any])
-async def get_panel_data(experiment_id: str, panel_name: str):
-    """Get transformed panel data for visualization.
-    
-    TODO: Use PanelProcessor
+@router.get("")
+async def get_all_panels(
+    experiment_id: str, 
+    request: Request
+) -> Dict[str, Any]:
     """
-    data = db.get_panel_data(experiment_id, panel_name)
-    if data is None:
-        raise HTTPException(status_code=404, detail="Panel data not found")
-    return data
+    Get all panels for an experiment with their rendered visualizations.
+    Generates ECharts options on-demand from stored datasets and panel configs.
+    
+    Args:
+        experiment_id: Experiment ID
+        
+    Returns:
+        List of panels with ECharts options
+    """
+    db = DSTDatabase()
+    
+    # Get experiment from database
+    experiment_data = db.get_experiment(experiment_id)
+    if experiment_data is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    experiment = ExperimentConfig(**experiment_data)
+    
+    # Get panel processor to transform data on-demand
+    from dst_dashboard.api.utils import get_panel_processor
+    processor = get_panel_processor(request)
+    
+    # Get stored panel data from database
+    rendered_panels = []
+    for panel_config in experiment.panels:
+        # Get pre-processed panel from database
+        panel_data = processor.db.get_panel_data(experiment_id, panel_config.name)
+        
+        if panel_data:
+            rendered_panels.append({
+                "panel_name": panel_config.name,
+                "panel_title": panel_config.title,
+                "panel_type": panel_config.type,
+                "dataset": panel_config.dataset,
+                "option": panel_data
+            })
+        else:
+            logger.warning(f"Panel '{panel_config.name}' not found in database, may need reprocessing")
+            rendered_panels.append({
+                "panel_name": panel_config.name,
+                "panel_title": panel_config.title,
+                "panel_type": panel_config.type,
+                "dataset": panel_config.dataset,
+                "error": "Panel not preprocessed"
+            })
+    
+    return {
+        "experiment_id": experiment_id,
+        "panels": rendered_panels
+    }
+
+
+@router.get("/by-dataset/{dataset_name}")
+async def get_panels_by_dataset(
+    experiment_id: str, 
+    dataset_name: str,
+    request: Request
+) -> Dict[str, Any]:
+    """
+    Get all preprocessed panels that use a specific dataset.
+    Reads from database - panels should already be processed.
+    
+    Args:
+        experiment_id: Experiment ID
+        dataset_name: Dataset name
+        
+    Returns:
+        List of panels using the specified dataset with ECharts options
+    """
+    db = DSTDatabase()
+    
+    # Get experiment from database
+    experiment_data = db.get_experiment(experiment_id)
+    if experiment_data is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    experiment = ExperimentConfig(**experiment_data)
+    
+    # Filter panels by dataset
+    matching_panels = [p for p in experiment.panels if p.dataset == dataset_name]
+    
+    if not matching_panels:
+        return {
+            "experiment_id": experiment_id,
+            "dataset_name": dataset_name,
+            "panels": []
+        }
+    
+    # Retrieve preprocessed panels from database
+    rendered_panels = []
+    for panel_config in matching_panels:
+        panel_data = db.get_panel_data(experiment_id, panel_config.name)
+        
+        if panel_data is not None:
+            rendered_panels.append({
+                "panel_name": panel_config.name,
+                "panel_title": panel_config.title,
+                "panel_type": panel_config.type,
+                "option": panel_data
+            })
+        else:
+            rendered_panels.append({
+                "panel_name": panel_config.name,
+                "panel_title": panel_config.title,
+                "panel_type": panel_config.type,
+                "error": "Panel data not found in database. Please reprocess the experiment."
+            })
+    
+    return {
+        "experiment_id": experiment_id,
+        "dataset_name": dataset_name,
+        "panels": rendered_panels
+    }
+
+
+@router.get("/{panel_name}")
+async def get_panel(
+    experiment_id: str, 
+    panel_name: str, 
+    request: Request
+) -> Dict[str, Any]:
+    """
+    Get preprocessed panel with rendered ECharts option.
+    Reads from database - panel should already be processed.
+    
+    Args:
+        experiment_id: Experiment ID
+        panel_name: Panel name
+        
+    Returns:
+        Panel with ECharts option ready for rendering
+    """
+    db = DSTDatabase()
+    
+    # Get experiment from database
+    experiment_data = db.get_experiment(experiment_id)
+    if experiment_data is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    experiment = ExperimentConfig(**experiment_data)
+    
+    # Find panel config
+    panel_config = None
+    for panel in experiment.panels:
+        if panel.name == panel_name:
+            panel_config = panel
+            break
+    
+    if panel_config is None:
+        raise HTTPException(status_code=404, detail="Panel not found")
+    
+    # Get preprocessed panel data from database
+    panel_data = db.get_panel_data(experiment_id, panel_name)
+    
+    if panel_data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Panel data not found in database. Please reprocess the experiment."
+        )
+    
+    return {
+        "panel_name": panel_name,
+        "panel_title": panel_config.title,
+        "panel_type": panel_config.type,
+        "option": panel_data
+    }
+
+
+@router.delete("/{panel_name}", status_code=204)
+async def delete_panel(experiment_id: str, panel_name: str, request: Request):
+    """Delete a panel."""
+    db = DSTDatabase()
+    
+    # Get experiment from database
+    experiment_data = db.get_experiment(experiment_id)
+    if experiment_data is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    experiment = ExperimentConfig(**experiment_data)
+    
+    # Find panel
+    panel_index = None
+    for i, p in enumerate(experiment.panels):
+        if p.name == panel_name:
+            panel_index = i
+            break
+    
+    if panel_index is None:
+        raise HTTPException(status_code=404, detail="Panel not found")
+    
+    # Remove panel from experiment
+    experiment.panels.pop(panel_index)
+    
+    # Update experiment in database
+    db.store_experiment(experiment.model_dump())
+    
+    # Delete cached panel data
+    db.delete_panel(experiment_id, panel_name)
+    
+    return None

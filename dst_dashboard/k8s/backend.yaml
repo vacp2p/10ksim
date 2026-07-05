@@ -1,0 +1,341 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dst-dashboard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dst-dashboard-config
+  namespace: dst-dashboard
+data:
+  config.yaml: |
+    # DST Explorer Configuration
+    # Global datasources - defined once, referenced by all experiments
+
+    datasources:
+      - name: victoria-logs
+        type: VictoriaLogs
+        url: https://vlselect.lab.vac.dev/select/logsql/query
+      
+      - name: victoria-metrics
+        type: Prometheus
+        url: https://metrics.lab.vac.dev/select/0/prometheus/api/v1/
+
+    experiments:
+      - id: gossipsub-pq-s1-2026-06-12
+        title: "GossipSub Priority Queues: Medium Queue Overflow"
+        family: libp2p/gossipsub
+        publish: true
+        description: "Analysis of medium priority queue behavior under high load conditions"
+        github_repo: "https://github.com/vacp2p/nim-libp2p"
+        github_pr: "https://github.com/vacp2p/nim-libp2p/pull/1234"
+        docker_image: "mamoutoudiarra/nim-libp2p-test:gossip-queues-v0.4"
+        date: "2026-06-12"
+        
+        metadata:
+          scenario: S1
+          namespace: libp2p-lab
+          date: "2026-06-12"
+          num_normal_nodes: 1
+          num_slow_nodes: 1
+          # Stack info for data fetching (from 10ksim metadata.json)
+          statefulsets: ["nimp2p"]
+          nodes: [2]
+          container_name: "pod-0"
+        
+        datasets:
+          - name: message-delays
+            datasource: victoria-logs
+            timeRange:
+              start: "2026-06-12T22:09:00Z"
+              end: "2026-06-12T22:13:30Z"
+            query:
+              namespace: libp2p-lab
+              tracer: nimlibp2p
+              pattern: received
+            schema:
+              - name: timestamp
+                type: datetime
+              - name: pod_name
+                type: string
+              - name: delayMs
+                type: float
+          
+          - name: queue-drops
+            datasource: victoria-metrics
+            timeRange:
+              start: "2026-06-12T22:09:00Z"
+              end: "2026-06-12T22:13:30Z"
+            query:
+              expr: increase(libp2p_pubsub_medium_priority_queue_drops_total{namespace="libp2p-lab"}[1m])
+              step: 15s
+              scrapeInterval: 10s
+            schema:
+              - name: timestamp
+                type: datetime
+              - name: pod
+                type: string
+              - name: value
+                type: float
+        
+        panels:
+          - name: delay-boxplot
+            title: Message Delivery Delay Distribution
+            type: boxplot
+            dataset: message-delays
+            publish: true
+            transform:
+              derive:
+                - name: pod_group
+                  function: regex_match
+                  field: pod_name
+                  pattern: ".*slow.*"
+                  match: slow
+                  no_match: normal
+              groupBy: pod_group
+              value: delayMs
+          
+          - name: medium-queue-drops
+            title: Medium Queue Drops Over Time
+            type: timeseries
+            dataset: queue-drops
+            publish: true
+            transform:
+              x: timestamp
+              y: value
+              groupBy: pod
+              top: 10
+            style:
+              yLabel: Drops
+              yUnit: number
+
+      - id: gossipsub-yamux-s0-2026-07-05
+        title: "GossipSub 100 Node Regression Test"
+        family: libp2p/gossipsub
+        publish: true
+        description: "GossipSub performance with 100 nodes using yamux muxer"
+        github_repo: "https://github.com/vacp2p/nim-libp2p"
+        docker_image: "mamoutoudiarra/nim-libp2p-test:gossip-queues-v0.4"
+        date: "2026-07-05"
+        
+        metadata:
+          scenario: S0
+          namespace: libp2p-lab
+          muxer: yamux
+          num_normal_nodes: 100
+          num_slow_nodes: 0
+          total_peers: 10
+          connect_to: 6
+          gossipsub_d: 6
+          statefulsets: ["nimp2p"]
+          nodes: [100]
+          container_name: "pod-0"
+        
+        datasets:
+          - name: message-delays
+            datasource: victoria-logs
+            timeRange:
+              start: "2026-07-05T17:47:11Z"
+              end: "2026-07-05T17:55:00Z"
+            query:
+              namespace: libp2p-lab
+              tracer: nimlibp2p
+              pattern: received
+            schema:
+              - name: timestamp
+                type: datetime
+              - name: pod_name
+                type: string
+              - name: delayMs
+                type: float
+          
+          - name: bandwidth-usage-dl
+            datasource: victoria-metrics
+            timeRange:
+              start: "2026-07-05T17:47:11Z"
+              end: "2026-07-05T17:55:00Z"
+            query:
+              expr: rate(container_network_transmit_bytes_total{namespace="libp2p-lab"}[1m])
+              step: 15s
+              scrapeInterval: 10s
+            schema:
+              - name: timestamp
+                type: datetime
+              - name: pod
+                type: string
+              - name: value
+                type: float
+          
+          - name: bandwidth-usage-ul
+            datasource: victoria-metrics
+            timeRange:
+              start: "2026-07-05T17:47:11Z"
+              end: "2026-07-05T17:55:00Z"
+            query:
+              expr: rate(container_network_receive_bytes_total{namespace="libp2p-lab"}[1m])
+              step: 15s
+              scrapeInterval: 10s
+            schema:
+              - name: timestamp
+                type: datetime
+              - name: pod
+                type: string
+              - name: value
+                type: float
+        
+        panels:
+          - name: delay-boxplot-top10
+            title: Message Delivery Delay (Top 10 Peers)
+            type: boxplot
+            dataset: message-delays
+            publish: true
+            transform:
+              groupBy: pod_name
+              value: delayMs
+              top: 10
+            
+          - name: delay-timeseries-top10
+            title: Message Delay Over Time (Top 10 Peers)
+            type: timeseries
+            dataset: message-delays
+            publish: true
+            transform:
+              x: timestamp
+              y: delayMs
+              groupBy: pod_name
+              top: 10
+            style:
+              yLabel: Delay (ms)
+          
+          - name: bandwidth-usage-dl-chart
+            title: Network Bandwidth Usage DL
+            type: timeseries
+            dataset: bandwidth-usage-dl
+            publish: true
+            transform:
+              x: timestamp
+              y: value
+              groupBy: pod
+              top: 10
+            style:
+              yLabel: Download
+              yUnit: bytes/s
+          
+          - name: bandwidth-usage-ul-chart
+            title: Network Bandwidth Usage UL
+            type: timeseries
+            dataset: bandwidth-usage-ul
+            publish: true
+            transform:
+              x: timestamp
+              y: value
+              groupBy: pod
+              top: 10
+            style:
+              yLabel: Upload
+              yUnit: bytes/s
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dst-dashboard-pvc
+  namespace: dst-dashboard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-vaclab
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dst-dashboard-backend
+  namespace: dst-dashboard
+spec:
+  serviceName: dst-dashboard-backend
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dst-dashboard-backend
+  template:
+    metadata:
+      labels:
+        app: dst-dashboard-backend
+    spec:
+      containers:
+      - name: dst-dashboard-backend
+        image: mamoutoudiarra/dst-dashboard-backend:dev-0.3
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DST_DB_PATH
+          value: /app/data/dashboard
+        - name: DST_CONFIG_PATH
+          value: /app/config/config.yaml
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "16Gi"
+            cpu: "4"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: dst-dashboard-pvc
+      - name: config
+        configMap:
+          name: dst-dashboard-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dst-dashboard-backend
+  namespace: dst-dashboard
+spec:
+  selector:
+    app: dst-dashboard-backend
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+  clusterIP: None
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dst-dashboard-backend-ingress
+  namespace: dst-dashboard
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - api.dev.dashboard.lab.vac.dev
+    secretName: dashboard-backend-tls
+  rules:
+  - host: api.dev.dashboard.lab.vac.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dst-dashboard-backend
+            port:
+              number: 8000

@@ -57,14 +57,15 @@ class PanelTransform(BaseModel):
     value: Optional[str] = None
     x: Optional[str] = None
     y: Optional[str] = None
-    top: Optional[int] = None 
+    top: Optional[int] = None  # Top N by average value
+    firstN: Optional[int] = None  # First N items (no sorting) 
 
 
 class PanelStyle(BaseModel):
     """Panel style configuration."""
     yLabel: Optional[str] = None
     xLabel: Optional[str] = None
-    yUnit: Optional[str] = None
+    yUnit: Optional[Literal["bytes", "bytes/s", "bps", "ms", "seconds", "percent", "number"]] = None  # Auto-format units
     yMin: Optional[float] = None
     yMax: Optional[float] = None
 
@@ -76,6 +77,7 @@ class PanelConfig(BaseModel):
     dataset: str  # References dataset by name
     transform: PanelTransform
     style: Optional[PanelStyle] = None
+    echarts_options: Optional[Dict[str, Any]] = None  # Override ECharts options (colors, grid, etc.)
     publish: bool  # Whether to show on UI
 
 
@@ -83,12 +85,29 @@ class ExperimentConfig(BaseModel):
     id: str
     title: str
     family: str
+    description: Optional[str] = None  # Experiment description
     metadata: Dict[str, Any]  # Flexible metadata from 10ksim
     datasets: List[DatasetConfig]
     panels: List[PanelConfig]
     publish: bool  # Whether to show on UI
+    github_repo: Optional[str] = None  # GitHub repository URL
+    github_pr: Optional[str] = None  # Pull request URL
+    docker_image: Optional[str] = None  # Docker image reference
+    date: Optional[str] = None  # ISO date string (YYYY-MM-DD)
 
 
 class DashboardFullConfig(BaseModel):
     datasources: List[DataSourceConfig]
     experiments: List[ExperimentConfig]
+    
+    def WithValidateDatasources(self) -> "DashboardFullConfig":
+        if not self.datasources:
+            raise ValueError("At least one datasource must be defined in the config.")
+        for datasource in self.datasources:
+            if not datasource.name:
+                raise ValueError("Datasource must have a name.")
+            if not datasource.type:
+                raise ValueError("Datasource must have a type.")
+            if not datasource.url:
+                raise ValueError("Datasource must have a URL.")
+        return self

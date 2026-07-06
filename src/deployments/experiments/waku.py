@@ -8,7 +8,7 @@ from kubernetes import client
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.statefulset import StatefulSetConfig
-from src.deployments.experiments.base_experiment import BaseExperiment
+from src.deployments.experiments.base_experiment import BaseExperiment, V1Deployable
 from src.deployments.libp2p.builders.nodes import Nodes
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
 from src.deployments.pod_api_requester.configs import Target
@@ -23,12 +23,9 @@ logger = logging.getLogger(__name__)
 
 def build_nodes(
     namespace: str, nodes: NonNegativeInt, bootstrap_nodes: NonNegativeInt
-) -> Dict[str, dict]:
+) -> Dict[str, V1Deployable]:
     config = StatefulSetConfig()
     api_client = client.ApiClient()
-
-    def to_dict(deployment) -> dict:
-        return api_client.sanitize_for_serialization(deployment)
 
     builder = WakuStatefulSetBuilder()
     nodes = (
@@ -46,8 +43,8 @@ def build_nodes(
     )
 
     return {
-        "bootstrap": to_dict(bootstrap),
-        "nodes": to_dict(nodes),
+        "bootstrap": bootstrap,
+        "nodes": nodes,
     }
 
 
@@ -71,7 +68,7 @@ class ExpConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     num_messages: NonNegativeInt = 20
-    num_nodes: NonNegativeInt = 20
+    num_relay_nodes: NonNegativeInt = 20
     num_bootstrap_nodes: NonNegativeInt = 5
     delay_cold_start: NonNegativeFloat = 1
     delay_after_publish: NonNegativeFloat = 0.5
@@ -105,16 +102,16 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
 
         # Nodes
         deployments = build_nodes(
-            self.namespace, self.config.num_nodes, self.config.num_bootstrap_nodes
+            self.namespace, self.config.num_relay_nodes, self.config.num_bootstrap_nodes
         )
         for deployment in deployments.values():
             await self.deploy(deployment=deployment)
 
         await asyncio.sleep(self.config.delay_cold_start)
         nodes = deployments["nodes"]
-        num_nodes = nodes["spec"]["replicas"]
-        name = nodes["metadata"]["name"]
-        namespace = nodes["metadata"]["namespace"]
+        num_nodes = nodes.spec.replicas
+        name = nodes.metadata.name
+        namespace = nodes.metadata.namespace
         logger.info(f"Starting disconnect+publish loop for nodes in `{name}`")
         self.log_event("start_messages")
         for _ in range(0, self.config.num_messages):

@@ -2,6 +2,7 @@
 FROM debian:bookworm-slim AS builder
 
 ARG NIX_USER=nixuser
+ARG DELIVERY_MODULE_BRANCH=v0.1.3
 
 # Standard tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -73,7 +74,7 @@ RUN git checkout tutorial-v1
 WORKDIR $HOME
 RUN git clone https://github.com/logos-co/logos-delivery-module.git
 WORKDIR $HOME/logos-delivery-module
-RUN git checkout v0.1.1
+RUN git checkout ${DELIVERY_MODULE_BRANCH}
 RUN # You have to use dual for some reason.
 RUN nix bundle --bundler $HOME/nix-bundle-lgx#dual .
 RUN lgpm install --file logos-delivery_module-module-lgx-*/logos-delivery_module-module.lgx --modules-dir "$HOME/.logos/modules"

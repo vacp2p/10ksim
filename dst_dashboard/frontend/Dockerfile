@@ -17,12 +17,16 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (use npm install instead of ci for flexibility)
-RUN npm install --production
+# Install dependencies (use npm install instead of ci for flexibility).
+# Not --production: Tailwind/PostCSS/daisyui are devDependencies but run at
+# build time below; this build stage's node_modules never reaches the final
+# nginx image anyway, so there's no size cost to including them.
+RUN npm install
 
-# Copy source code
+# Copy source code and PostCSS/Tailwind config (required for the build step below)
 COPY public/ ./public/
 COPY src/ ./src/
+COPY postcss.config.js tailwind.config.js ./
 
 # Build-time argument for API URL (baked into the build)
 ARG REACT_APP_API_URL=http://localhost:8000

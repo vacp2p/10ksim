@@ -216,7 +216,7 @@ class PanelProcessor(DatasetProcessor):
                 "text": panel_config.title,
                 "left": "center",
                 "textStyle": {
-                    "color": "#ffffff"
+                    "color": "#152521"
                 }
             },
             "tooltip": {
@@ -233,7 +233,7 @@ class PanelProcessor(DatasetProcessor):
                     "saveAsImage": {"title": "Save"}
                 },
                 "iconStyle": {
-                    "borderColor": "#999999"
+                    "borderColor": "#848e88"
                 },
                 "emphasis": {
                     "iconStyle": {
@@ -259,15 +259,15 @@ class PanelProcessor(DatasetProcessor):
                 "data": categories,
                 "boundaryGap": True,
                 "splitArea": {"show": False},
-                "axisLabel": {"color": "#999999"},
-                "axisLine": {"lineStyle": {"color": "#333333"}}
+                "axisLabel": {"color": "#475651"},
+                "axisLine": {"lineStyle": {"color": "#b8bdb8"}}
             },
             "yAxis": {
                 "type": "value",
                 "splitArea": {"show": False},
-                "axisLabel": {"color": "#999999"},
-                "axisLine": {"lineStyle": {"color": "#333333"}},
-                "splitLine": {"lineStyle": {"color": "#1a1a1a"}}
+                "axisLabel": {"color": "#475651"},
+                "axisLine": {"lineStyle": {"color": "#b8bdb8"}},
+                "splitLine": {"lineStyle": {"color": "#eceee4"}}
             },
             "series": [
                 {
@@ -430,7 +430,7 @@ class PanelProcessor(DatasetProcessor):
                 "left": "center",
                 "top": 10,
                 "textStyle": {
-                    "color": "#ffffff",
+                    "color": "#152521",
                     "fontSize": 16,
                     "fontWeight": "normal"
                 }
@@ -440,15 +440,15 @@ class PanelProcessor(DatasetProcessor):
                 "axisPointer": {
                     "type": "line",
                     "lineStyle": {
-                        "color": "#555",
+                        "color": "#b8bdb8",
                         "type": "dashed"
                     }
                 },
-                "backgroundColor": "rgba(0, 0, 0, 0.9)",
-                "borderColor": "#333",
+                "backgroundColor": "rgba(245, 245, 239, 0.95)",
+                "borderColor": "#dbddd7",
                 "borderWidth": 1,
                 "textStyle": {
-                    "color": "#fff",
+                    "color": "#152521",
                     "fontSize": 12
                 },
                 "confine": True
@@ -459,13 +459,13 @@ class PanelProcessor(DatasetProcessor):
                 "bottom": 5,
                 "left": "center",
                 "textStyle": {
-                    "color": "#999999",
+                    "color": "#475651",
                     "fontSize": 11
                 },
                 "pageIconColor": "#5470c6",
-                "pageIconInactiveColor": "#444",
+                "pageIconInactiveColor": "#dbddd7",
                 "pageTextStyle": {
-                    "color": "#999"
+                    "color": "#475651"
                 },
                 "icon": "roundRect"
             },
@@ -480,7 +480,7 @@ class PanelProcessor(DatasetProcessor):
                     "saveAsImage": {"title": "Save"}
                 },
                 "iconStyle": {
-                    "borderColor": "#999999"
+                    "borderColor": "#848e88"
                 },
                 "emphasis": {
                     "iconStyle": {
@@ -508,13 +508,13 @@ class PanelProcessor(DatasetProcessor):
                 "type": "time",
                 "boundaryGap": False,
                 "axisLabel": {
-                    "color": "#999999",
+                    "color": "#475651",
                     "fontSize": 11,
                     "formatter": "{HH}:{mm}"
                 },
                 "axisLine": {
                     "lineStyle": {
-                        "color": "#333333"
+                        "color": "#b8bdb8"
                     }
                 },
                 "axisTick": {
@@ -527,7 +527,7 @@ class PanelProcessor(DatasetProcessor):
             "yAxis": {
                 "type": "value",
                 "axisLabel": {
-                    "color": "#999999",
+                    "color": "#475651",
                     "fontSize": 11
                 },
                 "axisLine": {
@@ -538,7 +538,7 @@ class PanelProcessor(DatasetProcessor):
                 },
                 "splitLine": {
                     "lineStyle": {
-                        "color": "#1a1a1a",
+                        "color": "#eceee4",
                         "type": "solid"
                     }
                 }
@@ -550,10 +550,10 @@ class PanelProcessor(DatasetProcessor):
         if panel_config.style:
             if panel_config.style.xLabel:
                 option["xAxis"]["name"] = panel_config.style.xLabel
-                option["xAxis"]["nameTextStyle"] = {"color": "#999999", "fontSize": 11}
+                option["xAxis"]["nameTextStyle"] = {"color": "#475651", "fontSize": 11}
             if panel_config.style.yLabel:
                 option["yAxis"]["name"] = panel_config.style.yLabel
-                option["yAxis"]["nameTextStyle"] = {"color": "#999999", "fontSize": 11}
+                option["yAxis"]["nameTextStyle"] = {"color": "#475651", "fontSize": 11}
             if panel_config.style.yMin is not None:
                 option["yAxis"]["min"] = panel_config.style.yMin
             if panel_config.style.yMax is not None:

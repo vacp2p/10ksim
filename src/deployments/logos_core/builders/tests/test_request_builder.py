@@ -21,7 +21,6 @@ def load_yaml(path: Path) -> Any:
 
 
 def load_expected_case(case_dir: Path) -> List[Tuple[str, Any]]:
-    print(f"asdfasdfasdf: {case_dir}")
     result: dict[str, Any] = {}
     for path in sorted(case_dir.glob("*.yaml")):
         dict_obj = load_yaml(path)
@@ -35,7 +34,6 @@ def get_deployments(builder: LogoscorePodApiRequester) -> List[Tuple[str, Any]]:
     result: dict[str, Any] = {}
     for dep in deployments:
         name = dep.metadata.name
-        print(f"asdf {name} {type(dep)}")
         result[f"{name}.yaml"] = k8s_obj_to_dict(dep)
     return sorted(result.items())
 

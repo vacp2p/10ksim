@@ -204,7 +204,8 @@ class LogoscorePodApiRequester(PodApiRequesterBuilder):
 
     def build_dependencies(self) -> Dict[str, V1Deployable]:
         deps = super().build_dependencies()
-        deps["logoscore"] = self._logoscore_dependencies
+        if self._logoscore_dependencies:
+            deps["logoscore"] = self._logoscore_dependencies
         return deepcopy(deps)
 
 

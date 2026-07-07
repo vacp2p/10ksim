@@ -8,7 +8,7 @@ import traceback
 from typing import List, Literal, Optional
 
 from kubernetes.dynamic.exceptions import ApiException
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PrivateAttr
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
@@ -67,11 +67,9 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
     service_account_name: str = "secret-creator2"
     pod_container_name: str = "logoscore-0"  # All on shard 0. Eg. logoscore-0-0 logoscore-0-1
 
-    _container_name: Optional[str] = PrivateAttr(default=None)
-
     def _get_metadata(self) -> dict:
         metadata = Bridge().get_metadata(self.events_log_path)
-        metadata["stack"]["container_name"] = self._container_name
+        metadata["stack"]["container_name"] = self.pod_container_name
         return metadata
 
     def build_publisher(self):
@@ -177,23 +175,35 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                 logger.error(f"e: {e}")
             await init_node(self.namespace, indexed_name, self.relay_service, addresses)
 
-        for name, service in zip(
-            [bootstrap_name, relay_name], [self.bootstrap_service, self.relay_service]
+        tasks = []
+        for count, name, service in zip(
+            [self.config.num_bootstrap_nodes, self.config.num_relay_nodes],
+            [bootstrap_name, relay_name],
+            [self.bootstrap_service, self.relay_service],
         ):
-            for index in range(self.config.num_relay_nodes):
+            for index in range(count):
                 indexed_name = f"{name}-{index}"
-                await start_node(self.namespace, indexed_name, service)
+                tasks.append(asyncio.create_task(start_node(self.namespace, indexed_name, service)))
+        await asyncio.gather(*tasks)
 
+        tasks = []
         topic = "/my-app/1/dst/proto"
         for index in range(self.config.num_relay_nodes):
             indexed_name = f"{relay_name}-{index}"
-            await subscribe(self.namespace, indexed_name, self.relay_service, topic)
+            tasks.append(
+                asyncio.create_task(
+                    subscribe(self.namespace, indexed_name, self.relay_service, topic)
+                )
+            )
+        await asyncio.gather(*tasks)
 
         message = "aGVsbG8="  # Test message
-        for _message_index in range(self.config.num_messages):
+        for message_index in range(self.config.num_messages):
             index = random.randrange(0, self.config.num_relay_nodes)
             indexed_name = f"{relay_name}-{index}"
+            logger.info(f"Sending message {message_index+1}/{self.config.num_messages}")
             await send(self.namespace, indexed_name, self.relay_service, topic, message)
+            await asyncio.sleep(self.config.delay_after_publish)
 
         await asyncio.sleep(20)
         self.log_event("publisher_wait_finished")
@@ -209,7 +219,7 @@ async def send(namespace, name_with_index, service_name, topic, message):
 
     try:
         target = Target(
-            name="pub",
+            name="send",
             name_template=name_with_index,
             service=service_name,
             port=8645,
@@ -241,7 +251,7 @@ async def subscribe(namespace, name_with_index, service_name, topic):
 
     try:
         target = Target(
-            name="pub",
+            name="subscribe",
             name_template=name_with_index,
             service=service_name,
             port=8645,
@@ -273,7 +283,7 @@ async def start_node(namespace, name_with_index, service_name):
 
     try:
         target = Target(
-            name="pub",
+            name="start_node",
             name_template=name_with_index,
             service=service_name,
             port=8645,
@@ -319,7 +329,7 @@ async def init_node(
 
     try:
         target = Target(
-            name="pub",
+            name="init_node",
             name_template=name_with_index,
             service=service_name,
             port=8645,
@@ -350,7 +360,7 @@ async def get_address(namespace, name_with_index, service) -> str:
     }
     try:
         target = Target(
-            name="pub",
+            name="get_address",
             name_template=name_with_index,
             service=service,
             port=8645,
@@ -381,7 +391,7 @@ async def get_address(namespace, name_with_index, service) -> str:
 async def init_token(namespace, name_with_index, service_name):
     try:
         target = Target(
-            name="pub",
+            name="init_token",
             name_template=name_with_index,
             service=service_name,
             port=8645,

@@ -52,7 +52,6 @@ class RequesterBaseParams:
     image: Optional[Image] = None
     service_name: Optional[str] = None
     requester_base_enabled: Optional[bool] = None
-    requester_selector_app: Optional[str] = None
     pod_service_reader_role_name: Optional[str] = None
     pod_service_reader_binding_name: Optional[str] = None
 
@@ -75,7 +74,6 @@ class PodApiRequesterBuilder(PodBuilder):
     _service_name: str = PrivateAttr(default="zerotesting-publisher")
 
     _requester_base_enabled: bool = PrivateAttr(default=False)
-    _requester_selector_app: Optional[str] = PrivateAttr(default="zerotenkay-publisher")
     _pod_service_reader_role_name: Optional[str] = PrivateAttr(default="pod-service-reader")
     _pod_service_reader_binding_name: Optional[str] = PrivateAttr(
         default="pod-service-reader-binding"
@@ -113,7 +111,6 @@ class PodApiRequesterBuilder(PodBuilder):
         "name",
         "app",
         "_container_name",
-        "_requester_selector_app",
         "_pod_service_reader_role_name",
         "_pod_service_reader_binding_name",
         "_image",
@@ -227,10 +224,6 @@ class PodApiRequesterBuilder(PodBuilder):
         self.service_name = service_name
         return self
 
-    def with_requester_selector_app(self, app: str) -> Self:
-        self._requester_selector_app = app
-        return self
-
     def with_mode(self, mode: ScriptMode) -> Self:
         self._mode = mode
         self._reconcile("_mode")
@@ -305,7 +298,6 @@ def _build_requester_base_params(builder: PodApiRequesterBuilder) -> RequesterBa
         mode=builder._mode,
         container_name=builder._container_name,
         requester_base_enabled=builder._requester_base_enabled,
-        requester_selector_app=builder._requester_selector_app,
         image=builder._image,
         pod_service_reader_binding_name=builder._pod_service_reader_binding_name,
         pod_service_reader_role_name=builder._pod_service_reader_role_name,

@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, Optional, Self
+from typing import Dict, List, Literal, Optional
 
 from kubernetes.client import V1ObjectMeta, V1Service, V1ServicePort, V1ServiceSpec
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,21 +45,6 @@ class ServiceConfig(BaseModel):
     kind: Optional[str] = Field(default="Service")
     labels: Optional[Dict[str, str]] = None
     service_spec: ServiceSpecConfig = Field(default_factory=ServiceSpecConfig)
-
-
-class ServiceConfigBuilder(BaseModel):
-    config: ServiceConfig = Field(default_factory=ServiceConfig)
-
-    def with_port(self, new_port: V1ServicePort) -> Self:
-        self.service_spec.with_port(new_port)
-        return self
-
-    def with_type(self, spec_type: ServiceSpecType) -> Self:
-        self.service_spec.spec_type = spec_type
-        return self
-
-    def build(self) -> V1Service:
-        return build_service(self.config)
 
 
 def build_service(config: ServiceConfig) -> V1Service:

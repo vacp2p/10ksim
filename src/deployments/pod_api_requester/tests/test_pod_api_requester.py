@@ -46,12 +46,6 @@ def test_with_service_name_updates_dns_search():
     assert "svc-a.ns.svc.cluster.local" in builder.config.pod_spec_config.dns_config.searches
 
 
-def test_with_requester_selector_app_updates_field():
-    builder = PodApiRequesterBuilder().with_namespace("ns").with_mode("server")
-    builder.with_requester_selector_app("alt-app")
-    assert builder._requester_selector_app == "alt-app"
-
-
 def test_with_dns_search_delegates_to_pod_spec():
     builder = PodApiRequesterBuilder().with_namespace("ns").with_mode("server")
     builder.with_dns_search("custom.ns.svc.cluster.local")

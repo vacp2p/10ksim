@@ -176,11 +176,11 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             await init_node(self.namespace, indexed_name, self.relay_service, addresses)
 
         tasks = []
-        for count, name, service in zip(
-            [self.config.num_bootstrap_nodes, self.config.num_relay_nodes],
-            [bootstrap_name, relay_name],
-            [self.bootstrap_service, self.relay_service],
-        ):
+        node_configs = [
+            (self.config.num_bootstrap_nodes, bootstrap_name, self.bootstrap_service),
+            (self.config.num_relay_nodes, relay_name, self.relay_service),
+        ]
+        for count, name, service in node_configs:
             for index in range(count):
                 indexed_name = f"{name}-{index}"
                 tasks.append(asyncio.create_task(start_node(self.namespace, indexed_name, service)))

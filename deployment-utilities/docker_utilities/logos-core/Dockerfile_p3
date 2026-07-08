@@ -1,0 +1,15 @@
+FROM pearsonwhite/dst-lc-node:wip-part-2-amd AS base
+
+ARG OPENMETRICS_MODULE_COMMIT=c50e9d39262a5fe17443a79a25f6437b19123416
+
+ARG NIX_USER=nixuser
+ENV USER=${NIX_USER}
+ENV HOME=/home/${NIX_USER}
+WORKDIR ${HOME}
+
+WORKDIR $HOME
+RUN git clone https://github.com/logos-co/openmetrics-module.git
+WORKDIR $HOME/openmetrics-module
+RUN git checkout ${OPENMETRICS_MODULE_COMMIT}
+RUN nix bundle --bundler $HOME/nix-bundle-lgx#dual .
+RUN lgpm install --file logos-openmetrics-module-lgx-*/logos-openmetrics-module.lgx --modules-dir "$HOME/.logos/modules"

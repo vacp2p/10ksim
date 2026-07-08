@@ -1,0 +1,29 @@
+FROM pearsonwhite/dst-lc-node:wip-part-3-amd AS base
+
+ARG LOGOSCORE_CLI_BRANCH=tutorial-v1
+
+ARG NIX_USER=nixuser
+
+ARG USER=nixuser
+
+ARG NIX_USER=nixuser
+ENV USER=${NIX_USER}
+ENV HOME=/home/${NIX_USER}
+WORKDIR ${HOME}
+
+WORKDIR $HOME
+RUN git clone https://github.com/logos-co/logos-logoscore-cli.git
+WORKDIR $HOME/logos-logoscore-cli
+RUN git checkout ${LOGOSCORE_CLI_BRANCH} \
+    && nix build \
+    && ln -s $(realpath ./result)/bin/logoscore $HOME/bin/logoscore
+
+ENV USER=$USER
+USER $USER
+WORKDIR /home/$USER
+ENV HOME=/home/$USER
+
+WORKDIR $HOME
+COPY entrypoint.sh entrypoint.sh
+COPY main.py main.py
+ENTRYPOINT ["/bin/sh", "-c", "./entrypoint.sh"]

@@ -3,6 +3,7 @@ FROM debian:bookworm-slim AS builder
 
 ARG NIX_USER=nixuser
 ARG DELIVERY_MODULE_BRANCH=v0.1.3
+ARG OPENMETRICS_MODULE_COMMIT=c50e9d39262a5fe17443a79a25f6437b19123416
 ARG USER=nixuser
 
 # Standard tools
@@ -49,7 +50,6 @@ trusted-public-keys = nix-cache.status.im-1:x/93lOfLU+duPplwMSBR+OlY4+mo+dCN7n0m
 trusted-users = root nixuser
 filter-syscalls = false
 EOF
-# RUN chown -R nixuser /home/nixuser/.config
 
 RUN mkdir -p /home/nixuser && chown nixuser:nixuser /home/nixuser
 USER ${NIX_USER}
@@ -85,6 +85,13 @@ RUN git checkout ${DELIVERY_MODULE_BRANCH}
 RUN # You have to use dual for some reason.
 RUN nix bundle --bundler $HOME/nix-bundle-lgx#dual .
 RUN lgpm install --file logos-delivery_module-module-lgx-*/logos-delivery_module-module.lgx --modules-dir "$HOME/.logos/modules"
+
+WORKDIR $HOME
+RUN git clone https://github.com/logos-co/openmetrics-module.git
+WORKDIR $HOME/openmetrics-module
+RUN git checkout ${OPENMETRICS_MODULE_COMMIT}
+RUN nix bundle --bundler $HOME/nix-bundle-lgx#dual .
+RUN lgpm install --file logos-openmetrics-module-lgx-*/logos-openmetrics-module.lgx --modules-dir "$HOME/.logos/modules"
 
 WORKDIR $HOME
 RUN git clone https://github.com/logos-co/logos-logoscore-cli.git

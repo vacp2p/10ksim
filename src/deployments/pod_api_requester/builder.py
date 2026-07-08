@@ -242,8 +242,7 @@ class PodApiRequesterBuilder(PodBuilder):
         return self
 
     def with_debug(self) -> Self:
-        self._mode = "debug"
-        return self.with_command("sleep", args=["infinity"])
+        return self.with_mode("debug")
 
     def build(self) -> V1Pod:
         if not self.namespace:

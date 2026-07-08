@@ -120,6 +120,8 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                 await self.deploy(deployment=deployment, wait_for_ready=True)
             except Exception as e:
                 # Ignore duplicate dependencies between bootstrap and relay
+                if not exist_ok:
+                    raise
                 raise_unless_already_exists(e)
 
     async def _run(self):

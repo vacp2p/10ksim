@@ -57,7 +57,9 @@ class Libp2pStatefulSetBuilder(StatefulSetBuilder):
         return self
 
     def with_image(self, image: Image) -> Self:
-        self.with_image_in_container(LIBP2P_CONTAINER_NAME, image, overwrite=True)
+        self.with_image_in_container(
+            image=image, container_name=LIBP2P_CONTAINER_NAME, overwrite=True
+        )
         return self
 
     def with_readiness_probe(self, probe: V1Probe) -> Self:

@@ -61,8 +61,6 @@ V1Deployable = Union[
     V1CronJob,
     V1ConfigMap,
     V1ServiceAccount,
-    V1ConfigMap,
-    V1ServiceAccount,
 ]
 
 

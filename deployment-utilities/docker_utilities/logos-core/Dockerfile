@@ -42,14 +42,15 @@ RUN apt-get update && \
 
 # Add config for nix and trust "nixuser" as root before we switch users.
 RUN mkdir -p /etc/nix/
-RUN cat >> /etc/nix/nix.conf << 'EOF'
-experimental-features = nix-command flakes
-accept-flake-config = true
-trusted-substituters = https://nix-cache.status.im/
-trusted-public-keys = nix-cache.status.im-1:x/93lOfLU+duPplwMSBR+OlY4+mo+dCN7n0mr4oPwgY= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-trusted-users = root nixuser
-filter-syscalls = false
-EOF
+RUN mkdir -p /etc/nix/ && \
+    printf '%s\n' \
+    'experimental-features = nix-command flakes' \
+    'accept-flake-config = true' \
+    'trusted-substituters = https://nix-cache.status.im/' \
+    'trusted-public-keys = nix-cache.status.im-1:x/93lOfLU+duPplwMSBR+OlY4+mo+dCN7n0mr4oPwgY= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
+    'trusted-users = root nixuser' \
+    'filter-syscalls = false' \
+    > /etc/nix/nix.conf
 
 RUN mkdir -p /home/nixuser && chown nixuser:nixuser /home/nixuser
 USER ${NIX_USER}

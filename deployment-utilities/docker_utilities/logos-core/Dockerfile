@@ -100,6 +100,11 @@ RUN git checkout tutorial-v1
 RUN nix build
 RUN ln -s $(realpath ./result)/bin/logoscore $HOME/bin/logoscore
 
+ENV USER=$USER
+USER $USER
+WORKDIR /home/$USER
+ENV HOME=/home/$USER
+
 WORKDIR $HOME
 COPY entrypoint.sh entrypoint.sh
 COPY main.py main.py

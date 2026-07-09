@@ -8,9 +8,9 @@ while ! nc -z localhost 8645; do
   sleep 0.1
 done
 
-logoscore --modules-dir "$HOME/.logos/modules" load-module delivery_module
-logoscore --modules-dir "$HOME/.logos/modules" load-module openmetrics
-logoscore --modules-dir "$HOME/.logos/modules" status
+logoscore load-module delivery_module
+logoscore load-module openmetrics
+logoscore status
 logoscore issue-token --name $HOSTNAME
 
 python3 ./main.py

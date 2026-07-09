@@ -1,0 +1,16 @@
+FROM pearsonwhite/dst-lc-node:wip-part-4-cliv0.2.1-amd AS base
+
+ARG NIX_USER=nixuser
+ENV USER=${NIX_USER}
+ENV HOME=/home/${NIX_USER}
+
+WORKDIR ${HOME}
+
+
+USER ${USER}
+WORKDIR ${HOME}
+
+COPY entrypoint.sh entrypoint.sh
+COPY main.py main.py
+
+ENTRYPOINT ["/bin/sh", "-c", "./entrypoint.sh"]

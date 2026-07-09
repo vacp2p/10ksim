@@ -52,7 +52,7 @@ class MultiNimlibp2pKad(Multiple):
         base = {
             "discovery": "kad-dht",
             "bootstrap_nodes": 1,
-            "num_nodes": NUM_NODES,
+            "num_relay_nodes": NUM_NODES,
             "num_messages": NUM_MESSAGES,
             "delay_after_publish": 1,  # 1 msg/s
             "delay_cold_start": COLD_START,
@@ -77,5 +77,5 @@ class MultiNimlibp2pKad(Multiple):
             f"version_{params['version']}"
             f"__muxer_{params['muxer']}"
             f"__size_{params['message_size_bytes']}"
-            f"__nodes_{params['num_nodes']}"
+            f"__nodes_{params['num_relay_nodes']}"
         )

@@ -1,4 +1,5 @@
-FROM pearsonwhite/dst-lc-node:wip-base-amd AS base
+# FROM pearsonwhite/dst-lc-node:wip-base-amd AS base
+FROM pearsonwhite/lc-p1-pkg2-bundler3 AS base
 
 ARG DELIVERY_MODULE_BRANCH=v0.1.3
 

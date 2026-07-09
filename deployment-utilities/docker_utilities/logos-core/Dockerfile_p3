@@ -1,4 +1,4 @@
-FROM pearsonwhite/dst-lc-node:wip-part-2-amd AS base
+FROM pearsonwhite/lc-p2:delivery1.3 AS base
 
 ARG OPENMETRICS_MODULE_COMMIT=c50e9d39262a5fe17443a79a25f6437b19123416
 

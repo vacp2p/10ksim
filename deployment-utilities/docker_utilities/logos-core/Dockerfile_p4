@@ -1,4 +1,4 @@
-FROM pearsonwhite/dst-lc-node:wip-part-3-amd AS base
+FROM pearsonwhite/lc-p3:delivery1.3-amd AS base
 
 # Do not use `tutorial-v1`. It is broken.
 # ARG LOGOSCORE_CLI_BRANCH=5a1cf746e841e8e8a8fd48333cff55bd12c45c52

@@ -4,6 +4,9 @@ FROM debian:bookworm-slim AS builder
 ARG NIX_USER=nixuser
 ARG USER=nixuser
 
+ARG PKG_MANAGER_BRANCH=0.2.0
+ARG BUNDLER_BRANCH=tutorial-v3
+
 # Standard tools
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -68,11 +71,11 @@ RUN cd $HOME
 WORKDIR $HOME
 RUN git clone https://github.com/logos-co/logos-package-manager.git
 WORKDIR $HOME/logos-package-manager
-RUN git checkout tutorial-v1
+RUN git checkout ${PKG_MANAGER_BRANCH}
 RUN nix build
 RUN ln -s $(realpath ./result)/bin/lgpm $HOME/bin/lgpm
 
 WORKDIR $HOME
 RUN git clone https://github.com/logos-co/nix-bundle-lgx.git
 WORKDIR $HOME/nix-bundle-lgx
-RUN git checkout tutorial-v1
+RUN git checkout ${BUNDLER_BRANCH}

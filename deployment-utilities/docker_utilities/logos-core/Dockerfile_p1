@@ -2,8 +2,6 @@
 FROM debian:bookworm-slim AS builder
 
 ARG NIX_USER=nixuser
-ARG DELIVERY_MODULE_BRANCH=v0.1.3
-ARG OPENMETRICS_MODULE_COMMIT=c50e9d39262a5fe17443a79a25f6437b19123416
 ARG USER=nixuser
 
 # Standard tools

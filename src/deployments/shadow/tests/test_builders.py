@@ -108,7 +108,7 @@ class TestRenderShadowYaml:
         )
         peer = sy["hosts"]["pod-0"]["processes"][0]
         assert peer["path"] == "./main"
-        assert peer["start_time"] == "5s"
+        assert peer["start_time"] == "5000ms"
         assert peer["expected_final_state"] == "running"
         env = peer["environment"]
         assert env["PEERS"] == "3"

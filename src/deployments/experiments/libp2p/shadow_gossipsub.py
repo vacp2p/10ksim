@@ -47,6 +47,8 @@ class ExpConfig(BaseModel):
     # Floor (µs) for lsquic engine tick re-arms; needs the tick-floor node image.
     # 0 = stock lsquic behavior (which livelocks quic under Shadow).
     lsquic_tick_floor_us: NonNegativeInt = 0
+    # Per-pod process start stagger (pod-i starts at 5000 + i*jitter ms); 0 = lockstep.
+    start_jitter_ms: NonNegativeInt = 0
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -91,6 +93,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             model_unblocked_syscall_latency=cfg.model_unblocked_syscall_latency,
             strace_logging_mode=cfg.strace_logging_mode,
             lsquic_tick_floor_us=cfg.lsquic_tick_floor_us,
+            start_jitter_ms=cfg.start_jitter_ms,
         )
         publisher_config = render_publisher_config(
             num_nodes=cfg.num_nodes,

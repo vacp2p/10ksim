@@ -56,6 +56,7 @@ def render_shadow_yaml(
     model_unblocked_syscall_latency: bool = False,
     strace_logging_mode: str = "off",
     lsquic_tick_floor_us: int = 0,
+    start_jitter_ms: int = 0,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -85,16 +86,21 @@ def render_shadow_yaml(
     if discovery == "kad-dht":
         peer_env["NODE_ROLE"] = "RoleNormal"
         peer_env["SERVICE"] = "bootstrap-0"
-    peer_process = {
-        "path": "./main",
-        "start_time": "5s",
-        "expected_final_state": "running",  # daemon: don't error when alive at stop_time
-        "environment": peer_env,
-    }
+    # start_jitter_ms staggers per-pod process start so peers don't wake and dial at
+    # one simulated instant (lockstep wakes force simultaneous-dial collisions that
+    # never occur on real hosts).
     hosts = {
         f"pod-{i}": {
             "network_node_id": 0,
-            "processes": [peer_process],
+            "processes": [
+                {
+                    "path": "./main",
+                    "start_time": f"{5000 + i * start_jitter_ms}ms",
+                    # daemon: don't error when alive at stop_time
+                    "expected_final_state": "running",
+                    "environment": peer_env,
+                }
+            ],
         }
         for i in range(num_nodes)
     }

@@ -39,6 +39,14 @@ class ExpConfig(BaseModel):
     sim_stop_time_s: NonNegativeInt = 180
     # storeMetrics scrape cadence (s); short so the last scrape is post-traffic.
     metrics_interval_s: NonNegativeInt = 15
+    # Determinism + diagnostics. seed is rendered into shadow.yaml (Shadow default 1);
+    # strace is global and heavy — small-N diagnosis only.
+    seed: NonNegativeInt = 1
+    model_unblocked_syscall_latency: bool = False
+    strace_logging_mode: str = "off"  # off | standard | deterministic
+    # Floor (µs) for lsquic engine tick re-arms; needs the tick-floor node image.
+    # 0 = stock lsquic behavior (which livelocks quic under Shadow).
+    lsquic_tick_floor_us: NonNegativeInt = 0
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -79,6 +87,10 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             discovery=cfg.discovery,
             start_sleep=cfg.start_sleep,
             metrics_interval_s=cfg.metrics_interval_s,
+            seed=cfg.seed,
+            model_unblocked_syscall_latency=cfg.model_unblocked_syscall_latency,
+            strace_logging_mode=cfg.strace_logging_mode,
+            lsquic_tick_floor_us=cfg.lsquic_tick_floor_us,
         )
         publisher_config = render_publisher_config(
             num_nodes=cfg.num_nodes,

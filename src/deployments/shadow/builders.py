@@ -52,6 +52,10 @@ def render_shadow_yaml(
     discovery: str = "static",
     start_sleep: int = 60,
     metrics_interval_s: int = 15,
+    seed: int = 1,
+    model_unblocked_syscall_latency: bool = False,
+    strace_logging_mode: str = "off",
+    lsquic_tick_floor_us: int = 0,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -75,6 +79,9 @@ def render_shadow_yaml(
         "STARTSLEEP": str(start_sleep),
         "METRICS_INTERVAL_S": str(metrics_interval_s),
     }
+    if lsquic_tick_floor_us > 0:
+        # Needs the tick-floor test-node image (stock images ignore the env var).
+        peer_env["LSQUIC_TICK_FLOOR_US"] = str(lsquic_tick_floor_us)
     if discovery == "kad-dht":
         peer_env["NODE_ROLE"] = "RoleNormal"
         peer_env["SERVICE"] = "bootstrap-0"
@@ -110,6 +117,11 @@ def render_shadow_yaml(
                         "MAXCONNECTIONS": str(num_nodes + 100),
                         "STARTSLEEP": str(start_sleep),
                         "METRICS_INTERVAL_S": str(metrics_interval_s),
+                        **(
+                            {"LSQUIC_TICK_FLOOR_US": str(lsquic_tick_floor_us)}
+                            if lsquic_tick_floor_us > 0
+                            else {}
+                        ),
                     },
                 }
             ],
@@ -128,16 +140,25 @@ def render_shadow_yaml(
             }
         ],
     }
-    return {
+    # Always render the seed so the run's shadow.yaml records it (Shadow defaults to 1).
+    config = {
         "general": {
             "stop_time": f"{sim_stop_time_s}s",
             "progress": True,
+            "seed": seed,
         },
         "network": {
             "graph": {"type": "1_gbit_switch"},
         },
         "hosts": hosts,
     }
+    if model_unblocked_syscall_latency:
+        config["general"]["model_unblocked_syscall_latency"] = True
+    if strace_logging_mode != "off":
+        # Global (all hosts) and voluminous — a straced host writes ~100s of MB per
+        # simulated minute of activity. Diagnostics at small N only.
+        config["experimental"] = {"strace_logging_mode": strace_logging_mode}
+    return config
 
 
 def render_publisher_config(

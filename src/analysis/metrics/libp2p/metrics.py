@@ -68,7 +68,7 @@ def low_peers(namespace: str) -> MetricToScrape:
 
 def high_peers(namespace: str) -> MetricToScrape:
     return MetricToScrape(
-        name="libp2p_high_peers",  # TODO: failing. libp2p_gossipsub_low_peers_topics exists but I don't see libp2p_gossipsub_healthy_peers_topics
+        name="libp2p_high_peers",
         query=f"sum by(job) (libp2p_gossipsub_healthy_peers_topics{{namespace='{namespace}'}})",
         extract_field="job",
         folder_name="high-peers/",
@@ -76,20 +76,23 @@ def high_peers(namespace: str) -> MetricToScrape:
 
 
 def container_memory_bytes(namespace: str) -> MetricToScrape:
+    # cadvisor emits both the pod cgroup total and a per-container series; `max by
+    # (pod)` picks the pod total. `sum` would add them and roughly double the value.
     return MetricToScrape(
         name="container_memory_bytes",
-        query=f"sum by (pod) (container_memory_usage_bytes{{namespace='{namespace}'}})",
+        query=f"max by (pod) (container_memory_usage_bytes{{namespace='{namespace}'}})",
         extract_field="pod",
         folder_name="container-memory/",
     )
 
 
-def nim_gc_memory_bytes(namespace: str):
-    # TODO: Not working. `nim_gc_mem_bytes` does not have `node` or `pod-node` keys.
+def nim_gc_memory_bytes(namespace: str) -> MetricToScrape:
+    # nim_gc_mem_bytes is a gauge (heap in use), so rate() of it is meaningless;
+    # sum the per-thread series for the pod total.
     return MetricToScrape(
         name="nim_gc_memory_bytes",
-        query=f"rate(nim_gc_mem_bytes{{namespace='{namespace}'}}[$__rate_interval])",
-        extract_field="pod-node",
+        query=f"sum by (pod) (nim_gc_mem_bytes{{namespace='{namespace}'}})",
+        extract_field="pod",
         folder_name="nim-gc-memory/",
     )
 

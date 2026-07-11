@@ -30,27 +30,48 @@ class PodSpecConfig(BaseModel):
     security_context: Optional[V1PodSecurityContext] = None
     automount_service_account_token: Optional[bool] = None
 
-    def with_dns_service(self, service: str, *, overwrite: bool = False):
+    def with_dns_search(self, dns_search: str, *, overwrite: bool = False):
         if self.dns_config is None:
             self.dns_config = V1PodDNSConfig(searches=[])
+        current_service = next(
+            (item for item in self.dns_config.searches if item == dns_search), None
+        )
+        if current_service:
+            if not overwrite:
+                raise ValueError(
+                    f"DNS service already exists in {type(self)}. service: `{dns_search}` config: `{self}`"
+                )
+            self.dns_config.searches.remove(current_service)
+        self.dns_config.searches.append(dns_search)
 
-        if service in self.dns_config.searches and not overwrite:
+    def remove_dns_search(self, dns_search: str, *, missing_ok: bool = True):
+        if self.dns_config is None:
+            if missing_ok == False:
+                raise ValueError(
+                    f"Attempted to remove nonexistent dns search. service: `{dns_search}` config: `{self}`"
+                )
+            return
+        current_service = next(
+            (item for item in self.dns_config.searches if item == dns_search), None
+        )
+        if not current_service:
+            if missing_ok:
+                return
             raise ValueError(
-                f"The {type(self)} already has dns service. "
-                f"service: `{service}` config: `{self}`"
+                f"Attempted to remove nonexistent dns search. service: `{dns_search}` config: `{self}`"
             )
-
-        self.dns_config.searches.append(service)
+        self.dns_config.searches.remove(current_service)
 
     def with_volume(self, volume: V1Volume, *, overwrite: bool = False):
         if self.volumes is None:
             self.volumes = []
-
-        if not overwrite and volume.name in [item.name for item in self.volumes]:
-            raise ValueError(
-                f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
-            )
-
+        current_volume = next((item for item in self.volumes if item.name == volume.name), None)
+        if current_volume:
+            if not overwrite:
+                raise ValueError(
+                    f"Volume already exists in {type(self)}. volume: `{volume}` config: `{self}`"
+                )
+            self.volumes.remove(current_volume)
         self.volumes.append(volume)
 
     def add_init_container(

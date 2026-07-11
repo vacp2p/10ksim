@@ -3,7 +3,6 @@ from typing import Any, Iterable, List, Optional
 from pydantic import BaseModel
 
 from src.deployments.core.configs.container import Image
-from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.experiments.libp2p.nimlibp2p import NimLibp2pExperiment
 from src.deployments.experiments.multi_experiment import Multiple
 from src.deployments.registry import experiment
@@ -16,18 +15,11 @@ def shallow_merge(a: BaseModel, b: BaseModel):
 
 @experiment(name="multi_nimlibp2p")
 class MultiNimlibp2p(Multiple):
+    """Run nimlibp2p multiple times with different parameters."""
 
     def model_post_init(self, __context: Any) -> None:
         self.config.name = NimLibp2pExperiment.name
         super().model_post_init(__context)
-
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(
-            cls.name, help="Run nimlibp2p multiple times with different parameters."
-        )
-        Multiple.add_args(subparser)
-        BaseExperiment.add_args(subparser)
 
     def get_params_paths(self) -> Optional[dict]:
         """Return dict mapping keys to values.yaml paths"""

@@ -36,13 +36,9 @@ class ExpConfig(BaseModel):
 
 @experiment(name="service-discovery")
 class ServiceDiscovery(BaseExperiment[ExpConfig]):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Service discovery experiment"""
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(cls.name, help="Service discovery experiment")
-        BaseExperiment.add_args(subparser)
-        subparser.set_defaults(namespace="nimlibp2p")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def log_event(self, event):
         logger.info(event)

@@ -201,17 +201,15 @@ if curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
         return prefix + ["\n".join(script) + "\n"]
 
 
-@experiment(name="jswaku")
-class JsWakuNodes(BaseExperiment, BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class EmptyConfig(BaseModel):
+    pass
 
-    @classmethod
-    def add_parser(cls, subparsers) -> None:
-        subparser = subparsers.add_parser(
-            cls.name,
-            help="Run an experiment with lightpush nodes that are disconnected/reconnected.",
-        )
-        BaseExperiment.add_args(subparser)
+
+@experiment(name="jswaku")
+class JsWakuNodes(BaseExperiment[EmptyConfig]):
+    """Run an experiment with lightpush nodes that are disconnected/reconnected."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _preprocess_event(self, event: Any) -> Any:
         if isinstance(event, str):

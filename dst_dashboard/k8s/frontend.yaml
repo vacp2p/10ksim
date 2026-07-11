@@ -14,9 +14,23 @@ spec:
       labels:
         app: dst-dashboard-frontend
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - metal-01.he-eu-hel1.misc.vacdst
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "monitoring"
+          effect: "PreferNoSchedule"
       containers:
       - name: frontend
-        image: mamoutoudiarra/dst-dashboard-frontend:dev-0.3
+        image: mamoutoudiarra/dst-dashboard-frontend:v0.5
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
@@ -55,10 +69,10 @@ spec:
   ingressClassName: traefik
   tls:
   - hosts:
-    - dev.dashboard.lab.vac.dev
+    - dashboard.lab.vac.dev
     secretName: dashboard-frontend-tls
   rules:
-  - host: dev.dashboard.lab.vac.dev
+  - host: dashboard.lab.vac.dev
     http:
       paths:
       - path: /

@@ -1,35 +1,20 @@
 """Dataset API routes."""
 
-from typing import List, Dict, Any
-
-from fastapi import APIRouter, HTTPException, Request, Body
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from dst_dashboard.config.data_structures import DatasetConfig, ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
 from dst_dashboard.api.utils import get_processor
+from dst_dashboard.auth import require_admin_token
 
 router = APIRouter(
     prefix="/experiments/{experiment_id}/datasets", tags=["datasets"]
 )
 
 
-class DatasetDataUpdate(BaseModel):
-    """Model for updating dataset data."""
-    data: List[Dict[str, Any]]
-
-
 @router.get("")
-async def get_experiment_datasets(experiment_id: str, request: Request):
-    """
-    Get all datasets for an experiment with their data.
-    
-    Args:
-        experiment_id: Experiment identifier
-        
-    Returns:
-        List of datasets with their configurations and data
-    """
+def get_experiment_datasets(experiment_id: str, request: Request):
+    """Get all datasets for an experiment with their data."""
     db = DSTDatabase()
     
     # Get experiment from database (source of truth)
@@ -66,7 +51,7 @@ async def get_experiment_datasets(experiment_id: str, request: Request):
 
 
 @router.get("/{dataset_name}", response_model=DatasetConfig)
-async def get_dataset(experiment_id: str, dataset_name: str, request: Request):
+def get_dataset(experiment_id: str, dataset_name: str, request: Request):
     """Get dataset configuration for an experiment."""
     db = DSTDatabase()
     
@@ -86,23 +71,13 @@ async def get_dataset(experiment_id: str, dataset_name: str, request: Request):
 
 
 @router.get("/{dataset_name}/data")
-async def get_dataset_data(
+def get_dataset_data(
     experiment_id: str,
     dataset_name: str,
     request: Request,
     refresh: bool = False
 ):
-    """
-    Get dataset data (with caching support).
-    
-    Args:
-        experiment_id: Experiment identifier
-        dataset_name: Dataset name
-        refresh: If True, force re-fetch from datasource even if cached
-        
-    Returns:
-        Dataset data (list of records)
-    """
+    """Get dataset data (with caching support). `refresh=True` forces a re-fetch."""
     db = DSTDatabase()
     
     # Get experiment from database
@@ -149,7 +124,12 @@ async def get_dataset_data(
 
 
 @router.delete("/{dataset_name}", status_code=204)
-async def delete_dataset(experiment_id: str, dataset_name: str, request: Request):
+def delete_dataset(
+    experiment_id: str,
+    dataset_name: str,
+    request: Request,
+    _: None = Depends(require_admin_token),
+):
     """Delete a dataset and its data."""
     db = DSTDatabase()
     

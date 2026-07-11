@@ -1,18 +1,18 @@
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, Body
-from pydantic import BaseModel
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from dst_dashboard.config.data_structures import ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
-from dst_dashboard.processors.experiment_processor import ExperimentProcessor
 from dst_dashboard.api.utils import get_processor
+from dst_dashboard.auth import require_admin_token
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
 
 @router.get("/families")
-async def list_families(request: Request) -> Dict[str, Any]:
+def list_families(request: Request) -> Dict[str, Any]:
     """
     Get all experiment families with their experiments.
     Organized for navigation in the dashboard UI.
@@ -63,7 +63,7 @@ async def list_families(request: Request) -> Dict[str, Any]:
 
 
 @router.get("", response_model=List[ExperimentConfig])
-async def list_experiments(
+def list_experiments(
     request: Request,
     publish: Optional[bool] = Query(None, description="Filter by publish status"),
 ):
@@ -81,7 +81,7 @@ async def list_experiments(
 
 
 @router.get("/{experiment_id}", response_model=ExperimentConfig)
-async def get_experiment(experiment_id: str, request: Request):
+def get_experiment(experiment_id: str, request: Request):
     """Get experiment details from database."""
     db = DSTDatabase()
     
@@ -95,17 +95,24 @@ async def get_experiment(experiment_id: str, request: Request):
 
 
 @router.post("", response_model=ExperimentConfig, status_code=201)
-async def create_experiment(experiment: ExperimentConfig, request: Request):
+def create_experiment(
+    experiment: ExperimentConfig, request: Request, _: None = Depends(require_admin_token)
+):
     """
     Create a new experiment and process it (fetch datasets, generate panels).
+    `id` is always server-assigned - any id in the request body is ignored.
     """
     db = DSTDatabase()
-    
-    # Check if experiment already exists
-    existing = db.get_experiment(experiment.id)
-    if existing:
-        raise HTTPException(status_code=409, detail=f"Experiment with ID '{experiment.id}' already exists")
-    
+
+    # id is never client-supplied - always assign a fresh one
+    experiment.id = str(ObjectId())
+
+    # Title must be unique
+    if db.experiments.find_one({"title": experiment.title}):
+        raise HTTPException(
+            status_code=409, detail=f"Experiment with title '{experiment.title}' already exists"
+        )
+
     # Store experiment in database
     db.store_experiment(experiment.model_dump())
     
@@ -125,24 +132,38 @@ async def create_experiment(experiment: ExperimentConfig, request: Request):
 
 
 @router.put("/{experiment_id}", response_model=ExperimentConfig)
-async def update_experiment(experiment_id: str, experiment: ExperimentConfig, request: Request):
+def update_experiment(
+    experiment_id: str,
+    experiment: ExperimentConfig,
+    request: Request,
+    _: None = Depends(require_admin_token),
+):
     """
-    Update an existing experiment. 
+    Update an existing experiment.
     Only reprocesses if configuration changed (datasets, panels, datasources, time ranges).
+    `id` always comes from the URL path - any id in the request body is ignored.
     """
     db = DSTDatabase()
-    
-    # Ensure the ID in the path matches the ID in the body
-    if experiment.id != experiment_id:
-        raise HTTPException(status_code=400, detail="Experiment ID in path must match ID in body")
-    
+
+    # id is never client-supplied - the path is authoritative
+    experiment.id = experiment_id
+
     # Get existing experiment from DB
     existing_data = db.get_experiment(experiment_id)
     if not existing_data:
         raise HTTPException(status_code=404, detail="Experiment not found")
-    
+
     existing = ExperimentConfig(**existing_data)
-    
+
+    # Title must be unique among *other* experiments
+    title_conflict = db.experiments.find_one(
+        {"title": experiment.title, "id": {"$ne": experiment_id}}
+    )
+    if title_conflict:
+        raise HTTPException(
+            status_code=409, detail=f"Experiment with title '{experiment.title}' already exists"
+        )
+
     # Check if reprocessing is needed
     needs_reprocessing = (
         existing.datasets != experiment.datasets or
@@ -174,7 +195,9 @@ async def update_experiment(experiment_id: str, experiment: ExperimentConfig, re
 
 
 @router.delete("/{experiment_id}", status_code=204)
-async def delete_experiment(experiment_id: str, request: Request):
+def delete_experiment(
+    experiment_id: str, request: Request, _: None = Depends(require_admin_token)
+):
     """Delete an experiment and all its associated data (datasets, panels)."""
     db = DSTDatabase()
     

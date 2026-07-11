@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class TimeRange(BaseModel):
@@ -82,7 +82,7 @@ class PanelConfig(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    id: str
+    id: Optional[str] = None  # Server-assigned on create; ignored if sent by the client
     title: str
     family: str
     description: Optional[str] = None  # Experiment description
@@ -98,8 +98,7 @@ class ExperimentConfig(BaseModel):
 
 class DashboardFullConfig(BaseModel):
     datasources: List[DataSourceConfig]
-    experiments: List[ExperimentConfig]
-    
+
     def WithValidateDatasources(self) -> "DashboardFullConfig":
         if not self.datasources:
             raise ValueError("At least one datasource must be defined in the config.")

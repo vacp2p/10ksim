@@ -1,7 +1,8 @@
 """Experiment processor - processes complete experiments with datasets and panels."""
 import logging
-import uuid
-from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from bson import ObjectId
 
 from dst_dashboard.config.data_structures import (
     ExperimentConfig,
@@ -20,29 +21,13 @@ class ExperimentProcessor(PanelProcessor):
     """
 
     def __init__(self, config: DashboardFullConfig, db: DSTDatabase):
-        """
-        Initialize experiment processor.
-        
-        Args:
-            config: Dashboard configuration
-            db: Database instance
-        """
         super().__init__(config, db)
 
     def _ensure_experiment_id(self, experiment: ExperimentConfig) -> str:
-        """
-        Ensure experiment has a valid ID, generate UUID if missing.
-        
-        Args:
-            experiment: Experiment configuration
-            
-        Returns:
-            Experiment ID (existing or newly generated)
-        """
+        """Ensure experiment has a valid ID, generating one (Mongo ObjectId-style) if missing."""
         if not experiment.id or experiment.id.strip() == "":
-            # Generate UUID for experiment
-            generated_id = str(uuid.uuid4())
-            logger.info(f"Generated UUID for experiment '{experiment.title}': {generated_id}")
+            generated_id = str(ObjectId())
+            logger.info(f"Generated ID for experiment '{experiment.title}': {generated_id}")
             experiment.id = generated_id
         
         return experiment.id
@@ -52,25 +37,11 @@ class ExperimentProcessor(PanelProcessor):
         experiment_id: str, 
         dataset_config: DatasetConfig
     ) -> bool:
-        """
-        Process a single dataset - fetch and store if needed.
-        
-        Args:
-            experiment_id: Experiment ID
-            dataset_config: Dataset configuration
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        """Process a single dataset - fetch and store if needed. Returns True on success."""
         logger.info(f"Processing dataset: {dataset_config.name}")
-        
-        # Check if dataset already exists
+
         existing_data = self.db.get_dataset(experiment_id, dataset_config.name)
-        
-        # Determine if we need to fetch data
-        should_fetch = existing_data is None
-        
-        if not should_fetch:
+        if existing_data is not None:
             logger.info(
                 f"Dataset '{dataset_config.name}' already exists with {len(existing_data)} rows, skipping fetch"
             )
@@ -98,42 +69,40 @@ class ExperimentProcessor(PanelProcessor):
             return False
 
     def process_experiment_datasets(
-        self, 
+        self,
         experiment: ExperimentConfig,
-        max_workers: int = 1  # Sequential to avoid SQLite threading issues
+        max_workers: int = 4
     ) -> int:
-        """
-        Process all datasets for an experiment sequentially.
-        
-        Args:
-            experiment: Experiment configuration
-            max_workers: Number of workers (always 1 for sequential processing)
-            
-        Returns:
-            Number of successfully processed datasets
-        """
+        """Process all datasets for an experiment concurrently (fetches are I/O-bound). Returns the number processed successfully."""
         if not experiment.datasets:
             return 0
-        
-        # Process datasets sequentially to avoid SQLite threading issues
+
+        if len(experiment.datasets) == 1 or max_workers <= 1:
+            return sum(
+                self.process_dataset(experiment.id, dataset_config)
+                for dataset_config in experiment.datasets
+            )
+
         success_count = 0
-        for dataset_config in experiment.datasets:
-            if self.process_dataset(experiment.id, dataset_config):
-                success_count += 1
-        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self.process_dataset, experiment.id, dataset_config): dataset_config
+                for dataset_config in experiment.datasets
+            }
+            for future in as_completed(futures):
+                dataset_config = futures[future]
+                try:
+                    if future.result():
+                        success_count += 1
+                except Exception:
+                    logger.error(
+                        f"Dataset '{dataset_config.name}' processing raised unexpectedly", exc_info=True
+                    )
+
         return success_count
 
     def process_experiment(self, experiment: ExperimentConfig) -> str:
-        """
-        Process a complete experiment - store experiment, fetch datasets, store panels.
-        
-        Args:
-            experiment: Experiment configuration
-            
-        Returns:
-            Experiment ID
-        """
-        # Ensure experiment has an ID (generate UUID if missing)
+        """Process a complete experiment - store it, fetch datasets, store panels. Returns the experiment ID."""
         experiment_id = self._ensure_experiment_id(experiment)
         
         logger.info(f"Processing experiment: {experiment_id} - {experiment.title}")
@@ -158,29 +127,3 @@ class ExperimentProcessor(PanelProcessor):
         logger.info(f"Processed {panel_count}/{len(experiment.panels)} panels for experiment '{experiment_id}'")
         
         return experiment_id
-
-    def process_all_experiments(self) -> Dict[str, Any]:
-        """
-        Process all experiments from configuration.
-        
-        Returns:
-            Summary dictionary with processing results
-        """
-        results = {
-            "total_experiments": len(self.config.experiments),
-            "processed_experiments": [],
-            "failed_experiments": []
-        }
-        
-        for experiment in self.config.experiments:
-            try:
-                experiment_id = self.process_experiment(experiment)
-                results["processed_experiments"].append(experiment_id)
-            except Exception as e:
-                logger.error(f"Failed to process experiment '{experiment.title}': {e}", exc_info=True)
-                results["failed_experiments"].append({
-                    "title": experiment.title,
-                    "error": str(e)
-                })
-        
-        return results

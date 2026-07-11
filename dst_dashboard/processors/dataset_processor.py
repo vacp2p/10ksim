@@ -1,13 +1,14 @@
 """Dataset processor - base class for fetching and processing datasets."""
 import logging
+import threading
 from typing import Dict, List, Any, Optional
 
 import pandas as pd
 from result import Ok, Err
 
 from dst_dashboard.config.data_structures import (
-    DatasetConfig, 
-    DataSourceConfig, 
+    DatasetConfig,
+    DataSourceConfig,
     ExperimentConfig,
     DashboardFullConfig
 )
@@ -17,6 +18,39 @@ from src.analysis.metrics import scrape_utils
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 
 logger = logging.getLogger(__name__)
+
+_victorialogs_log_init_lock = threading.Lock()
+_victorialogs_log_initialized = False
+
+
+def _ensure_victorialogs_logging_initialized():
+    """One-time (per-process) init of the log queue DataPuller's worker processes attach to.
+
+    log_utils.apply_config() mutates global logging state (clears every
+    logger's handlers, restarts a QueueListener), so it must only ever run
+    once - concurrent dataset fetches (now run via a thread pool) would
+    otherwise race on that global state.
+    """
+    global _victorialogs_log_initialized
+    if _victorialogs_log_initialized:
+        return
+    with _victorialogs_log_init_lock:
+        if _victorialogs_log_initialized:
+            return
+        from src.analysis.utils.log_utils import apply_config, Config
+        try:
+            config = Config(
+                logger_name="data_puller",
+                level=logging.INFO,
+                fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                handlers=[],
+                tz_offset_hours=0,
+            )
+            apply_config(config)
+            logger.debug("Log queue initialized for DataPuller")
+        except Exception as e:
+            logger.debug(f"Log queue initialization skipped: {e}")
+        _victorialogs_log_initialized = True
 
 
 class DatasetProcessor:
@@ -28,13 +62,6 @@ class DatasetProcessor:
     """
 
     def __init__(self, config: DashboardFullConfig, db: DSTDatabase):
-        """
-        Initialize dataset processor.
-        
-        Args:
-            config: Dashboard configuration
-            db: Database instance
-        """
         self.config = config
         self.db = db
         self._datasources = {ds.name: ds for ds in config.datasources}
@@ -44,23 +71,14 @@ class DatasetProcessor:
         return self._datasources.get(datasource_name)
 
     def _get_experiment(self, experiment_id: str) -> Optional[ExperimentConfig]:
-        """Get experiment configuration by ID."""
-        for exp in self.config.experiments:
-            if exp.id == experiment_id:
-                return exp
-        return None
+        """Get experiment configuration by ID. Experiments live only in the database."""
+        experiment_data = self.db.get_experiment(experiment_id)
+        if experiment_data is None:
+            return None
+        return ExperimentConfig(**experiment_data)
 
     def _apply_schema(self, data_rows: List[Dict[str, Any]], dataset_config: DatasetConfig) -> List[Dict[str, Any]]:
-        """
-        Apply schema to data rows - filter fields and apply type conversions.
-        
-        Args:
-            data_rows: Raw data rows
-            dataset_config: Dataset configuration with schema
-            
-        Returns:
-            Data rows with only schema fields and proper types
-        """
+        """Apply schema to data rows - filter fields and apply type conversions."""
         if not dataset_config.schema:
             return data_rows
         
@@ -100,20 +118,7 @@ class DatasetProcessor:
     def fetch_dataset(
         self, experiment_id: str, dataset_config: DatasetConfig
     ) -> List[Dict[str, Any]]:
-        """
-        Fetch dataset using appropriate fetcher based on datasource type.
-        
-        Args:
-            experiment_id: Experiment identifier
-            dataset_config: Dataset configuration from config
-            
-        Returns:
-            List of data rows as dictionaries
-            
-        Raises:
-            ValueError: If datasource not found or type unsupported
-            Exception: If data fetching fails
-        """
+        """Fetch dataset using the appropriate fetcher based on datasource type."""
         datasource = self._get_datasource(dataset_config.datasource)
         if not datasource:
             raise ValueError(
@@ -138,15 +143,7 @@ class DatasetProcessor:
             raise
 
     def _get_tracer_for_dataset(self, dataset_config: DatasetConfig):
-        """
-        Create appropriate tracer based on dataset configuration.
-        
-        Args:
-            dataset_config: Dataset configuration
-            
-        Returns:
-            Configured tracer instance
-        """
+        """Create the appropriate tracer based on dataset configuration."""
         tracer_type = dataset_config.query.tracer
         pattern = dataset_config.query.pattern
         
@@ -221,21 +218,7 @@ class DatasetProcessor:
         # Get tracer based on configuration
         tracer = self._get_tracer_for_dataset(dataset_config)
 
-        # Initialize logging queue for DataPuller
-        from src.analysis.utils.log_utils import apply_config, Config
-        try:
-            # Set up minimal config to initialize the log queue
-            config = Config(
-                logger_name="data_puller",
-                level=logging.INFO,
-                fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                handlers=[],
-                tz_offset_hours=0,
-            )
-            apply_config(config)
-            logger.debug("Log queue initialized for DataPuller")
-        except Exception as e:
-            logger.debug(f"Log queue initialization skipped: {e}")
+        _ensure_victorialogs_logging_initialized()
 
         # Initialize DataPuller
         data_puller = DataPuller().with_kwargs(kwargs).with_source_type("victoria")

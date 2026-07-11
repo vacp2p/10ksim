@@ -1,32 +1,24 @@
 """Panel API routes."""
 
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any
 
-from fastapi import APIRouter, HTTPException, Request, Body
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from dst_dashboard.config.data_structures import PanelConfig, ExperimentConfig
+from dst_dashboard.config.data_structures import ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
+from dst_dashboard.auth import require_admin_token
 
 router = APIRouter(prefix="/experiments/{experiment_id}/panels", tags=["panels"])
 logger = logging.getLogger(__name__)
 
 
 @router.get("")
-async def get_all_panels(
+def get_all_panels(
     experiment_id: str, 
     request: Request
 ) -> Dict[str, Any]:
-    """
-    Get all panels for an experiment with their rendered visualizations.
-    Generates ECharts options on-demand from stored datasets and panel configs.
-    
-    Args:
-        experiment_id: Experiment ID
-        
-    Returns:
-        List of panels with ECharts options
-    """
+    """Get all panels for an experiment with their rendered visualizations."""
     db = DSTDatabase()
     
     # Get experiment from database
@@ -71,22 +63,12 @@ async def get_all_panels(
 
 
 @router.get("/by-dataset/{dataset_name}")
-async def get_panels_by_dataset(
+def get_panels_by_dataset(
     experiment_id: str, 
     dataset_name: str,
     request: Request
 ) -> Dict[str, Any]:
-    """
-    Get all preprocessed panels that use a specific dataset.
-    Reads from database - panels should already be processed.
-    
-    Args:
-        experiment_id: Experiment ID
-        dataset_name: Dataset name
-        
-    Returns:
-        List of panels using the specified dataset with ECharts options
-    """
+    """Get all preprocessed panels that use a specific dataset."""
     db = DSTDatabase()
     
     # Get experiment from database
@@ -134,22 +116,12 @@ async def get_panels_by_dataset(
 
 
 @router.get("/{panel_name}")
-async def get_panel(
+def get_panel(
     experiment_id: str, 
     panel_name: str, 
     request: Request
 ) -> Dict[str, Any]:
-    """
-    Get preprocessed panel with rendered ECharts option.
-    Reads from database - panel should already be processed.
-    
-    Args:
-        experiment_id: Experiment ID
-        panel_name: Panel name
-        
-    Returns:
-        Panel with ECharts option ready for rendering
-    """
+    """Get a preprocessed panel with its rendered ECharts option."""
     db = DSTDatabase()
     
     # Get experiment from database
@@ -187,7 +159,12 @@ async def get_panel(
 
 
 @router.delete("/{panel_name}", status_code=204)
-async def delete_panel(experiment_id: str, panel_name: str, request: Request):
+def delete_panel(
+    experiment_id: str,
+    panel_name: str,
+    request: Request,
+    _: None = Depends(require_admin_token),
+):
     """Delete a panel."""
     db = DSTDatabase()
     

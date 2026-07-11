@@ -1,13 +1,13 @@
 """Datasource API routes."""
 
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query, Request
+from typing import List
+from fastapi import APIRouter, HTTPException, Request
 from dst_dashboard.config.data_structures import DataSourceConfig
 router = APIRouter(prefix="/datasources", tags=["datasources"])
 
 
 @router.get("", response_model=List[DataSourceConfig])
-async def list_datasources(
+def list_datasources(
     request: Request,
 ):
     """List loaded datasources"""
@@ -17,7 +17,7 @@ async def list_datasources(
     return datasources
 
 @router.get("/prometheus", response_model=List[DataSourceConfig])
-async def list_datasources(
+def list_prometheus_datasources(
     request: Request,
 ):
     """List prometheus datasources"""
@@ -28,7 +28,7 @@ async def list_datasources(
     return prometheus_datasources
 
 @router.get("/victorialogs", response_model=List[DataSourceConfig])
-async def list_datasources(
+def list_victorialogs_datasources(
     request: Request,
 ):
     """List victorialogs datasources"""
@@ -39,7 +39,7 @@ async def list_datasources(
     return victorialogs_datasources
 
 @router.get("/{datasource_name}", response_model=DataSourceConfig)
-async def get_datasource(datasource_name: str, request: Request):
+def get_datasource(datasource_name: str, request: Request):
     """Get a datasource by name from config."""
     datasources = getattr(request.app.state, "datasources", None)
     if datasources is None:

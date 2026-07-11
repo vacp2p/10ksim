@@ -1,7 +1,8 @@
 """Panel processor - processes panel configurations and transformations."""
 import logging
 import re
-from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Any
 from collections import defaultdict
 from copy import deepcopy
 
@@ -17,16 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def deep_merge(base: Dict, override: Dict) -> Dict:
-    """
-    Deep merge two dictionaries. Override values take precedence.
-    
-    Args:
-        base: Base dictionary
-        override: Dictionary with override values
-        
-    Returns:
-        Merged dictionary
-    """
+    """Deep merge two dictionaries. Override values take precedence."""
     result = deepcopy(base)
     
     for key, value in override.items():
@@ -47,30 +39,14 @@ class PanelProcessor(DatasetProcessor):
     """
 
     def __init__(self, config: DashboardFullConfig, db: DSTDatabase):
-        """
-        Initialize panel processor.
-        
-        Args:
-            config: Dashboard configuration
-            db: Database instance
-        """
         super().__init__(config, db)
 
     def process_panel(
-        self, 
-        experiment_id: str, 
+        self,
+        experiment_id: str,
         panel_config: PanelConfig
     ) -> bool:
-        """
-        Process and store panel ECharts options.
-        
-        Args:
-            experiment_id: Experiment ID
-            panel_config: Panel configuration
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        """Process and store panel ECharts options. Returns True on success."""
         logger.info(f"Processing panel: {panel_config.name}")
         
         # Verify that the dataset for this panel exists
@@ -91,42 +67,40 @@ class PanelProcessor(DatasetProcessor):
             return False
 
     def process_experiment_panels(
-        self, 
+        self,
         experiment: ExperimentConfig,
-        max_workers: int = 1  # Sequential to avoid memory issues
+        max_workers: int = 4
     ) -> int:
-        """
-        Process all panels for an experiment.
-        
-        Args:
-            experiment: Experiment configuration
-            max_workers: Number of workers (default: 1 for sequential)
-            
-        Returns:
-            Number of successfully processed panels
-        """
+        """Process all panels for an experiment concurrently. Returns the number processed successfully."""
         if not experiment.panels:
             return 0
-        
-        # Process sequentially to avoid memory issues with large datasets
+
+        if len(experiment.panels) == 1 or max_workers <= 1:
+            return sum(
+                self.process_panel(experiment.id, panel_config)
+                for panel_config in experiment.panels
+            )
+
         success_count = 0
-        for panel_config in experiment.panels:
-            if self.process_panel(experiment.id, panel_config):
-                success_count += 1
-        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self.process_panel, experiment.id, panel_config): panel_config
+                for panel_config in experiment.panels
+            }
+            for future in as_completed(futures):
+                panel_config = futures[future]
+                try:
+                    if future.result():
+                        success_count += 1
+                except Exception:
+                    logger.error(
+                        f"Panel '{panel_config.name}' processing raised unexpectedly", exc_info=True
+                    )
+
         return success_count
     
     def _apply_derive_transformations(self, data: List[Dict[str, Any]], panel_config: PanelConfig) -> List[Dict[str, Any]]:
-        """
-        Apply derive transformations to create new fields.
-        
-        Args:
-            data: Input data rows
-            panel_config: Panel configuration
-            
-        Returns:
-            Data with derived fields added
-        """
+        """Apply derive transformations to create new fields."""
         if not panel_config.transform or not panel_config.transform.derive:
             return data
         
@@ -150,16 +124,7 @@ class PanelProcessor(DatasetProcessor):
         return result
     
     def _transform_to_boxplot(self, data: List[Dict[str, Any]], panel_config: PanelConfig) -> Dict[str, Any]:
-        """
-        Transform data for ECharts boxplot visualization.
-        
-        Args:
-            data: Input data rows
-            panel_config: Panel configuration with groupBy and value fields
-            
-        Returns:
-            ECharts boxplot option spec
-        """
+        """Transform data for ECharts boxplot visualization."""
         transform = panel_config.transform
         group_by = transform.groupBy
         value_field = transform.value
@@ -300,16 +265,7 @@ class PanelProcessor(DatasetProcessor):
         return option
     
     def _transform_to_timeseries(self, data: List[Dict[str, Any]], panel_config: PanelConfig) -> Dict[str, Any]:
-        """
-        Transform data for ECharts timeseries (line chart) visualization.
-        
-        Args:
-            data: Input data rows
-            panel_config: Panel configuration with x and y fields
-            
-        Returns:
-            ECharts line chart option spec
-        """
+        """Transform data for ECharts timeseries (line chart) visualization."""
         transform = panel_config.transform
         x_field = transform.x
         y_field = transform.y
@@ -386,9 +342,7 @@ class PanelProcessor(DatasetProcessor):
                         }
                     }
                 })
-            
-            x_axis_data = None  # Using data pairs, no separate x-axis data needed
-            
+
         else:
             # Single series
             x_values = []
@@ -404,7 +358,6 @@ class PanelProcessor(DatasetProcessor):
                     x_values.append(x_val_serialized)
                     y_values.append(float(y_val))
             
-            x_axis_data = x_values
             series = [{
                 "name": panel_config.title,
                 "type": "line",
@@ -588,18 +541,7 @@ class PanelProcessor(DatasetProcessor):
         panel_config: PanelConfig,
         viz_format: str = "echarts"
     ) -> Dict[str, Any]:
-        """
-        Transform dataset for panel visualization.
-        
-        Args:
-            experiment_id: Experiment ID
-            panel_config: Panel configuration
-            viz_format: Visualization format (echarts, plotly, etc.)
-            
-        Returns:
-            Visualization option specification in the requested format
-        """
-        # Get dataset
+        """Transform dataset for panel visualization into the requested viz_format."""
         dataset = self.db.get_dataset(experiment_id, panel_config.dataset)
         if not dataset:
             raise ValueError(f"Dataset '{panel_config.dataset}' not found")
@@ -621,17 +563,7 @@ class PanelProcessor(DatasetProcessor):
         data: List[Dict[str, Any]],
         panel_config: PanelConfig
     ) -> Dict[str, Any]:
-        """
-        Transform data to ECharts format based on panel type.
-        
-        Args:
-            data: Transformed data rows
-            panel_config: Panel configuration
-            
-        Returns:
-            ECharts option specification
-        """
-        # Transform based on panel type
+        """Transform data to ECharts format based on panel type."""
         if panel_config.type == "boxplot":
             return self._transform_to_boxplot(data, panel_config)
         elif panel_config.type == "timeseries":
@@ -651,12 +583,4 @@ class PanelProcessor(DatasetProcessor):
             }
         else:
             raise ValueError(f"Unknown panel type: {panel_config.type}")
-    
-    def transform(self, df, panel_config):
-        """Transform DataFrame for visualization.
-        
-        DEPRECATED: Use transform_panel_data instead
-        """
-        logger.warning(f"transform deprecated, use transform_panel_data: {panel_config.name}")
-        return {}
 

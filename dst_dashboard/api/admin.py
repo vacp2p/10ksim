@@ -1,74 +1,52 @@
 """Admin API routes for configuration and data management."""
 
-from fastapi import APIRouter, Request, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi.responses import HTMLResponse
 import logging
 
 from dst_dashboard.config.utils import LoadConfig
 from dst_dashboard.storage.db import DSTDatabase
 from dst_dashboard.processors.experiment_processor import ExperimentProcessor
+from dst_dashboard.auth import create_admin_token, require_admin_token
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
 
+_ADMIN_HTML_PATH = Path(__file__).parent.parent / "static" / "admin.html"
+
 
 @router.post("/reload")
-async def reload_config(request: Request):
-    """
-    Reload configuration from file and re-process all experiments.
-    
-    This will:
-    1. Reload the config file
-    2. Clear and re-insert datasources
-    3. Re-process all experiments (fetch datasets, store panels)
-    
-    Returns:
-        Summary of reloaded data
-    """
+def reload_config(request: Request, _: None = Depends(require_admin_token)):
+    """Reload datasources from config.yaml (experiments are API-managed and unaffected)."""
     try:
         logger.info("Reloading configuration...")
-        
+
         # Load and validate configuration
         config = LoadConfig().WithValidateDatasources()
-        logger.info(
-            f"Reloaded configuration with {len(config.datasources)} datasources "
-            f"and {len(config.experiments)} experiments"
-        )
-        
+        logger.info(f"Reloaded configuration with {len(config.datasources)} datasources")
+
         # Update app state
         request.app.state.config = config
         request.app.state.datasources = config.datasources
-        
+
         # Initialize database
         db = DSTDatabase()
-        
+
         # Clear and re-insert datasources
         db.datasources.delete_many({})
         db.insert_datasource_list(config.datasources)
         logger.info(f"Re-inserted {len(config.datasources)} datasources")
-        
-        # Initialize experiment processor
-        processor = ExperimentProcessor(config, db)
-        
-        # Process all experiments
-        results = processor.process_all_experiments()
-        
-        logger.info(
-            f"Configuration reload completed: "
-            f"{len(results['processed_experiments'])}/{results['total_experiments']} experiments processed"
-        )
-        
+
         return {
             "status": "success",
-            "message": "Configuration reloaded successfully",
+            "message": "Datasources reloaded successfully",
             "summary": {
                 "datasources": len(config.datasources),
-                "experiments_total": results['total_experiments'],
-                "experiments_processed": len(results['processed_experiments']),
-                "experiments_failed": len(results['failed_experiments']),
             },
-            "details": results
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to reload configuration: {e}", exc_info=True)
         raise HTTPException(
@@ -78,25 +56,15 @@ async def reload_config(request: Request):
 
 
 @router.delete("/datasets/{experiment_id}/{dataset_name}")
-async def clear_dataset(experiment_id: str, dataset_name: str):
-    """
-    Clear cached dataset data to force re-fetch on next request.
-    
-    Args:
-        experiment_id: Experiment ID
-        dataset_name: Dataset name
-        
-    Returns:
-        Deletion confirmation
-    """
+def clear_dataset(
+    experiment_id: str, dataset_name: str, _: None = Depends(require_admin_token)
+):
+    """Clear cached dataset data to force re-fetch on next request."""
     try:
         db = DSTDatabase()
-        dataset_id = f"{experiment_id}:{dataset_name}"
-        
-        result = db.datasets.delete_one({"id": dataset_id})
-        
-        if result.deleted_count > 0:
-            logger.info(f"Cleared dataset: {dataset_id}")
+
+        if db.delete_dataset(experiment_id, dataset_name):
+            logger.info(f"Cleared dataset: {experiment_id}:{dataset_name}")
             return {
                 "status": "success",
                 "message": f"Dataset '{dataset_name}' cleared successfully"
@@ -106,7 +74,7 @@ async def clear_dataset(experiment_id: str, dataset_name: str):
                 status_code=404,
                 detail=f"Dataset '{dataset_name}' not found"
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -118,24 +86,19 @@ async def clear_dataset(experiment_id: str, dataset_name: str):
 
 
 @router.delete("/datasets")
-async def clear_all_datasets():
-    """
-    Clear all cached dataset data to force re-fetch.
-    
-    Returns:
-        Deletion confirmation
-    """
+def clear_all_datasets(_: None = Depends(require_admin_token)):
+    """Clear all cached dataset data to force re-fetch."""
     try:
         db = DSTDatabase()
-        result = db.datasets.delete_many({})
-        
-        logger.info(f"Cleared {result.deleted_count} datasets")
-        
+        count = db.clear_all_dataset_cache()
+
+        logger.info(f"Cleared {count} datasets")
+
         return {
             "status": "success",
-            "message": f"Cleared {result.deleted_count} datasets successfully"
+            "message": f"Cleared {count} datasets successfully"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to clear datasets: {e}")
         raise HTTPException(
@@ -145,43 +108,32 @@ async def clear_all_datasets():
 
 
 @router.post("/experiments/{experiment_id}/reprocess")
-async def reprocess_experiment(experiment_id: str, request: Request):
-    """
-    Reprocess a single experiment - fetch datasets and regenerate panels.
-    
-    This will:
-    1. Get experiment config from database
-    2. Fetch all datasets
-    3. Transform and store all panels
-    
-    Args:
-        experiment_id: Experiment ID to reprocess
-        
-    Returns:
-        Reprocessing results
-    """
+def reprocess_experiment(
+    experiment_id: str, request: Request, _: None = Depends(require_admin_token)
+):
+    """Reprocess a single experiment - fetch datasets and regenerate panels."""
     try:
         db = DSTDatabase()
-        
+
         # Get experiment from database
         experiment_data = db.get_experiment(experiment_id)
         if not experiment_data:
             raise HTTPException(status_code=404, detail="Experiment not found")
-        
+
         # Get config from app state
         config = request.app.state.config
-        
+
         # Initialize processor
         from dst_dashboard.config.data_structures import ExperimentConfig
         processor = ExperimentProcessor(config, db)
-        
+
         experiment = ExperimentConfig(**experiment_data)
-        
+
         logger.info(f"Reprocessing experiment: {experiment_id}")
-        
+
         # Process the experiment (this will fetch datasets and transform panels)
         success = processor.process_experiment(experiment)
-        
+
         if success:
             return {
                 "status": "success",
@@ -195,7 +147,7 @@ async def reprocess_experiment(experiment_id: str, request: Request):
                 status_code=500,
                 detail=f"Failed to reprocess experiment '{experiment_id}'"
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -204,3 +156,23 @@ async def reprocess_experiment(experiment_id: str, request: Request):
             status_code=500,
             detail=f"Failed to reprocess experiment: {str(e)}"
         )
+
+
+@router.get("/token", response_class=HTMLResponse)
+def admin_page():
+    """
+    Serve the admin page: a "Generate token" button, plus a small UI for
+    creating/editing/deleting experiments by pasting JSON.
+
+    Not gated by require_admin_token - you need this page to get a token in
+    the first place. Access is instead controlled upstream by Authentik
+    forward-auth on this ingress path (which covers both GET and POST here).
+    """
+    return HTMLResponse(content=_ADMIN_HTML_PATH.read_text())
+
+
+@router.post("/token")
+def generate_admin_token():
+    """Mint a fresh admin-scope token. Same protection boundary as GET /admin/token."""
+    return {"token": create_admin_token()}
+

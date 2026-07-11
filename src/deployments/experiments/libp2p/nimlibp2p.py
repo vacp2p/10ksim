@@ -47,8 +47,6 @@ class ExpConfig(BaseModel):
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
     wait_nodes_ready: bool = True
-    """Gate publishing on a ready rollout; set False for sparse meshes (static,
-    quic) whose readiness probe flaps and never reaches a stable 100%."""
 
     @model_validator(mode="after")
     def _check_bootstrap_nodes(self):

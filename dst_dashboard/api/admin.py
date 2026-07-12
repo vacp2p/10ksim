@@ -49,16 +49,11 @@ def reload_config(request: Request, _: None = Depends(require_admin_token)):
 
     except Exception as e:
         logger.error(f"Failed to reload configuration: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to reload configuration: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to reload configuration: {str(e)}")
 
 
 @router.delete("/datasets/{experiment_id}/{dataset_name}")
-def clear_dataset(
-    experiment_id: str, dataset_name: str, _: None = Depends(require_admin_token)
-):
+def clear_dataset(experiment_id: str, dataset_name: str, _: None = Depends(require_admin_token)):
     """Clear cached dataset data to force re-fetch on next request."""
     try:
         db = DSTDatabase()
@@ -67,22 +62,16 @@ def clear_dataset(
             logger.info(f"Cleared dataset: {experiment_id}:{dataset_name}")
             return {
                 "status": "success",
-                "message": f"Dataset '{dataset_name}' cleared successfully"
+                "message": f"Dataset '{dataset_name}' cleared successfully",
             }
         else:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Dataset '{dataset_name}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' not found")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to clear dataset: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to clear dataset: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to clear dataset: {str(e)}")
 
 
 @router.delete("/datasets")
@@ -94,17 +83,11 @@ def clear_all_datasets(_: None = Depends(require_admin_token)):
 
         logger.info(f"Cleared {count} datasets")
 
-        return {
-            "status": "success",
-            "message": f"Cleared {count} datasets successfully"
-        }
+        return {"status": "success", "message": f"Cleared {count} datasets successfully"}
 
     except Exception as e:
         logger.error(f"Failed to clear datasets: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to clear datasets: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to clear datasets: {str(e)}")
 
 
 @router.post("/experiments/{experiment_id}/reprocess")
@@ -125,6 +108,7 @@ def reprocess_experiment(
 
         # Initialize processor
         from dst_dashboard.config.data_structures import ExperimentConfig
+
         processor = ExperimentProcessor(config, db)
 
         experiment = ExperimentConfig(**experiment_data)
@@ -140,22 +124,18 @@ def reprocess_experiment(
                 "message": f"Experiment '{experiment_id}' reprocessed successfully",
                 "experiment_id": experiment_id,
                 "datasets_count": len(experiment.datasets),
-                "panels_count": len(experiment.panels)
+                "panels_count": len(experiment.panels),
             }
         else:
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to reprocess experiment '{experiment_id}'"
+                status_code=500, detail=f"Failed to reprocess experiment '{experiment_id}'"
             )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to reprocess experiment: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to reprocess experiment: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to reprocess experiment: {str(e)}")
 
 
 @router.get("/token", response_class=HTMLResponse)
@@ -175,4 +155,3 @@ def admin_page():
 def generate_admin_token():
     """Mint a fresh admin-scope token. Same protection boundary as GET /admin/token."""
     return {"token": create_admin_token()}
-

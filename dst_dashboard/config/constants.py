@@ -10,6 +10,7 @@ DEFAULT_MONGO_DB_NAME = "dst_dashboard"
 # secret was never configured - never rely on this outside local dev.
 INSECURE_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
 
+
 class Constants(StrEnum):
     """Constants used in DST dashboard application."""
 

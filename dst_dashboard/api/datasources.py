@@ -19,6 +19,7 @@ def list_datasources(
         raise HTTPException(status_code=500, detail="Datasources are not initialized")
     return datasources
 
+
 @router.get("/prometheus", response_model=List[DataSourceConfig])
 def list_prometheus_datasources(
     request: Request,
@@ -30,6 +31,7 @@ def list_prometheus_datasources(
     prometheus_datasources = [ds for ds in datasources if ds.type.lower() == "prometheus"]
     return prometheus_datasources
 
+
 @router.get("/victorialogs", response_model=List[DataSourceConfig])
 def list_victorialogs_datasources(
     request: Request,
@@ -40,6 +42,7 @@ def list_victorialogs_datasources(
         raise HTTPException(status_code=500, detail="Datasources are not initialized")
     victorialogs_datasources = [ds for ds in datasources if ds.type.lower() == "victorialogs"]
     return victorialogs_datasources
+
 
 @router.get("/{datasource_name}", response_model=DataSourceConfig)
 def get_datasource(datasource_name: str, request: Request):

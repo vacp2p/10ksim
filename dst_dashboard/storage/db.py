@@ -79,9 +79,7 @@ class DSTDatabase:
 
     def store_experiment(self, experiment: Dict[str, Any]) -> str:
         """Store experiment configuration. Returns the experiment ID."""
-        self.experiments.update_one(
-            {"id": experiment["id"]}, {"$set": experiment}, upsert=True
-        )
+        self.experiments.update_one({"id": experiment["id"]}, {"$set": experiment}, upsert=True)
         return experiment["id"]
 
     def get_experiment(self, experiment_id: str) -> Optional[Dict[str, Any]]:
@@ -109,9 +107,7 @@ class DSTDatabase:
         )
         return dataset_id
 
-    def get_dataset(
-        self, experiment_id: str, dataset_name: str
-    ) -> Optional[List[Dict[str, Any]]]:
+    def get_dataset(self, experiment_id: str, dataset_name: str) -> Optional[List[Dict[str, Any]]]:
         """Get dataset data."""
         dataset_id = f"{experiment_id}:{dataset_name}"
         payload = self._download_gridfs_file(self.dataset_fs, dataset_id)
@@ -131,9 +127,7 @@ class DSTDatabase:
             for doc in docs
         ]
 
-    def store_panel_data(
-        self, experiment_id: str, panel_name: str, data: Dict[str, Any]
-    ) -> str:
+    def store_panel_data(self, experiment_id: str, panel_name: str, data: Dict[str, Any]) -> str:
         """Store transformed panel data via GridFS. Returns the panel data ID."""
         panel_id = f"{experiment_id}:{panel_name}"
         self._delete_gridfs_file(self.panel_fs, panel_id)
@@ -144,9 +138,7 @@ class DSTDatabase:
         )
         return panel_id
 
-    def get_panel_data(
-        self, experiment_id: str, panel_name: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_panel_data(self, experiment_id: str, panel_name: str) -> Optional[Dict[str, Any]]:
         """Get transformed panel data."""
         panel_id = f"{experiment_id}:{panel_name}"
         payload = self._download_gridfs_file(self.panel_fs, panel_id)
@@ -155,9 +147,7 @@ class DSTDatabase:
     def insert_datasource(self, datasource: DataSourceConfig) -> DataSourceConfig:
         """Store datasource configuration."""
         data = datasource.model_dump()
-        self.datasources.update_one(
-            {"name": data["name"]}, {"$set": data}, upsert=True
-        )
+        self.datasources.update_one({"name": data["name"]}, {"$set": data}, upsert=True)
         return datasource
 
     def insert_datasource_list(self, datasources: List[DataSourceConfig]) -> List[DataSourceConfig]:
@@ -171,7 +161,9 @@ class DSTDatabase:
         dataset_id = f"{experiment_id}:{dataset_name}"
         return self.db["datasets.files"].find_one({"filename": dataset_id}, {"_id": 1}) is not None
 
-    def get_dataset_metadata(self, experiment_id: str, dataset_name: str) -> Optional[Dict[str, Any]]:
+    def get_dataset_metadata(
+        self, experiment_id: str, dataset_name: str
+    ) -> Optional[Dict[str, Any]]:
         """Get dataset metadata without data rows."""
         dataset_id = f"{experiment_id}:{dataset_name}"
         doc = self.db["datasets.files"].find_one(

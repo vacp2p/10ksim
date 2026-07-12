@@ -1,5 +1,4 @@
-"""JWT issuing and verification for admin (write) API access.
-"""
+"""JWT issuing and verification for admin (write) API access."""
 
 import logging
 import time

@@ -50,8 +50,11 @@ def main():
     args = parser.parse_args()
 
     if not args.token:
-        print("Error: an admin token is required (--token or DST_ADMIN_TOKEN). "
-              "Get one from GET /admin/token.", file=sys.stderr)
+        print(
+            "Error: an admin token is required (--token or DST_ADMIN_TOKEN). "
+            "Get one from GET /admin/token.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     with open(args.seed_file, "r", encoding="utf-8") as f:

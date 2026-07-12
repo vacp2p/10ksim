@@ -1,4 +1,5 @@
 """Experiment processor - processes complete experiments with datasets and panels."""
+
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -29,14 +30,10 @@ class ExperimentProcessor(PanelProcessor):
             generated_id = str(ObjectId())
             logger.info(f"Generated ID for experiment '{experiment.title}': {generated_id}")
             experiment.id = generated_id
-        
+
         return experiment.id
 
-    def process_dataset(
-        self, 
-        experiment_id: str, 
-        dataset_config: DatasetConfig
-    ) -> bool:
+    def process_dataset(self, experiment_id: str, dataset_config: DatasetConfig) -> bool:
         """Process a single dataset - fetch and store if needed. Returns True on success."""
         logger.info(f"Processing dataset: {dataset_config.name}")
 
@@ -46,12 +43,14 @@ class ExperimentProcessor(PanelProcessor):
                 f"Dataset '{dataset_config.name}' already exists with {len(existing_data)} rows, skipping fetch"
             )
             return True
-        
+
         # Fetch and store dataset
         try:
-            logger.info(f"Fetching dataset '{dataset_config.name}' from {dataset_config.datasource}")
+            logger.info(
+                f"Fetching dataset '{dataset_config.name}' from {dataset_config.datasource}"
+            )
             data = self.fetch_dataset(experiment_id, dataset_config)
-            
+
             if data:
                 self.db.store_dataset(experiment_id, dataset_config.name, data)
                 logger.info(f"Stored {len(data)} rows for dataset '{dataset_config.name}'")
@@ -61,7 +60,7 @@ class ExperimentProcessor(PanelProcessor):
                 # Store empty dataset to mark it as attempted
                 self.db.store_dataset(experiment_id, dataset_config.name, [])
                 return False
-                
+
         except Exception as e:
             logger.error(f"Failed to fetch dataset '{dataset_config.name}': {e}")
             # Store empty dataset to mark it as processed but failed
@@ -69,9 +68,7 @@ class ExperimentProcessor(PanelProcessor):
             return False
 
     def process_experiment_datasets(
-        self,
-        experiment: ExperimentConfig,
-        max_workers: int = 4
+        self, experiment: ExperimentConfig, max_workers: int = 4
     ) -> int:
         """Process all datasets for an experiment concurrently (fetches are I/O-bound). Returns the number processed successfully."""
         if not experiment.datasets:
@@ -96,7 +93,8 @@ class ExperimentProcessor(PanelProcessor):
                         success_count += 1
                 except Exception:
                     logger.error(
-                        f"Dataset '{dataset_config.name}' processing raised unexpectedly", exc_info=True
+                        f"Dataset '{dataset_config.name}' processing raised unexpectedly",
+                        exc_info=True,
                     )
 
         return success_count
@@ -104,26 +102,30 @@ class ExperimentProcessor(PanelProcessor):
     def process_experiment(self, experiment: ExperimentConfig) -> str:
         """Process a complete experiment - store it, fetch datasets, store panels. Returns the experiment ID."""
         experiment_id = self._ensure_experiment_id(experiment)
-        
+
         logger.info(f"Processing experiment: {experiment_id} - {experiment.title}")
-        
+
         # 1. Store experiment in database
         experiment_dict = experiment.model_dump()
         existing_exp = self.db.get_experiment(experiment_id)
-        
+
         if existing_exp:
             logger.info(f"Experiment '{experiment_id}' already exists in database, updating...")
         else:
             logger.info(f"Storing new experiment '{experiment_id}' in database")
-        
+
         self.db.store_experiment(experiment_dict)
-        
+
         # 2. Process datasets (datasets depend on datasources)
         dataset_count = self.process_experiment_datasets(experiment)
-        logger.info(f"Processed {dataset_count}/{len(experiment.datasets)} datasets for experiment '{experiment_id}'")
-        
+        logger.info(
+            f"Processed {dataset_count}/{len(experiment.datasets)} datasets for experiment '{experiment_id}'"
+        )
+
         # 3. Process panels (panels depend on datasets)
         panel_count = self.process_experiment_panels(experiment)
-        logger.info(f"Processed {panel_count}/{len(experiment.panels)} panels for experiment '{experiment_id}'")
-        
+        logger.info(
+            f"Processed {panel_count}/{len(experiment.panels)} panels for experiment '{experiment_id}'"
+        )
+
         return experiment_id

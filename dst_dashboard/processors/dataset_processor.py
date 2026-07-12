@@ -1,4 +1,5 @@
 """Dataset processor - base class for fetching and processing datasets."""
+
 import logging
 import threading
 from typing import Any, Dict, List, Optional
@@ -38,6 +39,7 @@ def _ensure_victorialogs_logging_initialized():
         if _victorialogs_log_initialized:
             return
         from src.analysis.utils.log_utils import Config, apply_config
+
         try:
             config = Config(
                 logger_name="data_puller",
@@ -56,7 +58,7 @@ def _ensure_victorialogs_logging_initialized():
 class DatasetProcessor:
     """
     Base processor for datasets - fetches data using DataPuller or scrape_utils.
-    
+
     This is the base class in the processor hierarchy:
     ExperimentProcessor -> PanelProcessor -> DatasetProcessor
     """
@@ -77,22 +79,24 @@ class DatasetProcessor:
             return None
         return ExperimentConfig(**experiment_data)
 
-    def _apply_schema(self, data_rows: List[Dict[str, Any]], dataset_config: DatasetConfig) -> List[Dict[str, Any]]:
+    def _apply_schema(
+        self, data_rows: List[Dict[str, Any]], dataset_config: DatasetConfig
+    ) -> List[Dict[str, Any]]:
         """Apply schema to data rows - filter fields and apply type conversions."""
         if not dataset_config.schema:
             return data_rows
-        
+
         schema_fields = {field.name: field.type for field in dataset_config.schema}
         filtered_rows = []
-        
+
         for row in data_rows:
             filtered_row = {}
             for field_name, field_type in schema_fields.items():
                 if field_name not in row:
                     continue
-                
+
                 value = row[field_name]
-                
+
                 # Apply type conversions
                 try:
                     if field_type == "datetime":
@@ -104,15 +108,15 @@ class DatasetProcessor:
                         value = int(value)
                     elif field_type == "string":
                         value = str(value)
-                    
+
                     filtered_row[field_name] = value
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Failed to convert field '{field_name}' to {field_type}: {e}")
                     continue
-            
+
             if filtered_row:  # Only add if we have at least some fields
                 filtered_rows.append(filtered_row)
-        
+
         return filtered_rows
 
     def fetch_dataset(
@@ -146,7 +150,7 @@ class DatasetProcessor:
         """Create the appropriate tracer based on dataset configuration."""
         tracer_type = dataset_config.query.tracer
         pattern = dataset_config.query.pattern
-        
+
         # Extract kubernetes fields from schema that need to be fetched as extra_fields
         extra_fields = []
         for field in dataset_config.schema:
@@ -159,14 +163,15 @@ class DatasetProcessor:
                 extra_fields.append("kubernetes.container_name")
             elif field.name.startswith("kubernetes."):
                 extra_fields.append(field.name)
-        
+
         if tracer_type == "nimlibp2p":
             from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
+
             tracer = Nimlibp2pTracer()
-            
+
             if extra_fields:
                 tracer = tracer.with_extra_fields(extra_fields)
-            
+
             # Use specific pattern if provided
             if pattern == "received":
                 tracer = tracer.with_received_pattern_group()
@@ -175,11 +180,11 @@ class DatasetProcessor:
             else:
                 # Default to received for message delay analysis
                 tracer = tracer.with_received_pattern_group()
-                
+
             return tracer
         else:
             # Fallback to generic MessageTracer
-            
+
             tracer = MessageTracer()
             if pattern:
                 tracer.with_wildcard_pattern()
@@ -188,7 +193,10 @@ class DatasetProcessor:
             return tracer
 
     def _fetch_from_victorialogs(
-        self, dataset_config: DatasetConfig, datasource: DataSourceConfig, experiment: ExperimentConfig
+        self,
+        dataset_config: DatasetConfig,
+        datasource: DataSourceConfig,
+        experiment: ExperimentConfig,
     ) -> List[Dict[str, Any]]:
         """Fetch logs from VictoriaLogs using DataPuller."""
         logger.info(f"Fetching dataset '{dataset_config.name}' from VictoriaLogs")
@@ -196,7 +204,7 @@ class DatasetProcessor:
         # Get statefulsets and nodes from experiment metadata
         stateful_sets = experiment.metadata.get("statefulsets", [])
         nodes_per_ss = experiment.metadata.get("nodes", [])
-        
+
         if not stateful_sets or not nodes_per_ss:
             logger.warning(
                 f"Experiment '{experiment.id}' missing statefulsets or nodes in metadata - returning empty dataset"
@@ -225,13 +233,15 @@ class DatasetProcessor:
 
         try:
             logger.debug(f"DataPuller kwargs: {kwargs}")
-            logger.debug(f"Fetching with stateful_sets={stateful_sets}, nodes_per_ss={nodes_per_ss}")
-            
+            logger.debug(
+                f"Fetching with stateful_sets={stateful_sets}, nodes_per_ss={nodes_per_ss}"
+            )
+
             # Fetch dataframes from VictoriaLogs
             results = data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_ss)
-            
+
             logger.debug(f"DataPuller returned {len(results)} result dicts")
-            
+
             # Convert results to standard format
             data_rows = []
             for idx, result_dict in enumerate(results):
@@ -241,9 +251,11 @@ class DatasetProcessor:
                     for df_idx, df in enumerate(df_list):
                         if isinstance(df, pd.DataFrame):
                             if not df.empty:
-                                logger.debug(f"DataFrame {df_idx} shape: {df.shape}, columns: {list(df.columns)}")
+                                logger.debug(
+                                    f"DataFrame {df_idx} shape: {df.shape}, columns: {list(df.columns)}"
+                                )
                                 # Convert DataFrame to list of dicts
-                                df_dict = df.reset_index().to_dict(orient='records')
+                                df_dict = df.reset_index().to_dict(orient="records")
                                 data_rows.extend(df_dict)
                             else:
                                 logger.debug(f"DataFrame {df_idx} is empty")
@@ -258,9 +270,9 @@ class DatasetProcessor:
                                     logger.warning(f"List contains non-dict items: {type(df[0])}")
                         else:
                             logger.warning(f"Result is not a DataFrame or list: {type(df)}")
-            
+
             logger.info(f"Converted {len(data_rows)} raw rows from VictoriaLogs")
-            
+
             # Normalize kubernetes.* field names (e.g., kubernetes.pod_name -> pod_name)
             normalized_rows = []
             for row in data_rows:
@@ -273,24 +285,27 @@ class DatasetProcessor:
                     else:
                         normalized_row[key] = value
                 normalized_rows.append(normalized_row)
-            
+
             logger.debug(f"Normalized {len(normalized_rows)} rows (renamed kubernetes.* fields)")
-            
+
             # Apply schema filtering and type conversions
             filtered_rows = self._apply_schema(normalized_rows, dataset_config)
-            
+
             logger.info(
                 f"Fetched {len(data_rows)} rows from VictoriaLogs, "
                 f"{len(filtered_rows)} rows after schema filtering for dataset '{dataset_config.name}'"
             )
             return filtered_rows
-            
+
         except Exception as e:
             logger.error(f"Error fetching from VictoriaLogs: {e}", exc_info=True)
             return []
 
     def _fetch_from_prometheus(
-        self, dataset_config: DatasetConfig, datasource: DataSourceConfig, experiment: ExperimentConfig
+        self,
+        dataset_config: DatasetConfig,
+        datasource: DataSourceConfig,
+        experiment: ExperimentConfig,
     ) -> List[Dict[str, Any]]:
         """Fetch metrics from Prometheus using direct query."""
         logger.info(f"Fetching dataset '{dataset_config.name}' from Prometheus")
@@ -302,7 +317,7 @@ class DatasetProcessor:
 
         # Parse step to integer (remove 's' suffix if present)
         step = dataset_config.query.step or "15s"
-        step_value = int(step.rstrip('s'))
+        step_value = int(step.rstrip("s"))
 
         # Create PromQL query URL
         promql_url = scrape_utils.create_promql(
@@ -310,7 +325,7 @@ class DatasetProcessor:
             dataset_config.query.expr,
             dataset_config.timeRange.start,
             dataset_config.timeRange.end,
-            step_value
+            step_value,
         )
 
         logger.debug(f"Prometheus query URL: {promql_url}")
@@ -318,40 +333,42 @@ class DatasetProcessor:
         try:
             # Execute query
             result = scrape_utils.get_query_data(promql_url)
-            
+
             match result:
                 case Ok(data):
-                    logger.info(f"Successfully fetched data from Prometheus for dataset '{dataset_config.name}'")
-                    
+                    logger.info(
+                        f"Successfully fetched data from Prometheus for dataset '{dataset_config.name}'"
+                    )
+
                     # Convert Prometheus response to standard format
                     data_rows = []
                     for series in data["data"]["result"]:
                         metric_labels = series.get("metric", {})
                         values = series.get("values", [])
-                        
+
                         for timestamp, value in values:
                             # Build row with timestamp, value, and all metric labels
                             row = {
-                                "timestamp": pd.to_datetime(timestamp, unit='s'),
+                                "timestamp": pd.to_datetime(timestamp, unit="s"),
                                 "value": float(value),
                             }
                             # Add all metric labels as potential fields
                             row.update(metric_labels)
                             data_rows.append(row)
-                    
+
                     # Apply schema filtering and type conversions
                     filtered_rows = self._apply_schema(data_rows, dataset_config)
-                    
+
                     logger.info(
                         f"Fetched {len(data_rows)} rows from Prometheus, "
                         f"{len(filtered_rows)} rows after schema filtering for dataset '{dataset_config.name}'"
                     )
                     return filtered_rows
-                    
+
                 case Err(error):
                     logger.error(f"Prometheus query error: {error}")
                     return []
-                    
+
         except Exception as e:
             logger.error(f"Error fetching from Prometheus: {e}")
             return []

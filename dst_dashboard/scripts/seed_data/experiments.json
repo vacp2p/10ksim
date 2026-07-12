@@ -109,7 +109,8 @@
           "publish": true,
           "transform": {
             "x": "timestamp",
-            "y": "value"
+            "y": "value",
+            "groupBy": "pod"
           },
           "style": {
             "yLabel": "Drops/sec"

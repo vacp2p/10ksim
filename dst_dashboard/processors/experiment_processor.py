@@ -5,12 +5,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from bson import ObjectId
 
 from dst_dashboard.config.data_structures import (
-    ExperimentConfig,
+    DashboardFullConfig,
     DatasetConfig,
-    DashboardFullConfig
+    ExperimentConfig,
 )
-from dst_dashboard.storage.db import DSTDatabase
 from dst_dashboard.processors.panel_processor import PanelProcessor
+from dst_dashboard.storage.db import DSTDatabase
 
 logger = logging.getLogger(__name__)
 

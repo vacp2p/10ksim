@@ -1,4 +1,5 @@
 import yaml
+
 from dst_dashboard.config.constants import Constants
 from dst_dashboard.config.data_structures import DashboardFullConfig
 

@@ -10,7 +10,6 @@ from pymongo import MongoClient
 from dst_dashboard.config.constants import Constants
 from dst_dashboard.config.data_structures import DataSourceConfig
 
-
 # Process-wide MongoClient. MongoClient manages its own internal connection
 # pool and is thread-safe, so a single instance is created lazily on first use
 # and reused by every DSTDatabase() instantiation for the life of the process

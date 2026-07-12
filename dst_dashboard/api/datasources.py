@@ -1,8 +1,11 @@
 """Datasource API routes."""
 
 from typing import List
+
 from fastapi import APIRouter, HTTPException, Request
+
 from dst_dashboard.config.data_structures import DataSourceConfig
+
 router = APIRouter(prefix="/datasources", tags=["datasources"])
 
 

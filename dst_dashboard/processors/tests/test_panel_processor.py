@@ -202,7 +202,7 @@ class TestProcessExperimentPanels:
         mocker.patch.object(
             processor,
             "process_panel",
-            side_effect=lambda panel_config: results_by_name[panel_config.name],
+            side_effect=lambda experiment_id, panel_config: results_by_name[panel_config.name],
         )
 
         result = processor.process_experiment_panels(experiment, max_workers=4)

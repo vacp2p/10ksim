@@ -8,7 +8,7 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from dst_dashboard.config.constants import Constants, INSECURE_DEFAULT_JWT_SECRET
+from dst_dashboard.config.constants import INSECURE_DEFAULT_JWT_SECRET, Constants
 
 logger = logging.getLogger(__name__)
 

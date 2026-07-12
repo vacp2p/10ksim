@@ -1,7 +1,8 @@
+import logging
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import sys
-import logging
 
 from dst_dashboard.api import admin, datasets, datasources, experiments, panels
 from dst_dashboard.config.utils import LoadConfig

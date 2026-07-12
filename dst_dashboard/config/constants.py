@@ -2,8 +2,6 @@ import os
 from enum import StrEnum
 from pathlib import Path
 
-
-
 DEFAULT_CONFIG_PATH = Path.home() / ".cache" / "dst_dashboard" / "config.yaml"
 DEFAULT_DATA_PATH = Path.home() / ".cache" / "dst_dashboard" / "data"
 DEFAULT_MONGO_URI = "mongodb://localhost:27017"

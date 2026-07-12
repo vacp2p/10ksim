@@ -1,12 +1,12 @@
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from dst_dashboard.config.data_structures import ExperimentConfig
-from dst_dashboard.storage.db import DSTDatabase
 from dst_dashboard.api.utils import get_processor
 from dst_dashboard.auth import require_admin_token
+from dst_dashboard.config.data_structures import ExperimentConfig
+from dst_dashboard.storage.db import DSTDatabase
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 

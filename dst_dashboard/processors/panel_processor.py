@@ -1,18 +1,14 @@
 """Panel processor - processes panel configurations and transformations."""
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Any
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+from typing import Any, Dict, List
 
-from dst_dashboard.config.data_structures import (
-    PanelConfig,
-    ExperimentConfig,
-    DashboardFullConfig
-)
-from dst_dashboard.storage.db import DSTDatabase
+from dst_dashboard.config.data_structures import DashboardFullConfig, ExperimentConfig, PanelConfig
 from dst_dashboard.processors.dataset_processor import DatasetProcessor
+from dst_dashboard.storage.db import DSTDatabase
 
 logger = logging.getLogger(__name__)
 

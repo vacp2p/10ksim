@@ -1,21 +1,21 @@
 """Dataset processor - base class for fetching and processing datasets."""
 import logging
 import threading
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from result import Ok, Err
+from result import Err, Ok
 
 from dst_dashboard.config.data_structures import (
+    DashboardFullConfig,
     DatasetConfig,
     DataSourceConfig,
     ExperimentConfig,
-    DashboardFullConfig
 )
 from dst_dashboard.storage.db import DSTDatabase
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
-from src.analysis.metrics import scrape_utils
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
+from src.analysis.metrics import scrape_utils
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def _ensure_victorialogs_logging_initialized():
     with _victorialogs_log_init_lock:
         if _victorialogs_log_initialized:
             return
-        from src.analysis.utils.log_utils import apply_config, Config
+        from src.analysis.utils.log_utils import Config, apply_config
         try:
             config = Config(
                 logger_name="data_puller",

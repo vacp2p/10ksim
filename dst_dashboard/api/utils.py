@@ -1,6 +1,7 @@
 """Utility functions for API routes."""
 
 import logging
+
 from fastapi import HTTPException, Request
 
 from dst_dashboard.processors.experiment_processor import ExperimentProcessor

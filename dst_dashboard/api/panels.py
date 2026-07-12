@@ -1,13 +1,13 @@
 """Panel API routes."""
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from dst_dashboard.auth import require_admin_token
 from dst_dashboard.config.data_structures import ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
-from dst_dashboard.auth import require_admin_token
 
 router = APIRouter(prefix="/experiments/{experiment_id}/panels", tags=["panels"])
 logger = logging.getLogger(__name__)

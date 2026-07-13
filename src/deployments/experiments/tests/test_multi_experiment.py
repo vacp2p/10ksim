@@ -5,7 +5,7 @@ import pytest
 from pydantic import PrivateAttr
 
 from src.deployments.experiments.multi_experiment import Config, Multiple, dict_to_namespace
-from src.deployments.registry import registry as experiment_registry
+from src.deployments.registry import Registry
 
 # --------------------------------------------------------------------------- #
 # Helper Functions
@@ -37,15 +37,17 @@ def _make_multiple(mocker, param_sets: list, output_folder: Path, **config_kwarg
 
 @pytest.fixture
 def registered_target(mocker):
-    """Register a fake experiment factory under `dummy-multi-target` for the registry lookup."""
+    """Create an isolated local Registry
+    to avoid using the shared global registry."""
     run_mock = mocker.AsyncMock()
     fake_experiment = SimpleNamespace(run=run_mock)
     factory = mocker.Mock(return_value=fake_experiment)
-    experiment_registry.add("dummy-multi-target", factory, module_path="dummy-module")
-    yield factory, run_mock
-    info = experiment_registry.get("dummy-multi-target")
-    if info:
-        experiment_registry._experiments.remove(info)
+
+    local_registry = Registry()
+    local_registry.add("dummy-multi-target", factory, module_path="dummy-module")
+    mocker.patch("src.deployments.experiments.multi_experiment.experiment_registry", local_registry)
+
+    return factory, run_mock
 
 
 # --------------------------------------------------------------------------- #

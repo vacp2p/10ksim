@@ -68,7 +68,7 @@ def get_dataset_data(experiment_id: str, dataset_name: str, request: Request):
     """Get cached dataset data.
 
     This endpoints always serves from mongodb.
-    To refresh, use POST /admin/experiments/{experiment_id}/reprocess, 
+    To refresh, use POST /admin/experiments/{experiment_id}/reprocess,
     which keeps datasets and their derived panels in sync.
     """
     db = DSTDatabase()

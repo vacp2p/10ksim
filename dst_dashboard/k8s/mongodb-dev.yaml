@@ -51,9 +51,15 @@ spec:
               protocol: TCP
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
-              value: "root"
+              valueFrom:
+                secretKeyRef:
+                  name: dst-mongo-dev-root-credentials
+                  key: username
             - name: MONGO_INITDB_ROOT_PASSWORD
-              value: "" #password
+              valueFrom:
+                secretKeyRef:
+                  name: dst-mongo-dev-root-credentials
+                  key: password
           volumeMounts:
             - name: mongo-data-dev
               mountPath: /data/db

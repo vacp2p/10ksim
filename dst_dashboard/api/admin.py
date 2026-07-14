@@ -115,21 +115,17 @@ def reprocess_experiment(
 
         logger.info(f"Reprocessing experiment: {experiment_id}")
 
-        # Process the experiment (this will fetch datasets and transform panels)
-        success = processor.process_experiment(experiment)
+        # Process the experiment (this will fetch datasets and transform panels).
+        # process_experiment always returns the experiment ID or raises an exception on failure.
+        processor.process_experiment(experiment)
 
-        if success:
-            return {
-                "status": "success",
-                "message": f"Experiment '{experiment_id}' reprocessed successfully",
-                "experiment_id": experiment_id,
-                "datasets_count": len(experiment.datasets),
-                "panels_count": len(experiment.panels),
-            }
-        else:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to reprocess experiment '{experiment_id}'"
-            )
+        return {
+            "status": "success",
+            "message": f"Experiment '{experiment_id}' reprocessed successfully",
+            "experiment_id": experiment_id,
+            "datasets_count": len(experiment.datasets),
+            "panels_count": len(experiment.panels),
+        }
 
     except HTTPException:
         raise

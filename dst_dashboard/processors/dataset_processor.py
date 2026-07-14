@@ -183,13 +183,10 @@ class DatasetProcessor:
 
             return tracer
         else:
-            # Fallback to generic MessageTracer
-
+            # Fallback to generic MessageTracer. MessageTracer only supports a
+            # wildcard pattern today, so `pattern` isn't applicable here.
             tracer = MessageTracer()
-            if pattern:
-                tracer.with_wildcard_pattern()
-            else:
-                tracer.with_wildcard_pattern()
+            tracer.with_wildcard_pattern()
             return tracer
 
     def _fetch_from_victorialogs(

@@ -321,9 +321,8 @@ class PanelProcessor(DatasetProcessor):
                 )
 
         else:
-            # Single series
-            x_values = []
-            y_values = []
+            # Assume single series
+            data_pairs = []
 
             for row in data:
                 x_val = row.get(x_field)
@@ -334,14 +333,13 @@ class PanelProcessor(DatasetProcessor):
                     x_val_serialized = (
                         x_val.isoformat() if hasattr(x_val, "isoformat") else str(x_val)
                     )
-                    x_values.append(x_val_serialized)
-                    y_values.append(float(y_val))
+                    data_pairs.append([x_val_serialized, float(y_val)])
 
             series = [
                 {
                     "name": panel_config.title,
                     "type": "line",
-                    "data": y_values,
+                    "data": data_pairs,
                     "smooth": True,
                     "sampling": "lttb",
                     "symbol": "none",

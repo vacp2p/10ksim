@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dst_dashboard.api import admin, datasets, datasources, experiments, panels
+from dst_dashboard.config.constants import Constants
 from dst_dashboard.config.utils import LoadConfig
 from dst_dashboard.storage.db import DSTDatabase
 
@@ -54,11 +55,12 @@ def on_startup():
         sys.exit(1)
 
 
-# Enable CORS for frontend
+# Enable CORS for the frontend only.
+# allow_credentials isn't needed here;
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[origin.strip() for origin in str(Constants.DST_ALLOWED_ORIGINS).split(",")],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

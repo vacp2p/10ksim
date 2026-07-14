@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from dst_dashboard.api.utils import get_processor
 from dst_dashboard.auth import require_admin_token
 from dst_dashboard.config.data_structures import DatasetConfig, ExperimentConfig
 from dst_dashboard.storage.db import DSTDatabase
@@ -21,9 +20,6 @@ def get_experiment_datasets(experiment_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Experiment not found")
 
     experiment = ExperimentConfig(**experiment_data)
-
-    # Initialize database
-    db = DSTDatabase()
 
     # Get all datasets with their data
     datasets = []
@@ -68,10 +64,13 @@ def get_dataset(experiment_id: str, dataset_name: str, request: Request):
 
 
 @router.get("/{dataset_name}/data")
-def get_dataset_data(
-    experiment_id: str, dataset_name: str, request: Request, refresh: bool = False
-):
-    """Get dataset data (with caching support). `refresh=True` forces a re-fetch."""
+def get_dataset_data(experiment_id: str, dataset_name: str, request: Request):
+    """Get cached dataset data.
+
+    This endpoints always serves from mongodb.
+    To refresh, use POST /admin/experiments/{experiment_id}/reprocess, 
+    which keeps datasets and their derived panels in sync.
+    """
     db = DSTDatabase()
 
     # Get experiment from database
@@ -81,37 +80,20 @@ def get_dataset_data(
 
     experiment = ExperimentConfig(**experiment_data)
 
-    # Find dataset config
-    dataset_config = None
-    for dataset in experiment.datasets:
-        if dataset.name == dataset_name:
-            dataset_config = dataset
-            break
-
-    if dataset_config is None:
+    if not any(dataset.name == dataset_name for dataset in experiment.datasets):
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Initialize processor
-    processor = get_processor(request)
+    cached_data = db.get_dataset(experiment_id, dataset_name)
+    if cached_data is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Dataset '{dataset_name}' has not been processed yet. "
+                f"POST /admin/experiments/{experiment_id}/reprocess to fetch it."
+            ),
+        )
 
-    # Check cache unless refresh requested
-    if not refresh:
-        cached_data = db.get_dataset(experiment_id, dataset_name)
-        if cached_data is not None:
-            return {"data": cached_data, "source": "cache"}
-
-    # Fetch fresh data using processor
-    try:
-        data = processor.fetch_dataset(experiment_id, dataset_config)
-
-        # Update cache
-        if data:
-            db.store_dataset(experiment_id, dataset_name, data)
-
-        return {"data": data, "source": "datasource"}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch dataset: {str(e)}")
+    return {"data": cached_data, "source": "cache"}
 
 
 @router.delete("/{dataset_name}", status_code=204)

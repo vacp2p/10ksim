@@ -496,10 +496,10 @@ class TestTransformToTimeseries:
 
         assert [s["name"] for s in option["series"]] == ["a", "b"]
 
-    def test_single_series_without_groupby_has_no_x_pairing(self):
+    def test_single_series_without_groupby_has_x_pairing(self):
         """
-        Characterizes current behavior: without groupBy, series data is a plain
-        list of y-values (no [timestamp, value] pairing), unlike the grouped path.
+        Should pair each value with its x (timestamp) as [x, y], matching the
+        grouped path - required since xAxis is time-typed.
         """
         processor = _make_processor()
         panel_config = _create_panel_config(
@@ -513,7 +513,7 @@ class TestTransformToTimeseries:
             {
                 "name": "Solo",
                 "type": "line",
-                "data": [1.0, 2.0],
+                "data": [["t1", 1.0], ["t2", 2.0]],
                 "smooth": True,
                 "sampling": "lttb",
                 "symbol": "none",

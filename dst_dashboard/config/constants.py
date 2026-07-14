@@ -6,6 +6,8 @@ DEFAULT_CONFIG_PATH = Path.home() / ".cache" / "dst_dashboard" / "config.yaml"
 DEFAULT_DATA_PATH = Path.home() / ".cache" / "dst_dashboard" / "data"
 DEFAULT_MONGO_URI = "mongodb://localhost:27017"
 DEFAULT_MONGO_DB_NAME = "dst_dashboard"
+# Comma-separated list of origins allowed to call this API from a browser.
+DEFAULT_ALLOWED_ORIGINS = "https://dashboard.lab.vac.dev"
 # Clearly-marked insecure fallback so it's obvious in logs/code review if a real
 # secret was never configured - never rely on this outside local dev.
 INSECURE_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
@@ -33,4 +35,8 @@ class Constants(StrEnum):
     DST_JWT_SECRET = os.environ.get(
         "DST_JWT_SECRET",
         INSECURE_DEFAULT_JWT_SECRET,
+    )
+    DST_ALLOWED_ORIGINS = os.environ.get(
+        "DST_ALLOWED_ORIGINS",
+        DEFAULT_ALLOWED_ORIGINS,
     )

@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dst-dashboard-config
+  namespace: dst-dashboard
+data:
+  config.yaml: |
+    # DST Explorer Configuration
+    # Global datasources - defined once, referenced by all experiments
+
+    datasources:
+      - name: victoria-logs
+        type: VictoriaLogs
+        url: http://vlc-victoria-logs-cluster-vlselect.victorialogs:9471/select/logsql/query
+
+      - name: victoria-metrics
+        type: Prometheus
+        url: http://vmselect-vmks-victoria-metrics-k8s-stack.vmetrics:8481/select/0/prometheus/api/v1/
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dst-dashboard-backend
+  namespace: dst-dashboard
+spec:
+  serviceName: dst-dashboard-backend
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dst-dashboard-backend
+  template:
+    metadata:
+      labels:
+        app: dst-dashboard-backend
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - metal-01.he-eu-hel1.misc.vacdst
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "monitoring"
+          effect: "PreferNoSchedule"
+      containers:
+      - name: dst-dashboard-backend
+        image: mamoutoudiarra/dst-dashboard-backend:v0.5
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DST_MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: dst-mongo-dev-credentials
+              key: uri
+        - name: DST_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: dst-dashboard-jwt-secret
+              key: secret
+        - name: DST_CONFIG_PATH
+          value: /app/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "4"
+          limits:
+            memory: "16Gi"
+            cpu: "8"
+      volumes:
+      - name: config
+        configMap:
+          name: dst-dashboard-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dst-dashboard-backend
+  namespace: dst-dashboard
+spec:
+  selector:
+    app: dst-dashboard-backend
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+  clusterIP: None
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dst-dashboard-backend-ingress
+  namespace: dst-dashboard
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - api.dashboard.lab.vac.dev
+    secretName: dashboard-backend-tls
+  rules:
+  - host: api.dashboard.lab.vac.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dst-dashboard-backend
+            port:
+              number: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dst-dashboard-backend-admin-token-ingress
+  namespace: dst-dashboard
+  annotations:
+    # Same host as the main ingress above, but this path additionally requires
+    # Authentik SSO via forward-auth before Traefik ever proxies to the app -
+    # this page is the only way to read a write-scoped API token, so it's
+    # gated at the infra layer rather than by the app itself.
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd,default-authentik-forwardauth@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - api.dashboard.lab.vac.dev
+    secretName: dashboard-backend-tls
+  rules:
+  - host: api.dashboard.lab.vac.dev
+    http:
+      paths:
+      - path: /admin/token
+        pathType: Exact
+        backend:
+          service:
+            name: dst-dashboard-backend
+            port:
+              number: 8000

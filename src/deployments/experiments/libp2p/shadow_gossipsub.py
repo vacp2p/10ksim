@@ -1,7 +1,7 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
@@ -31,8 +31,8 @@ class ExpConfig(BaseModel):
     message_size_bytes: NonNegativeInt = 1000
     delay_seconds: NonNegativeFloat = 2.0
     connect_to: NonNegativeInt = 2
-    muxer: str = "yamux"  # yamux | mplex | quic
-    discovery: str = "static"  # static (CONNECTTO dial) | kad-dht (bootstrap anchor)
+    muxer: Literal["yamux", "mplex", "quic"] = "yamux"
+    discovery: Literal["static", "kad-dht"] = "static"  # CONNECTTO dial vs kad bootstrap
     start_sleep: NonNegativeInt = 60  # node STARTSLEEP before mesh formation
     # Timing (simulated seconds). Publisher starts after the mesh forms (~60s).
     publisher_start_s: NonNegativeInt = 90

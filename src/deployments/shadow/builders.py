@@ -1,6 +1,6 @@
 # Builders for Shadow simulator runs: config values -> kubernetes-client objects
 # and yaml dicts. Pure data, no I/O. See the "Using Shadow at DST" runbook.
-from typing import Optional
+from typing import Literal, Optional
 
 from kubernetes.client import (
     V1Capabilities,
@@ -48,8 +48,8 @@ def render_shadow_yaml(
     sim_stop_time_s: int,
     publisher_start_s: int,
     connect_to: int = 2,
-    muxer: str = "yamux",
-    discovery: str = "static",
+    muxer: Literal["yamux", "mplex", "quic"] = "yamux",
+    discovery: Literal["static", "kad-dht"] = "static",
     start_sleep: int = 60,
     metrics_interval_s: int = 15,
     seed: int = 1,

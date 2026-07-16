@@ -197,6 +197,27 @@ class TestRenderShadowYaml:
         assert sy["general"]["progress"] is True
         assert sy["network"]["graph"]["type"] == "1_gbit_switch"
 
+    def test_wan_network_uses_gml_with_link_properties(self):
+        sy = render_shadow_yaml(
+            num_nodes=3,
+            sim_stop_time_s=180,
+            publisher_start_s=90,
+            latency_ms=10,
+            bandwidth_mbit=50,
+        )
+        graph = sy["network"]["graph"]
+        assert graph["type"] == "gml"
+        gml = str(graph["inline"])
+        assert 'latency "10 ms"' in gml
+        assert 'host_bandwidth_up "50 Mbit"' in gml
+        # zero latency + zero loss keeps the plain switch
+        assert (
+            render_shadow_yaml(num_nodes=3, sim_stop_time_s=180, publisher_start_s=90)["network"][
+                "graph"
+            ]["type"]
+            == "1_gbit_switch"
+        )
+
     def test_connect_to_must_be_less_than_num_nodes(self):
         with pytest.raises(ValueError):
             render_shadow_yaml(num_nodes=2, sim_stop_time_s=10, publisher_start_s=5, connect_to=2)

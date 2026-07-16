@@ -66,20 +66,16 @@ class Command(BaseModel):
             self.args.append(arg)
 
     def _add_arg_replace(self, arg, existing_args_map: dict):
-        """
-        Helper for add_args with on_duplicate == "replace"
-
-        Note: This may modify `existing_args_map` for the caller.
-        """
         try:
             flag, _value = arg
         except ValueError:
             flag = arg
-        if flag in existing_args_map:
-            self.args = [item for item in self.args if item != arg]
-            # Remove from map so it won't be replaced again.
-            del existing_args_map[flag]
-            self.args.insert(existing_args_map[flag], arg)
+
+        if flag in existing_args_map and existing_args_map[flag]:
+            index = existing_args_map[flag].pop(0)
+            self.args[index] = arg
+            if not existing_args_map[flag]:
+                del existing_args_map[flag]
         else:
             self.args.append(arg)
 
@@ -89,28 +85,16 @@ class Command(BaseModel):
         *,
         on_duplicate: Literal["error", "ignore", "replace"] = "error",
     ):
-        """Add args to command.
-
-        `on_duplicate` determines the behavior when an argument with the same key already exists.
-
-        `"error"`: raises ValueError if flag existed in self.args when this function was called
-
-        Note: This allows you to have duplicate flags in `args` param and add them to self.args.
-
-        `"ignore"`: does not add the argument
-
-        `"replace"`: replaces all instances of the argument in self.args with all new arguments with the same flag
-
-        Note: This allows you to pass in a new set of flags/value pairs to replace an existing set.
-
-        For example: --name=Alice --name=Bob can be replaced with --name=Alfred --name=Ben --name=Carl
-        """
         if isinstance(args, dict):
             args = [(key, value) for key, value in args.items()]
 
         existing_args_map = defaultdict(list)
         for index, arg in enumerate(self.args):
-            existing_args_map[arg].append(index)
+            try:
+                flag, _value = arg
+            except ValueError:
+                flag = arg
+            existing_args_map[flag].append(index)
 
         for arg in args:
             if on_duplicate == "error":

@@ -75,10 +75,11 @@ class StatefulSetBuilder(BaseModel):
         self,
         delay: Union[str, NonNegativeInt],
         jitter: Union[str, NonNegativeInt],
+        rate_mbit: Optional[NonNegativeInt] = None,
         *,
         overwrite: bool = False,
     ) -> Self:
-        delay_container = init_container_delay(delay, jitter)
+        delay_container = init_container_delay(delay, jitter, rate_mbit)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
             delay_container, overwrite=overwrite
         )

@@ -5,7 +5,7 @@ from typing import List, Optional, Self
 from pydantic import BaseModel, Field
 
 from src.analysis.metrics.config import MetricToScrape, ScrapeConfig
-from src.analysis.metrics.libp2p.metrics import libp2p_metrics
+from src.analysis.metrics.libp2p.metrics import gossipsub_detail_metrics, libp2p_metrics
 from src.analysis.utils.time_utils import TimeRange
 
 
@@ -20,6 +20,7 @@ class Nimlibp2pScrapeBuilder(BaseModel):
     namespace: Optional[str] = None
     metrics_to_scrape: List[MetricToScrape] = Field(default_factory=list)
     has_libp2p_metrics: bool = False
+    has_gossipsub_detail: bool = False
 
     def with_dump_location(self, folder: str) -> Self:
         self.dump_location = folder
@@ -52,12 +53,20 @@ class Nimlibp2pScrapeBuilder(BaseModel):
         self.has_libp2p_metrics = True
         return self
 
+    def with_gossipsub_detail_metrics(self) -> Self:
+        # Gossipsub control-traffic + efficiency counters (IHAVE/IWANT/GRAFT/PRUNE,
+        # duplicates, IDONTWANT). Deferred like with_libp2p_metrics so namespace can be set.
+        self.has_gossipsub_detail = True
+        return self
+
     def build(self) -> ScrapeConfig:
         assert self.namespace, "Missing namespace"
 
         all_metrics = deepcopy(self.metrics_to_scrape)
         if self.has_libp2p_metrics:
             all_metrics.extend(libp2p_metrics(namespace=self.namespace))
+        if self.has_gossipsub_detail:
+            all_metrics.extend(gossipsub_detail_metrics(namespace=self.namespace))
 
         assert self.name, "Missing name"
         return ScrapeConfig(

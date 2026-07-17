@@ -108,3 +108,43 @@ def libp2p_metrics(namespace: str) -> Iterator[MetricToScrape]:
     yield high_peers(namespace)
     yield container_memory_bytes(namespace)
     yield nim_gc_memory_bytes(namespace)
+
+
+def _gossipsub_counter(namespace: str, name: str, metric: str, folder: str) -> MetricToScrape:
+    # These pubsub/gossipsub counters carry a per-topic label; sum by pod to get one
+    # monotonic series per node. The per-node total over the run is the last value.
+    # `pod` is the pod name on both Shadow (the importer tags it) and the cluster (the
+    # libp2p-nodes scrape relabels it), unlike `instance` which is the podIP on k8s.
+    return MetricToScrape(
+        name=name,
+        query=f"sum by (pod) ({metric}{{namespace='{namespace}'}})",
+        extract_field="pod",
+        folder_name=folder,
+    )
+
+
+# Gossipsub control traffic (IHAVE/IWANT/GRAFT/PRUNE) and message efficiency counters.
+# Reported off the Shadow runs, where the mesh and schedule are deterministic so these
+# are exact (on the cluster they are too noisy to compare). Reduced per node by last
+# value (total over the run); see gossipsub_summary.py.
+_GOSSIPSUB_DETAIL = [
+    ("gs_ihave_recv", "libp2p_pubsub_received_ihave_total", "gossipsub/ihave-recv/"),
+    ("gs_iwant_sent", "libp2p_pubsub_broadcast_iwant_total", "gossipsub/iwant-sent/"),
+    ("gs_iwant_recv", "libp2p_pubsub_received_iwant_total", "gossipsub/iwant-recv/"),
+    ("gs_graft_sent", "libp2p_pubsub_broadcast_graft_total", "gossipsub/graft-sent/"),
+    ("gs_graft_recv", "libp2p_pubsub_received_graft_total", "gossipsub/graft-recv/"),
+    ("gs_prune_sent", "libp2p_pubsub_broadcast_prune_total", "gossipsub/prune-sent/"),
+    ("gs_prune_recv", "libp2p_pubsub_received_prune_total", "gossipsub/prune-recv/"),
+    ("gs_duplicate", "libp2p_gossipsub_duplicate_total", "gossipsub/duplicate/"),
+    ("gs_received", "libp2p_gossipsub_received_total", "gossipsub/received/"),
+    (
+        "gs_idontwant_saved",
+        "libp2p_gossipsub_idontwant_saved_messages_total",
+        "gossipsub/idontwant-saved/",
+    ),
+]
+
+
+def gossipsub_detail_metrics(namespace: str) -> Iterator[MetricToScrape]:
+    for name, metric, folder in _GOSSIPSUB_DETAIL:
+        yield _gossipsub_counter(namespace, name, metric, folder)

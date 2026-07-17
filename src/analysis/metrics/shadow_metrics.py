@@ -11,6 +11,7 @@ from typing import List, Optional
 
 import requests
 
+from src.analysis.metrics.libp2p import gossipsub_summary
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 
@@ -184,11 +185,18 @@ def scrape_run_metrics(
             )
             .with_interval(start_dt, end_dt, run_dir.name)
             .with_libp2p_metrics()
+            .with_gossipsub_detail_metrics()
             .build()
         )
         config.url = f"{vm.url}/api/v1/"
         Scrapper(config=config).query_and_dump_metrics()
     logger.info(f"Dumped Shadow metrics CSVs under {dump_location}/")
+
+    # The gossipsub control/efficiency counters are the reason to run Shadow deterministically;
+    # log the per-node medians so they show up next to delivery in the run output.
+    gs = gossipsub_summary.summarize(dump_location, run_dir.name)
+    if gs:
+        logger.info(f"Gossipsub detail (per-node median) for {run_dir.name}: {gs}")
     return dump_location
 
 

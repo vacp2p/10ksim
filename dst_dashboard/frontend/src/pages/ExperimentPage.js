@@ -4,6 +4,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useTheme } from '../context/ThemeContext';
 import ChartPanel from '../components/ChartPanel';
+import PageLoader from '../components/PageLoader';
 
 function ExperimentPage() {
     const { experimentId } = useParams();
@@ -26,7 +27,7 @@ function ExperimentPage() {
     }, [experimentId]);
 
     if (loading) {
-        return <div className="text-center py-24 text-base-content-tertiary text-lg">Loading experiment...</div>;
+        return <PageLoader />;
     }
 
     if (error) {
@@ -42,7 +43,7 @@ function ExperimentPage() {
             <div className="bg-base-200 border-b border-base-100 px-4 lg:px-8 py-16">
                 <div className="max-w-7xl mx-auto">
                     <Link
-                        to="/"
+                        to="/experiments"
                         className="btn btn-sm btn-ghost gap-2 mb-6 -ml-2 text-base-content-secondary hover:text-primary"
                     >
                         &larr; Back to Experiments
@@ -50,7 +51,7 @@ function ExperimentPage() {
                     <div className="text-secondary font-mono text-sm uppercase tracking-widest mb-3">
                         {experiment.family}
                     </div>
-                    <h1 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">{experiment.title}</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold mb-4 leading-tight tracking-tight">{experiment.title}</h1>
                     {experiment.description && (
                         <p className="text-base-content-secondary text-lg font-light max-w-3xl mb-6">
                             {experiment.description}

@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import PageLoader from './components/PageLoader';
+import PageTransition from './components/PageTransition';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ExperimentsPage = lazy(() => import('./pages/ExperimentsPage'));
@@ -18,19 +19,21 @@ function App() {
                     <Navbar />
                     <main className="grow flex flex-col pt-16">
                         <Suspense fallback={<PageLoader />}>
-                            <Routes>
-                                <Route path="/" element={<HomePage />} />
-                                <Route path="/experiments" element={<ExperimentsPage />} />
-                                <Route path="/experiment/:experimentId" element={<ExperimentPage />} />
-                                <Route
-                                    path="/vaclab/topology"
-                                    element={<ComingSoonPage title="Topology" description="Interactive network topology visualization is coming soon." />}
-                                />
-                                <Route
-                                    path="/vaclab/networks"
-                                    element={<ComingSoonPage title="Networks" description="Live network explorer is coming soon." />}
-                                />
-                            </Routes>
+                            <PageTransition>
+                                <Routes>
+                                    <Route path="/" element={<HomePage />} />
+                                    <Route path="/experiments" element={<ExperimentsPage />} />
+                                    <Route path="/experiment/:experimentId" element={<ExperimentPage />} />
+                                    <Route
+                                        path="/vaclab/topology"
+                                        element={<ComingSoonPage title="Topology" description="Interactive network topology visualization is coming soon." />}
+                                    />
+                                    <Route
+                                        path="/vaclab/networks"
+                                        element={<ComingSoonPage title="Networks" description="Live network explorer is coming soon." />}
+                                    />
+                                </Routes>
+                            </PageTransition>
                         </Suspense>
                     </main>
                     <Footer />

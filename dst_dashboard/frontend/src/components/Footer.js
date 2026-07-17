@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../config';
 
 const FOOTER_COLUMNS = [
     {
-        title: 'Product',
+        title: 'Explore',
         links: [
             { label: 'Experiments', to: '/experiments' },
             { label: 'Topology', to: '/vaclab/topology' },
@@ -15,7 +15,7 @@ const FOOTER_COLUMNS = [
         title: 'Tools',
         links: [
             { label: '10ksim', href: 'https://github.com/vacp2p/10ksim' },
-            { label: 'VacLab', href: 'https://github.com/vacp2p' },
+            { label: 'vaclab', href: 'https://github.com/vacp2p/vaclab-2' },
         ],
     },
     {
@@ -28,9 +28,9 @@ const FOOTER_COLUMNS = [
     {
         title: 'Social',
         links: [
-            { label: 'GitHub', href: 'https://github.com/vacp2p' },
-            { label: 'X / Twitter', href: 'https://twitter.com/vacp2p' },
-            { label: 'vac.dev', href: 'https://vac.dev' },
+            { label: 'GitHub', href: 'https://github.com/vacp2p', icon: 'bi-github' },
+            { label: 'Discord', href: 'https://discord.com/channels/864066763682218004/1113778766657880127', icon: 'bi-discord' },
+            { label: 'vac.dev', href: 'https://vac.dev', icon: 'bi-globe' },
         ],
     },
 ];
@@ -52,7 +52,13 @@ function Footer() {
                                             {link.label}
                                         </Link>
                                     ) : (
-                                        <a href={link.href} target="_blank" rel="noopener noreferrer" className="link link-hover">
+                                        <a
+                                            href={link.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="link link-hover inline-flex items-center gap-2"
+                                        >
+                                            {link.icon && <i className={`bi ${link.icon}`}></i>}
                                             {link.label}
                                         </a>
                                     )}
@@ -63,7 +69,7 @@ function Footer() {
                 ))}
             </div>
             <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-base-100 text-xs text-base-content-tertiary font-mono">
-                &copy; {new Date().getFullYear()} VacLab. DST Dashboard — Distributed Systems Testing Analytics.
+                &copy; {new Date().getFullYear()} vaclab. DST Dashboard — Distributed Systems Testing Analytics.
             </div>
         </footer>
     );

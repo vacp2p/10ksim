@@ -4,6 +4,10 @@ import pytest
 from ruamel.yaml import YAML
 
 from src.deployments.shadow.builders import (
+    _bootstrap_host,
+    _peer_env,
+    _peer_hosts,
+    _publisher_host,
     build_configmap,
     build_pvc,
     build_shadow_job,
@@ -70,6 +74,77 @@ class TestRenderPublisherConfig:
 
 
 # --------------------------------------------------------------------------- #
+# host builders (the pieces render_shadow_yaml assembles)
+# --------------------------------------------------------------------------- #
+class TestHostBuilders:
+    def _env(self, **over):
+        base = dict(
+            num_nodes=5,
+            connect_to=2,
+            muxer="yamux",
+            discovery="static",
+            start_sleep=60,
+            metrics_interval_s=15,
+            lsquic_tick_floor_us=0,
+        )
+        base.update(over)
+        return _peer_env(**base)
+
+    def test_peer_env_static_omits_kad_and_tickfloor(self):
+        env = self._env()
+        assert env["MUXER"] == "yamux" and env["DISCOVERY"] == "static"
+        assert "NODE_ROLE" not in env and "SERVICE" not in env
+        assert "LSQUIC_TICK_FLOOR_US" not in env
+
+    def test_peer_env_kad_adds_role_and_service(self):
+        env = self._env(discovery="kad-dht")
+        assert env["NODE_ROLE"] == "RoleNormal"
+        assert env["SERVICE"] == "bootstrap-0"
+
+    def test_peer_env_tickfloor_only_when_set(self):
+        assert (
+            _peer_env(
+                num_nodes=5,
+                connect_to=2,
+                muxer="quic",
+                discovery="static",
+                start_sleep=60,
+                metrics_interval_s=15,
+                lsquic_tick_floor_us=10000,
+            )["LSQUIC_TICK_FLOOR_US"]
+            == "10000"
+        )
+
+    def test_peer_hosts_stagger_start_time_by_jitter(self):
+        hosts = _peer_hosts(3, {"MUXER": "yamux"}, start_jitter_ms=50)
+        assert [hosts[f"pod-{i}"]["processes"][0]["start_time"] for i in range(3)] == [
+            "5000ms",
+            "5050ms",
+            "5100ms",
+        ]
+        assert all(hosts[h]["processes"][0]["expected_final_state"] == "running" for h in hosts)
+
+    def test_bootstrap_host_lifts_connection_cap(self):
+        h = _bootstrap_host(
+            num_nodes=1000,
+            muxer="yamux",
+            start_sleep=60,
+            metrics_interval_s=15,
+            lsquic_tick_floor_us=0,
+        )
+        env = h["processes"][0]["environment"]
+        assert env["NODE_ROLE"] == "RoleBootstrap"
+        assert env["MAXCONNECTIONS"] == "1100"  # num_nodes + 100
+
+    def test_publisher_host_runs_requester_batch(self):
+        h = _publisher_host(90, "/app/api_requester.py")
+        proc = h["processes"][0]
+        assert proc["path"] == "/usr/bin/python3"
+        assert "--mode batch" in proc["args"]
+        assert proc["start_time"] == "90s"
+
+
+# --------------------------------------------------------------------------- #
 # render_shadow_yaml  (peer hosts + publisher host)
 # --------------------------------------------------------------------------- #
 class TestRenderShadowYaml:
@@ -108,7 +183,7 @@ class TestRenderShadowYaml:
         )
         peer = sy["hosts"]["pod-0"]["processes"][0]
         assert peer["path"] == "./main"
-        assert peer["start_time"] == "5s"
+        assert peer["start_time"] == "5000ms"
         assert peer["expected_final_state"] == "running"
         env = peer["environment"]
         assert env["PEERS"] == "3"

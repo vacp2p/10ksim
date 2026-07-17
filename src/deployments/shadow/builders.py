@@ -1,6 +1,6 @@
 # Builders for Shadow simulator runs: config values -> kubernetes-client objects
 # and yaml dicts. Pure data, no I/O. See the "Using Shadow at DST" runbook.
-from typing import Optional
+from typing import Literal, Optional
 
 from kubernetes.client import (
     V1Capabilities,
@@ -42,45 +42,95 @@ _SHADOW_SECURITY = V1SecurityContext(
 )
 
 
-def render_shadow_yaml(
+def _peer_env(
     *,
     num_nodes: int,
-    sim_stop_time_s: int,
-    publisher_start_s: int,
-    connect_to: int = 2,
-    muxer: str = "yamux",
-    metrics_interval_s: int = 15,
-    requester_app_path: str = _REQUESTER_APP_PATH,
+    connect_to: int,
+    muxer: str,
+    discovery: str,
+    start_sleep: int,
+    metrics_interval_s: int,
+    lsquic_tick_floor_us: int,
 ) -> dict:
-    """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
-    running the pod-api-requester in batch mode against the peers' `/publish`
-    endpoints. The traffic shape (message count, size, pacing) lives in the
-    requester's own config (see `render_publisher_config`), mounted at
-    `{_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}`."""
-    if connect_to >= num_nodes:
-        raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
-
-    peer_env = {
+    """Environment for a relay (pod-*) node."""
+    env = {
         "PEERS": str(num_nodes),
         "CONNECTTO": str(connect_to),
         "SHADOWENV": "true",  # env.nim requires the literal string "true"
         "MUXER": muxer,
+        "DISCOVERY": discovery,
+        "STARTSLEEP": str(start_sleep),
         "METRICS_INTERVAL_S": str(metrics_interval_s),
     }
-    peer_process = {
-        "path": "./main",
-        "start_time": "5s",
-        "expected_final_state": "running",  # daemon: don't error when alive at stop_time
-        "environment": peer_env,
-    }
-    hosts = {
+    if lsquic_tick_floor_us > 0:
+        # Needs the tick-floor test-node image (stock images ignore the env var).
+        env["LSQUIC_TICK_FLOOR_US"] = str(lsquic_tick_floor_us)
+    if discovery == "kad-dht":
+        env["NODE_ROLE"] = "RoleNormal"
+        env["SERVICE"] = "bootstrap-0"
+    return env
+
+
+def _peer_hosts(num_nodes: int, peer_env: dict, start_jitter_ms: int) -> dict:
+    """The N relay hosts (pod-0..pod-(N-1)). start_jitter_ms staggers per-pod process
+    start so peers don't wake and dial at one simulated instant (lockstep wakes force
+    simultaneous-dial collisions that never occur on real hosts)."""
+    return {
         f"pod-{i}": {
             "network_node_id": 0,
-            "processes": [peer_process],
+            "processes": [
+                {
+                    "path": "./main",
+                    "start_time": f"{5000 + i * start_jitter_ms}ms",
+                    # daemon: don't error when alive at stop_time
+                    "expected_final_state": "running",
+                    "environment": peer_env,
+                }
+            ],
         }
         for i in range(num_nodes)
     }
-    hosts["publisher"] = {
+
+
+def _bootstrap_host(
+    *,
+    num_nodes: int,
+    muxer: str,
+    start_sleep: int,
+    metrics_interval_s: int,
+    lsquic_tick_floor_us: int,
+) -> dict:
+    """The kad-dht anchor (bootstrap-0); peers discover through it by hostname."""
+    env = {
+        "PEERS": str(num_nodes),
+        "SHADOWENV": "true",
+        "MUXER": muxer,
+        "DISCOVERY": "kad-dht",
+        "NODE_ROLE": "RoleBootstrap",
+        # the single anchor must accept every node's bootstrap dial, so lift its cap
+        # above the network size (default is 250).
+        "MAXCONNECTIONS": str(num_nodes + 100),
+        "STARTSLEEP": str(start_sleep),
+        "METRICS_INTERVAL_S": str(metrics_interval_s),
+    }
+    if lsquic_tick_floor_us > 0:
+        env["LSQUIC_TICK_FLOOR_US"] = str(lsquic_tick_floor_us)
+    return {
+        "network_node_id": 0,
+        "processes": [
+            {
+                "path": "./main",
+                "start_time": "5s",
+                "expected_final_state": "running",
+                "environment": env,
+            }
+        ],
+    }
+
+
+def _publisher_host(publisher_start_s: int, requester_app_path: str) -> dict:
+    """The publisher host: runs the pod-api-requester in batch mode against the peers."""
+    return {
         "network_node_id": 0,
         "processes": [
             {
@@ -94,16 +144,75 @@ def render_shadow_yaml(
             }
         ],
     }
-    return {
+
+
+def render_shadow_yaml(
+    *,
+    num_nodes: int,
+    sim_stop_time_s: int,
+    publisher_start_s: int,
+    connect_to: int = 2,
+    muxer: Literal["yamux", "mplex", "quic"] = "yamux",
+    discovery: Literal["static", "kad-dht"] = "static",
+    start_sleep: int = 60,
+    metrics_interval_s: int = 15,
+    seed: int = 1,
+    model_unblocked_syscall_latency: bool = False,
+    strace_logging_mode: str = "off",
+    lsquic_tick_floor_us: int = 0,
+    start_jitter_ms: int = 0,
+    requester_app_path: str = _REQUESTER_APP_PATH,
+) -> dict:
+    """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
+    running the pod-api-requester in batch mode against the peers' `/publish`
+    endpoints. The traffic shape (message count, size, pacing) lives in the
+    requester's own config (see `render_publisher_config`), mounted at
+    `{_CONFIG_MOUNT}/{_PUBLISHER_CONFIG}`.
+
+    discovery selects mesh formation: "static" dials CONNECTTO peers by pod-N
+    hostname; "kad-dht" adds a `bootstrap-0` anchor host that peers discover
+    through (Shadow resolves it by hostname, so no k8s Service is needed)."""
+    if connect_to >= num_nodes:
+        raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
+
+    peer_env = _peer_env(
+        num_nodes=num_nodes,
+        connect_to=connect_to,
+        muxer=muxer,
+        discovery=discovery,
+        start_sleep=start_sleep,
+        metrics_interval_s=metrics_interval_s,
+        lsquic_tick_floor_us=lsquic_tick_floor_us,
+    )
+    hosts = _peer_hosts(num_nodes, peer_env, start_jitter_ms)
+    if discovery == "kad-dht":
+        hosts["bootstrap-0"] = _bootstrap_host(
+            num_nodes=num_nodes,
+            muxer=muxer,
+            start_sleep=start_sleep,
+            metrics_interval_s=metrics_interval_s,
+            lsquic_tick_floor_us=lsquic_tick_floor_us,
+        )
+    hosts["publisher"] = _publisher_host(publisher_start_s, requester_app_path)
+    # Always render the seed so the run's shadow.yaml records it (Shadow defaults to 1).
+    config = {
         "general": {
             "stop_time": f"{sim_stop_time_s}s",
             "progress": True,
+            "seed": seed,
         },
         "network": {
             "graph": {"type": "1_gbit_switch"},
         },
         "hosts": hosts,
     }
+    if model_unblocked_syscall_latency:
+        config["general"]["model_unblocked_syscall_latency"] = True
+    if strace_logging_mode != "off":
+        # Global (all hosts) and voluminous — a straced host writes ~100s of MB per
+        # simulated minute of activity. Diagnostics at small N only.
+        config["experimental"] = {"strace_logging_mode": strace_logging_mode}
+    return config
 
 
 def render_publisher_config(

@@ -1,7 +1,7 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
 
@@ -31,11 +31,24 @@ class ExpConfig(BaseModel):
     message_size_bytes: NonNegativeInt = 1000
     delay_seconds: NonNegativeFloat = 2.0
     connect_to: NonNegativeInt = 2
+    muxer: Literal["yamux", "mplex", "quic"] = "yamux"
+    discovery: Literal["static", "kad-dht"] = "static"  # CONNECTTO dial vs kad bootstrap
+    start_sleep: NonNegativeInt = 60  # node STARTSLEEP before mesh formation
     # Timing (simulated seconds). Publisher starts after the mesh forms (~60s).
     publisher_start_s: NonNegativeInt = 90
     sim_stop_time_s: NonNegativeInt = 180
     # storeMetrics scrape cadence (s); short so the last scrape is post-traffic.
     metrics_interval_s: NonNegativeInt = 15
+    # Determinism + diagnostics. seed is rendered into shadow.yaml (Shadow default 1);
+    # strace is global and heavy — small-N diagnosis only.
+    seed: NonNegativeInt = 1
+    model_unblocked_syscall_latency: bool = False
+    strace_logging_mode: str = "off"  # off | standard | deterministic
+    # Floor (µs) for lsquic engine tick re-arms; needs the tick-floor node image.
+    # 0 = stock lsquic behavior (which livelocks quic under Shadow).
+    lsquic_tick_floor_us: NonNegativeInt = 0
+    # Per-pod process start stagger (pod-i starts at 5000 + i*jitter ms); 0 = lockstep.
+    start_jitter_ms: NonNegativeInt = 0
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -59,8 +72,10 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         self.log_event("run_start")
         cfg = self.config
         namespace = self.namespace
-        # unique per run (output folder name carries a random suffix)
-        run_id = self.output_folder.name.lower().replace("_", "-")[:50].strip("-")
+        # unique per run (output folder name carries a random suffix). Cap the length
+        # so the derived `shadow-<run_id>-reader` log-reader pod stays within the k8s
+        # 63-char name limit.
+        run_id = self.output_folder.name.lower().replace("_", "-")[:45].strip("-")
         cm_name = f"shadow-{run_id}"
         job_name = f"shadow-{run_id}"
         pvc_name = f"shadow-{run_id}-data"
@@ -70,7 +85,15 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             sim_stop_time_s=cfg.sim_stop_time_s,
             publisher_start_s=cfg.publisher_start_s,
             connect_to=cfg.connect_to,
+            muxer=cfg.muxer,
+            discovery=cfg.discovery,
+            start_sleep=cfg.start_sleep,
             metrics_interval_s=cfg.metrics_interval_s,
+            seed=cfg.seed,
+            model_unblocked_syscall_latency=cfg.model_unblocked_syscall_latency,
+            strace_logging_mode=cfg.strace_logging_mode,
+            lsquic_tick_floor_us=cfg.lsquic_tick_floor_us,
+            start_jitter_ms=cfg.start_jitter_ms,
         )
         publisher_config = render_publisher_config(
             num_nodes=cfg.num_nodes,

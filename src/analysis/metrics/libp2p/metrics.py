@@ -97,6 +97,36 @@ def nim_gc_memory_bytes(namespace: str) -> MetricToScrape:
     )
 
 
+# Mesh-health gauges, keyed by pod so Shadow and the cluster share node identity
+# (`instance` is the podIP on k8s). Mesh degree and connection count degrade before
+# delivery does, so these are the early regression signals; last value = end-of-run state.
+def gossipsub_mesh_peers(namespace: str) -> MetricToScrape:
+    return MetricToScrape(
+        name="gossipsub_mesh_peers",
+        query=f"sum by (pod) (libp2p_gossipsub_peers_per_topic_mesh{{namespace='{namespace}'}})",
+        extract_field="pod",
+        folder_name="mesh-peers/",
+    )
+
+
+def gossipsub_topic_peers(namespace: str) -> MetricToScrape:
+    return MetricToScrape(
+        name="gossipsub_topic_peers",
+        query=f"sum by (pod) (libp2p_gossipsub_peers_per_topic_gossipsub{{namespace='{namespace}'}})",
+        extract_field="pod",
+        folder_name="topic-peers/",
+    )
+
+
+def connections(namespace: str) -> MetricToScrape:
+    return MetricToScrape(
+        name="connections",
+        query=f"sum by (pod) (libp2p_peers{{namespace='{namespace}'}})",
+        extract_field="pod",
+        folder_name="connections/",
+    )
+
+
 def libp2p_metrics(namespace: str) -> Iterator[MetricToScrape]:
     yield peers(namespace)
     yield open_streams(namespace)
@@ -108,6 +138,9 @@ def libp2p_metrics(namespace: str) -> Iterator[MetricToScrape]:
     yield high_peers(namespace)
     yield container_memory_bytes(namespace)
     yield nim_gc_memory_bytes(namespace)
+    yield gossipsub_mesh_peers(namespace)
+    yield gossipsub_topic_peers(namespace)
+    yield connections(namespace)
 
 
 def _gossipsub_counter(namespace: str, name: str, metric: str, folder: str) -> MetricToScrape:

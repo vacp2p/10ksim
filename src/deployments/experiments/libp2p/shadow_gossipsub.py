@@ -3,7 +3,7 @@
 import logging
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PositiveInt
 
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
@@ -49,10 +49,8 @@ class ExpConfig(BaseModel):
     lsquic_tick_floor_us: NonNegativeInt = 0
     # Per-pod process start stagger (pod-i starts at 5000 + i*jitter ms); 0 = lockstep.
     start_jitter_ms: NonNegativeInt = 0
-    # WAN network model. latency_ms > 0 (or a sub-1Gbit bandwidth) swaps the ~0-latency
-    # 1_gbit_switch for a GML link with these properties (all hosts share one network node).
-    latency_ms: NonNegativeInt = 0
-    bandwidth_mbit: NonNegativeInt = 1000
+    latency_ms: Optional[NonNegativeInt] = None
+    bandwidth_mbit: Optional[PositiveInt] = None
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"

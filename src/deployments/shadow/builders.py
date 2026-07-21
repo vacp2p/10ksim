@@ -147,6 +147,10 @@ def _publisher_host(publisher_start_s: int, requester_app_path: str) -> dict:
     }
 
 
+_SWITCH_BANDWIDTH_MBIT = 1000
+_SWITCH_LATENCY_MS = 0
+
+
 def _wan_gml(latency_ms: int, bandwidth_mbit: int) -> LiteralScalarString:
     """A one-node GML graph with a self-loop, so every host (all on network_node_id 0)
     sees `latency_ms` one-way delay and `bandwidth_mbit` up/down. Shadow's GML parser
@@ -184,8 +188,8 @@ def render_shadow_yaml(
     strace_logging_mode: str = "off",
     lsquic_tick_floor_us: int = 0,
     start_jitter_ms: int = 0,
-    latency_ms: int = 0,
-    bandwidth_mbit: int = 1000,
+    latency_ms: Optional[int] = None,
+    bandwidth_mbit: Optional[int] = None,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -220,14 +224,20 @@ def render_shadow_yaml(
         )
     hosts["publisher"] = _publisher_host(publisher_start_s, requester_app_path)
 
-    # Network: the built-in 1_gbit_switch is ~0-latency, which is unrealistic and can
-    # skew latency-sensitive behaviour. Set latency_ms (or a sub-1Gbit bandwidth) to model
-    # a WAN via a one-node GML with a self-loop (all hosts share network_node_id 0), the
-    # same shape the standalone shadow harness used.
-    if latency_ms > 0 or bandwidth_mbit < 1000:
-        graph = {"type": "gml", "inline": _wan_gml(latency_ms, bandwidth_mbit)}
-    else:
+    if latency_ms is None and bandwidth_mbit is None:
         graph = {"type": "1_gbit_switch"}
+    else:
+        if latency_ms is not None and latency_ms < 0:
+            raise ValueError(f"latency_ms must be >= 0, got {latency_ms}")
+        if bandwidth_mbit is not None and bandwidth_mbit <= 0:
+            raise ValueError(f"bandwidth_mbit must be > 0, got {bandwidth_mbit}")
+        graph = {
+            "type": "gml",
+            "inline": _wan_gml(
+                _SWITCH_LATENCY_MS if latency_ms is None else latency_ms,
+                _SWITCH_BANDWIDTH_MBIT if bandwidth_mbit is None else bandwidth_mbit,
+            ),
+        }
 
     # Always render the seed so the run's shadow.yaml records it (Shadow defaults to 1).
     config = {

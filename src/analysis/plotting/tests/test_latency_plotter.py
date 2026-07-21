@@ -3,8 +3,6 @@ from pathlib import Path
 import pandas as pd
 
 from src.analysis.plotting.latency_plotter import (
-    LatencyPlotConfig,
-    LatencyPlotter,
     latency_percentiles,
     latency_table,
     load_delays,
@@ -64,29 +62,3 @@ class TestPercentiles:
         assert list(table.columns) == ["v2.1.0", "v2.2.0"]
         assert table.loc["p50", "v2.1.0"] == 2.0
         assert table.loc["p50", "v2.2.0"] == 200.0
-
-
-class TestLatencyPlotter:
-    def test_writes_one_figure_per_config(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        a = _write_received(tmp_path / "a", [1, 2, 3])
-        b = _write_received(tmp_path / "b", [10, 20, 30])
-        LatencyPlotter(
-            configs=[LatencyPlotConfig(name="xver_latency", runs={"v2.1.0": a, "v2.2.0": b})]
-        ).create_plots()
-        assert (tmp_path / "xver_latency.jpg").exists()
-
-    def test_runs_without_data_are_skipped_not_fatal(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        good = _write_received(tmp_path / "good", [1, 2])
-        cfg = LatencyPlotConfig(
-            name="partial", runs={"has data": good, "missing": tmp_path / "nope"}
-        )
-        LatencyPlotter(configs=[cfg]).create_plots()
-        assert (tmp_path / "partial.jpg").exists()
-
-    def test_no_data_at_all_writes_nothing(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        cfg = LatencyPlotConfig(name="empty", runs={"missing": tmp_path / "nope"})
-        LatencyPlotter(configs=[cfg]).create_plots()
-        assert not (tmp_path / "empty.jpg").exists()

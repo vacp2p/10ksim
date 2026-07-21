@@ -71,6 +71,12 @@ def _peer_env(
     return env
 
 
+# Relay addresses are 11.{100+s//250}.{s%250}.{10+h}: host octets run 10..254 and the
+# second octet stops at 255, so the plan holds 245 hosts per /24 across 39000 subnets.
+_MAX_HOSTS_PER_SUBNET = 245
+_MAX_SUBNETS = (255 - 100) * 250 - 1
+
+
 def _peer_ip(index: int, hosts_per_subnet: int) -> str:
     """Address for relay `index` under an IP plan of `hosts_per_subnet` hosts per /24.
 
@@ -83,7 +89,13 @@ def _peer_ip(index: int, hosts_per_subnet: int) -> str:
     network honest. The 11.100+ base stays clear of the addresses Shadow assigns itself
     for hosts we do not pin (bootstrap, publisher).
     """
+    if not 1 <= hosts_per_subnet <= _MAX_HOSTS_PER_SUBNET:
+        raise ValueError(
+            f"hosts_per_subnet must be 1..{_MAX_HOSTS_PER_SUBNET}, got {hosts_per_subnet}"
+        )
     subnet, host = divmod(index, hosts_per_subnet)
+    if subnet > _MAX_SUBNETS:
+        raise ValueError(f"IP plan exhausted at relay {index} (max {_MAX_SUBNETS + 1} subnets)")
     return f"11.{100 + subnet // 250}.{subnet % 250}.{10 + host}"
 
 

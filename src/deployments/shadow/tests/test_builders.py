@@ -139,6 +139,19 @@ class TestHostBuilders:
         assert ips[0] == "11.100.0.10" and ips[9] == "11.100.0.19"
         assert ips[10] == "11.100.1.10"
 
+    def test_every_planned_octet_is_a_valid_address(self):
+        for hosts_per_subnet in (1, 10, 245):
+            for i in (0, 1, 999, 5000):
+                octets = [int(o) for o in _peer_ip(i, hosts_per_subnet).split(".")]
+                assert all(0 <= o <= 255 for o in octets), (i, hosts_per_subnet, octets)
+
+    def test_packing_beyond_a_subnet_is_rejected_not_silently_wrong(self):
+        # 250 hosts in a /24 would overflow the host octet into 11.100.0.256
+        with pytest.raises(ValueError):
+            _peer_ip(0, 250)
+        with pytest.raises(ValueError):
+            _peer_ip(0, 0)
+
     def test_peer_ips_avoid_shadow_assigned_range(self):
         # bootstrap/publisher are not pinned, so Shadow assigns them from 11.0.x
         assert all(not _peer_ip(i, 1).startswith("11.0.") for i in range(1000))

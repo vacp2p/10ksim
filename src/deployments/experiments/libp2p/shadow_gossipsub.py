@@ -51,6 +51,8 @@ class ExpConfig(BaseModel):
     start_jitter_ms: NonNegativeInt = 0
     latency_ms: Optional[NonNegativeInt] = None
     bandwidth_mbit: Optional[PositiveInt] = None
+    # Peers per /24; 1 = every peer on its own subnet.
+    hosts_per_subnet: PositiveInt = 1
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -98,6 +100,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             start_jitter_ms=cfg.start_jitter_ms,
             latency_ms=cfg.latency_ms,
             bandwidth_mbit=cfg.bandwidth_mbit,
+            hosts_per_subnet=cfg.hosts_per_subnet,
         )
         publisher_config = render_publisher_config(
             num_nodes=cfg.num_nodes,

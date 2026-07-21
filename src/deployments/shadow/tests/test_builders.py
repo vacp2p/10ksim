@@ -7,6 +7,7 @@ from src.deployments.shadow.builders import (
     _bootstrap_host,
     _peer_env,
     _peer_hosts,
+    _peer_ip,
     _publisher_host,
     build_configmap,
     build_pvc,
@@ -116,13 +117,37 @@ class TestHostBuilders:
         )
 
     def test_peer_hosts_stagger_start_time_by_jitter(self):
-        hosts = _peer_hosts(3, {"MUXER": "yamux"}, start_jitter_ms=50)
+        hosts = _peer_hosts(3, {"MUXER": "yamux"}, start_jitter_ms=50, hosts_per_subnet=1)
         assert [hosts[f"pod-{i}"]["processes"][0]["start_time"] for i in range(3)] == [
             "5000ms",
             "5050ms",
             "5100ms",
         ]
         assert all(hosts[h]["processes"][0]["expected_final_state"] == "running" for h in hosts)
+
+    def test_peer_ip_gives_each_relay_its_own_subnet_by_default(self):
+        ips = [_peer_ip(i, 1) for i in range(1000)]
+        assert len(set(ips)) == 1000
+        # every relay in a distinct /24: nothing for a prefix rate limiter to cap
+        assert len({ip.rsplit(".", 1)[0] for ip in ips}) == 1000
+        assert ips[0] == "11.100.0.10"
+        assert ips[250] == "11.101.0.10"  # rolls into the next second octet
+
+    def test_peer_ip_packs_subnets_when_asked(self):
+        ips = [_peer_ip(i, 10) for i in range(1000)]
+        assert len({ip.rsplit(".", 1)[0] for ip in ips}) == 100  # 10 hosts per /24
+        assert ips[0] == "11.100.0.10" and ips[9] == "11.100.0.19"
+        assert ips[10] == "11.100.1.10"
+
+    def test_peer_ips_avoid_shadow_assigned_range(self):
+        # bootstrap/publisher are not pinned, so Shadow assigns them from 11.0.x
+        assert all(not _peer_ip(i, 1).startswith("11.0.") for i in range(1000))
+
+    def test_peer_hosts_pin_the_planned_addresses(self):
+        hosts = _peer_hosts(3, {"MUXER": "yamux"}, start_jitter_ms=0, hosts_per_subnet=1)
+        assert [hosts[f"pod-{i}"]["ip_addr"] for i in range(3)] == [
+            _peer_ip(i, 1) for i in range(3)
+        ]
 
     def test_bootstrap_host_lifts_connection_cap(self):
         h = _bootstrap_host(

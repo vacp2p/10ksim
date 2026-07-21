@@ -71,13 +71,32 @@ def _peer_env(
     return env
 
 
-def _peer_hosts(num_nodes: int, peer_env: dict, start_jitter_ms: int) -> dict:
+def _peer_ip(index: int, hosts_per_subnet: int) -> str:
+    """Address for relay `index` under an IP plan of `hosts_per_subnet` hosts per /24.
+
+    Real peers sit behind many different networks, but Shadow's default assignment packs
+    every host into one contiguous block (1000 hosts land in ~4 /24s), which reads as a
+    handful of subnets hosting hundreds of peers each. Protocols that rate-limit by
+    address prefix treat that as a Sybil farm: nim-libp2p v2.2.0's kad admission caps
+    peers per IP and per /24, so on the packed plan most peers are never admitted and
+    never get their addresses stored. Spreading hosts across subnets keeps the simulated
+    network honest. The 11.100+ base stays clear of the addresses Shadow assigns itself
+    for hosts we do not pin (bootstrap, publisher).
+    """
+    subnet, host = divmod(index, hosts_per_subnet)
+    return f"11.{100 + subnet // 250}.{subnet % 250}.{10 + host}"
+
+
+def _peer_hosts(
+    num_nodes: int, peer_env: dict, start_jitter_ms: int, hosts_per_subnet: int
+) -> dict:
     """The N relay hosts (pod-0..pod-(N-1)). start_jitter_ms staggers per-pod process
     start so peers don't wake and dial at one simulated instant (lockstep wakes force
     simultaneous-dial collisions that never occur on real hosts)."""
     return {
         f"pod-{i}": {
             "network_node_id": 0,
+            "ip_addr": _peer_ip(i, hosts_per_subnet),
             "processes": [
                 {
                     "path": "./main",
@@ -161,6 +180,7 @@ def render_shadow_yaml(
     strace_logging_mode: str = "off",
     lsquic_tick_floor_us: int = 0,
     start_jitter_ms: int = 0,
+    hosts_per_subnet: int = 1,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -171,7 +191,11 @@ def render_shadow_yaml(
 
     discovery selects mesh formation: "static" dials CONNECTTO peers by pod-N
     hostname; "kad-dht" adds a `bootstrap-0` anchor host that peers discover
-    through (Shadow resolves it by hostname, so no k8s Service is needed)."""
+    through (Shadow resolves it by hostname, so no k8s Service is needed).
+
+    hosts_per_subnet sets the IP plan: 1 (default) gives every relay its own /24, the
+    realistic shape. Raise it to pack peers into shared subnets, which is what an
+    address-prefix rate limiter sees as a Sybil farm (see `_peer_ip`)."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 
@@ -184,7 +208,7 @@ def render_shadow_yaml(
         metrics_interval_s=metrics_interval_s,
         lsquic_tick_floor_us=lsquic_tick_floor_us,
     )
-    hosts = _peer_hosts(num_nodes, peer_env, start_jitter_ms)
+    hosts = _peer_hosts(num_nodes, peer_env, start_jitter_ms, hosts_per_subnet)
     if discovery == "kad-dht":
         hosts["bootstrap-0"] = _bootstrap_host(
             num_nodes=num_nodes,

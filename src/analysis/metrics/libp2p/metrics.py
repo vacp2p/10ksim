@@ -97,9 +97,7 @@ def nim_gc_memory_bytes(namespace: str) -> MetricToScrape:
     )
 
 
-# Mesh-health gauges, keyed by pod so Shadow and the cluster share node identity
-# (`instance` is the podIP on k8s). Mesh degree and connection count degrade before
-# delivery does, so these are the early regression signals; last value = end-of-run state.
+# Mesh-health gauges, keyed by pod: `instance` is the podIP on k8s, not a node name.
 def gossipsub_mesh_peers(namespace: str) -> MetricToScrape:
     return MetricToScrape(
         name="gossipsub_mesh_peers",

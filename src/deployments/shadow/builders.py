@@ -71,24 +71,14 @@ def _peer_env(
     return env
 
 
-# Relay addresses are 11.{100+s//250}.{s%250}.{10+h}: host octets run 10..254 and the
-# second octet stops at 255, so the plan holds 245 hosts per /24 across 39000 subnets.
+# 11.{100+s//250}.{s%250}.{10+h}; the 11.100+ base keeps clear of the addresses Shadow
+# assigns to unpinned hosts (bootstrap, publisher).
 _MAX_HOSTS_PER_SUBNET = 245
 _MAX_SUBNETS = (255 - 100) * 250 - 1
 
 
 def _peer_ip(index: int, hosts_per_subnet: int) -> str:
-    """Address for relay `index` under an IP plan of `hosts_per_subnet` hosts per /24.
-
-    Real peers sit behind many different networks, but Shadow's default assignment packs
-    every host into one contiguous block (1000 hosts land in ~4 /24s), which reads as a
-    handful of subnets hosting hundreds of peers each. Protocols that rate-limit by
-    address prefix treat that as a Sybil farm: nim-libp2p v2.2.0's kad admission caps
-    peers per IP and per /24, so on the packed plan most peers are never admitted and
-    never get their addresses stored. Spreading hosts across subnets keeps the simulated
-    network honest. The 11.100+ base stays clear of the addresses Shadow assigns itself
-    for hosts we do not pin (bootstrap, publisher).
-    """
+    """Address for relay `index`, packing `hosts_per_subnet` relays into each /24."""
     if not 1 <= hosts_per_subnet <= _MAX_HOSTS_PER_SUBNET:
         raise ValueError(
             f"hosts_per_subnet must be 1..{_MAX_HOSTS_PER_SUBNET}, got {hosts_per_subnet}"
@@ -205,9 +195,7 @@ def render_shadow_yaml(
     hostname; "kad-dht" adds a `bootstrap-0` anchor host that peers discover
     through (Shadow resolves it by hostname, so no k8s Service is needed).
 
-    hosts_per_subnet sets the IP plan: 1 (default) gives every relay its own /24, the
-    realistic shape. Raise it to pack peers into shared subnets, which is what an
-    address-prefix rate limiter sees as a Sybil farm (see `_peer_ip`)."""
+    hosts_per_subnet: 1 gives every relay its own /24; raise it to share prefixes."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 

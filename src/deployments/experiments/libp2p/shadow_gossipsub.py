@@ -49,8 +49,7 @@ class ExpConfig(BaseModel):
     lsquic_tick_floor_us: NonNegativeInt = 0
     # Per-pod process start stagger (pod-i starts at 5000 + i*jitter ms); 0 = lockstep.
     start_jitter_ms: NonNegativeInt = 0
-    # Relays per /24. 1 = every peer on its own subnet (realistic). Raising it packs
-    # peers into shared prefixes, which address-based rate limiters read as a Sybil farm.
+    # Relays per /24; 1 = every peer on its own subnet.
     hosts_per_subnet: PositiveInt = 1
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"

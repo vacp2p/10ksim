@@ -1,9 +1,8 @@
 """Reduce the gossipsub control/efficiency counter CSVs (dumped by the
 `with_gossipsub_detail_metrics` scrape) into per-muxer report numbers.
 
-These are monotonic counters, so per node the total over the run is the last value.
-The mesh-health gauges (mesh peers, topic peers, connections) reduce the same way,
-where the last value is the end-of-run state instead of a total.
+These are monotonic counters, so per node the total over the run is the last value; the
+mesh-health gauges reduce the same way, giving end-of-run state.
 We aggregate the across-node median (the typical node) for each metric, and derive the
 duplicate ratio (duplicates / delivered), the cleanest single "how efficient was the
 mesh" number. Meant for the Shadow section, where the run is deterministic so the

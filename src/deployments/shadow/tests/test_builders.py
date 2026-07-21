@@ -128,7 +128,6 @@ class TestHostBuilders:
     def test_peer_ip_gives_each_relay_its_own_subnet_by_default(self):
         ips = [_peer_ip(i, 1) for i in range(1000)]
         assert len(set(ips)) == 1000
-        # every relay in a distinct /24: nothing for a prefix rate limiter to cap
         assert len({ip.rsplit(".", 1)[0] for ip in ips}) == 1000
         assert ips[0] == "11.100.0.10"
         assert ips[250] == "11.101.0.10"  # rolls into the next second octet
@@ -146,14 +145,14 @@ class TestHostBuilders:
                 assert all(0 <= o <= 255 for o in octets), (i, hosts_per_subnet, octets)
 
     def test_packing_beyond_a_subnet_is_rejected_not_silently_wrong(self):
-        # 250 hosts in a /24 would overflow the host octet into 11.100.0.256
+        # 250 would overflow the host octet to 11.100.0.256
         with pytest.raises(ValueError):
             _peer_ip(0, 250)
         with pytest.raises(ValueError):
             _peer_ip(0, 0)
 
     def test_peer_ips_avoid_shadow_assigned_range(self):
-        # bootstrap/publisher are not pinned, so Shadow assigns them from 11.0.x
+        # Shadow assigns unpinned hosts from 11.0.x
         assert all(not _peer_ip(i, 1).startswith("11.0.") for i in range(1000))
 
     def test_peer_hosts_pin_the_planned_addresses(self):

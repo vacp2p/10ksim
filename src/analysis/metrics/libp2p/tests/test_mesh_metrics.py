@@ -19,7 +19,7 @@ def _write_gauge_csv(metrics_dir: Path, folder: str, name: str, columns: dict) -
 
 
 # --------------------------------------------------------------------------- #
-# the mesh-health gauges (mesh peers, topic peers, connections)
+# mesh-health gauges
 # --------------------------------------------------------------------------- #
 class TestMeshMetrics:
     def test_gauges_are_pod_keyed_in_the_namespace(self):
@@ -46,11 +46,11 @@ class TestMeshMetrics:
 
 
 # --------------------------------------------------------------------------- #
-# summary integration: gauges reduce by last value (end-of-run state)
+# summary integration: gauges reduce by last value
 # --------------------------------------------------------------------------- #
 class TestMeshSummary:
     def test_summarize_reports_end_of_run_state(self, tmp_path):
-        # gauges can go down; the last sample is the state we report (pod-0: 8 -> 2)
+        # unlike counters, gauges can fall: pod-0 goes 8 -> 2
         _write_gauge_csv(tmp_path, "mesh-peers", "mplex", {"pod-0": [8, 2], "pod-1": [8, 8]})
         _write_gauge_csv(tmp_path, "connections", "mplex", {"pod-0": [250, 20], "pod-1": [250, 24]})
         summary = summarize(tmp_path, "mplex")

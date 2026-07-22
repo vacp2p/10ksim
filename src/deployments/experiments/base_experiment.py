@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, ClassVar, Dict, Generic, Literal, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
+from src.analysis.post_run_analysis import run_post_analysis
 from src.analysis.utils.log_utils import log_to_path
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.k8s_cleanup import (
@@ -49,8 +50,6 @@ from src.utils.cli_utils import flag_exists
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
-    V1Role,
-    V1RoleBinding,
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
@@ -59,6 +58,8 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
+    V1Role,
+    V1RoleBinding,
     V1ConfigMap,
     V1ServiceAccount,
 ]
@@ -83,6 +84,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[Optional[str]] = None
 
     _type: str = PrivateAttr()
 
@@ -347,6 +349,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         self.log_event("run_finished")
         self._dump_metadata()
+        run_post_analysis(self)
 
     @abstractmethod
     async def _run(self):

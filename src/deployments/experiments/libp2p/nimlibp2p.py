@@ -46,6 +46,7 @@ class ExpConfig(BaseModel):
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     node_start_delay: NonNegativeInt = 60
+    post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True
 
     @model_validator(mode="after")
@@ -231,7 +232,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         self.log_event("publisher_messages_finished")
 
-        await asyncio.sleep(20)
+        await asyncio.sleep(self.config.post_publish_dwell)
         self.log_event("publisher_wait_finished")
 
         self.log_event("internal_run_finished")

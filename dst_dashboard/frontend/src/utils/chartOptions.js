@@ -103,3 +103,31 @@ export function buildChartOption(rawOption, isDark) {
     applyChartTheme(option, isDark);
     return option;
 }
+
+function stripAxisChrome(axis) {
+    if (!axis) return axis;
+    const strip = (a) => ({
+        ...a,
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+    });
+    return Array.isArray(axis) ? axis.map(strip) : strip(axis);
+}
+
+// A small, chrome-free variant for card/thumbnail previews: same data and
+// series colors as the real chart, but no axes, legend, toolbox or tooltip -
+// just the shape of the data at a glance.
+export function buildThumbnailOption(rawOption, isDark) {
+    const option = buildChartOption(rawOption, isDark);
+    return {
+        ...option,
+        grid: { left: 4, right: 4, top: 6, bottom: 4, containLabel: false },
+        legend: { show: false },
+        toolbox: { show: false },
+        tooltip: { show: false },
+        xAxis: stripAxisChrome(option.xAxis),
+        yAxis: stripAxisChrome(option.yAxis),
+    };
+}

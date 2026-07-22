@@ -24,6 +24,7 @@ from kubernetes.client import (
     V1VolumeMount,
 )
 from ruamel.yaml import YAML
+from ruamel.yaml.scalarstring import LiteralScalarString
 
 # The pod-api-requester app is baked into the Shadow base image; the publisher host
 # runs it in batch mode and reads its traffic config from the mounted ConfigMap.
@@ -146,6 +147,32 @@ def _publisher_host(publisher_start_s: int, requester_app_path: str) -> dict:
     }
 
 
+_SWITCH_BANDWIDTH_MBIT = 1000
+_SWITCH_LATENCY_MS = 0
+
+
+def _wan_gml(latency_ms: int, bandwidth_mbit: int) -> LiteralScalarString:
+    """A one-node GML graph with a self-loop, so every host (all on network_node_id 0)
+    sees `latency_ms` one-way delay and `bandwidth_mbit` up/down. Shadow's GML parser
+    wants multi-line GML (one attribute per line); return it as a YAML literal block so
+    the inline value keeps its newlines."""
+    gml = f"""graph [
+  directed 0
+  node [
+    id 0
+    host_bandwidth_up "{bandwidth_mbit} Mbit"
+    host_bandwidth_down "{bandwidth_mbit} Mbit"
+  ]
+  edge [
+    source 0
+    target 0
+    latency "{latency_ms} ms"
+  ]
+]
+"""
+    return LiteralScalarString(gml)
+
+
 def render_shadow_yaml(
     *,
     num_nodes: int,
@@ -161,6 +188,8 @@ def render_shadow_yaml(
     strace_logging_mode: str = "off",
     lsquic_tick_floor_us: int = 0,
     start_jitter_ms: int = 0,
+    latency_ms: Optional[int] = None,
+    bandwidth_mbit: Optional[int] = None,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -194,6 +223,22 @@ def render_shadow_yaml(
             lsquic_tick_floor_us=lsquic_tick_floor_us,
         )
     hosts["publisher"] = _publisher_host(publisher_start_s, requester_app_path)
+
+    if latency_ms is None and bandwidth_mbit is None:
+        graph = {"type": "1_gbit_switch"}
+    else:
+        if latency_ms is not None and latency_ms < 0:
+            raise ValueError(f"latency_ms must be >= 0, got {latency_ms}")
+        if bandwidth_mbit is not None and bandwidth_mbit <= 0:
+            raise ValueError(f"bandwidth_mbit must be > 0, got {bandwidth_mbit}")
+        graph = {
+            "type": "gml",
+            "inline": _wan_gml(
+                _SWITCH_LATENCY_MS if latency_ms is None else latency_ms,
+                _SWITCH_BANDWIDTH_MBIT if bandwidth_mbit is None else bandwidth_mbit,
+            ),
+        }
+
     # Always render the seed so the run's shadow.yaml records it (Shadow defaults to 1).
     config = {
         "general": {
@@ -201,9 +246,7 @@ def render_shadow_yaml(
             "progress": True,
             "seed": seed,
         },
-        "network": {
-            "graph": {"type": "1_gbit_switch"},
-        },
+        "network": {"graph": graph},
         "hosts": hosts,
     }
     if model_unblocked_syscall_latency:

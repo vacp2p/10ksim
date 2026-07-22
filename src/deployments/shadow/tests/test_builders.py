@@ -197,6 +197,47 @@ class TestRenderShadowYaml:
         assert sy["general"]["progress"] is True
         assert sy["network"]["graph"]["type"] == "1_gbit_switch"
 
+    def test_wan_network_uses_gml_with_link_properties(self):
+        sy = render_shadow_yaml(
+            num_nodes=3,
+            sim_stop_time_s=180,
+            publisher_start_s=90,
+            latency_ms=10,
+            bandwidth_mbit=50,
+        )
+        graph = sy["network"]["graph"]
+        assert graph["type"] == "gml"
+        gml = str(graph["inline"])
+        assert 'latency "10 ms"' in gml
+        assert 'host_bandwidth_up "50 Mbit"' in gml
+
+    def _graph(self, **kwargs):
+        return render_shadow_yaml(num_nodes=3, sim_stop_time_s=180, publisher_start_s=90, **kwargs)[
+            "network"
+        ]["graph"]
+
+    def test_unset_network_keeps_the_builtin_switch(self):
+        assert self._graph()["type"] == "1_gbit_switch"
+
+    def test_bandwidth_above_the_switch_is_applied_not_ignored(self):
+        gml = str(self._graph(bandwidth_mbit=2000)["inline"])
+        assert 'host_bandwidth_up "2000 Mbit"' in gml
+
+    def test_one_knob_set_keeps_the_switch_value_for_the_other(self):
+        assert 'host_bandwidth_up "1000 Mbit"' in str(self._graph(latency_ms=50)["inline"])
+        assert 'latency "0 ms"' in str(self._graph(bandwidth_mbit=50)["inline"])
+
+    def test_explicit_zero_latency_still_builds_a_link(self):
+        assert self._graph(latency_ms=0)["type"] == "gml"
+
+    def test_out_of_range_values_are_rejected(self):
+        with pytest.raises(ValueError):
+            self._graph(latency_ms=-1)
+        with pytest.raises(ValueError):
+            self._graph(bandwidth_mbit=0)
+        with pytest.raises(ValueError):
+            self._graph(bandwidth_mbit=-10)
+
     def test_connect_to_must_be_less_than_num_nodes(self):
         with pytest.raises(ValueError):
             render_shadow_yaml(num_nodes=2, sim_stop_time_s=10, publisher_start_s=5, connect_to=2)

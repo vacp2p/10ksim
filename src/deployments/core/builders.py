@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Self, Tuple, Union
+from typing import List, Optional, Self, Tuple
 
 from kubernetes.client import (
     V1Container,
@@ -73,8 +73,8 @@ class StatefulSetBuilder(BaseModel):
 
     def with_network_delay(
         self,
-        delay: Union[str, NonNegativeInt],
-        jitter: Union[str, NonNegativeInt],
+        delay: NonNegativeInt,
+        jitter: NonNegativeInt,
         rate_mbit: Optional[NonNegativeInt] = None,
         *,
         overwrite: bool = False,

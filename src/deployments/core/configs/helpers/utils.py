@@ -1,6 +1,6 @@
 # Python Imports
 from copy import deepcopy
-from typing import Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, get_args
+from typing import Dict, List, Literal, Optional, Tuple, Type, TypeVar, get_args
 
 from kubernetes.client import V1Capabilities, V1Container, V1SecurityContext
 from pydantic import NonNegativeInt
@@ -162,16 +162,13 @@ def convert_to_container_config(
 
 
 def init_container_delay(
-    delay: Union[str, NonNegativeInt],
-    jitter: Union[str, NonNegativeInt],
+    delay: NonNegativeInt,
+    jitter: NonNegativeInt,
     rate_mbit: Optional[NonNegativeInt] = None,
 ):
-    netem = f"delay {str(delay)}ms"
-    # netem's `distribution` needs a non-zero jitter; a fixed delay omits it.
-    if str(jitter) not in ("0", "0ms", ""):
-        netem += f" {str(jitter)}ms distribution normal"
-    # Fold the bandwidth cap into the same netem qdisc; a separate tbf root qdisc
-    # would collide with this one on eth0.
+    netem = f"delay {delay}ms"
+    if jitter:
+        netem += f" {jitter}ms distribution normal"
     if rate_mbit:
         netem += f" rate {rate_mbit}mbit"
     return V1Container(

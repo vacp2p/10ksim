@@ -199,8 +199,8 @@ class TestStatefulSetBuilder:
             return_value=delay_container,
         )
 
-        builder.with_network_delay("100ms", "10ms")
-        mock_init_delay.assert_called_once_with("100ms", "10ms", None)
+        builder.with_network_delay(100, 10)
+        mock_init_delay.assert_called_once_with(100, 10, None)
 
     def test_with_network_delay_adds_init_container_to_pod_spec(self, mocker):
         """Should add init container to pod spec with correct delay and jitter values."""
@@ -233,8 +233,8 @@ class TestStatefulSetBuilder:
             return_value=delay_container,
         )
 
-        builder.with_network_delay("100ms", "10ms")
-        mock_init_delay.assert_called_once_with("100ms", "10ms", None)
+        builder.with_network_delay(100, 10)
+        mock_init_delay.assert_called_once_with(100, 10, None)
         init_containers = (
             builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
         )
@@ -253,7 +253,7 @@ class TestStatefulSetBuilder:
         mocker.patch(
             "src.deployments.core.builders.init_container_delay", return_value=delay_container
         )
-        result = builder.with_network_delay("100ms", "10ms")
+        result = builder.with_network_delay(100, 10)
         assert isinstance(result, StatefulSetBuilder)
 
     def test_init_container_delay_folds_rate_into_netem(self):
@@ -261,7 +261,6 @@ class TestStatefulSetBuilder:
         assert init_container_delay(50, 0, 50).command == [
             "tc qdisc add dev eth0 root netem delay 50ms rate 50mbit"
         ]
-        # existing delay+jitter output is unchanged
         assert init_container_delay(100, 10).command == [
             "tc qdisc add dev eth0 root netem delay 100ms 10ms distribution normal"
         ]
@@ -357,7 +356,7 @@ class TestStatefulSetBuilder:
             return_value=bandwidth_container,
         )
 
-        builder.with_network_delay("100ms", "10ms").with_bandwidth_limit(
+        builder.with_network_delay(100, 10).with_bandwidth_limit(
             ingress_rate="1mbit", egress_rate="500kbit"
         )
         init_containers = (

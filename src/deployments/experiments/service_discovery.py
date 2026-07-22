@@ -1,21 +1,15 @@
 # Python Imports
 import asyncio
-import json
 import logging
-from typing import List
+from typing import ClassVar, List
 
-from kubernetes.client import V1ServicePort, V1TCPSocketAction, V1Probe, V1StatefulSet
+from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
-from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
-
-from src.analysis.mesh_analysis.analyzers.service_discovery_analyzer import ServiceDiscoveryAnalyzer
 # Project Imports
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
-from src.deployments.core.k8s_cleanup import get_cleanup
 from src.deployments.experiments.base_experiment import BaseExperiment
-
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.libp2p.service_discovery_bridge import ServiceDiscoveryBridge
 from src.deployments.registry import experiment
@@ -69,11 +63,15 @@ class ExpConfig(BaseModel):
 
     app_name: str = "service-discovery"
 
+
 @experiment(name="service-discovery")
 class ServiceDiscovery(BaseExperiment[ExpConfig]):
     """Service discovery experiment"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[str] = (
+        "src.analysis.post_run.service_discovery:run_service_discovery_analysis"
+    )
 
     def _get_metadata(self) -> dict:
         return ServiceDiscoveryBridge().get_metadata(self.events_log_path)
@@ -82,15 +80,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         logger.info(event)
         return super().log_event(event)
 
-    async def _run(
-        self,
-    ):
-        self.log_event("run_start")
-
-        image = Image(repo=self.config.image_repo, tag=self.config.image_tag)
-
-
-
     async def _deploy_bootstrap(self, image: Image):
         bootstrap_service = (
             ServiceBuilder()
@@ -98,8 +87,12 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_namespace(self.config.namespace)
             .with_selector("app", self.config.app_name)
             .with_selector("role", self.config.bootstrap_role)
-            .with_port(V1ServicePort(port=self.config.bootstrap_service_port,
-                                     target_port=self.config.bootstrap_service_port))
+            .with_port(
+                V1ServicePort(
+                    port=self.config.bootstrap_service_port,
+                    target_port=self.config.bootstrap_service_port,
+                )
+            )
             .with_cluster_ip("None")
             .build()
         )
@@ -134,8 +127,12 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_namespace(self.config.namespace)
             .with_selector("app", self.config.app_name)
             .with_selector("role", self.config.popular_advertiser_role)
-            .with_port(V1ServicePort(port=self.config.popular_service_port,
-                                     target_port=self.config.popular_service_port))
+            .with_port(
+                V1ServicePort(
+                    port=self.config.popular_service_port,
+                    target_port=self.config.popular_service_port,
+                )
+            )
             .with_cluster_ip("None")
             .build()
         )
@@ -149,7 +146,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_popular_advertisers,
                 dns_searches=self.config.dns_searches,
-                service=self.config.advertisers_service_name
+                service=self.config.advertisers_service_name,
             )
             .with_readiness_probe(READINESS_PROBE)
             .with_image(image)

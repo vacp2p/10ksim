@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> None:
-    """Best-effort Shadow metrics and message reliability analysis."""
+    """Best-effort post-run analysis for Shadow runs."""
     if experiment.output_folder is None:
-        raise ValueError("Shadow post-run analysis requires experiment.output_folder")
+        logger.error("Shadow post-run analysis requires experiment.output_folder")
+        return
 
     cfg = experiment.config
     run_dir = experiment.output_folder
@@ -25,9 +26,8 @@ def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> No
         scrape_run_metrics(
             run_dir=run_dir, namespace=experiment.namespace, interval_s=cfg.metrics_interval_s
         )
-    except Exception:
-        logger.exception("Shadow metrics analysis failed")
-
+    except Exception as e:
+        logger.error(f"Shadow metrics analysis failed: {e}")
     try:
         puller = DataPuller().with_local(run_dir / "shadow_logs" / "logs")
         (
@@ -42,5 +42,5 @@ def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> No
             )
             .run()
         )
-    except Exception:
-        logger.exception("Shadow message analysis failed")
+    except Exception as e:
+        logger.error(f"Shadow message analysis failed: {e}")

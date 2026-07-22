@@ -37,48 +37,55 @@ def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:
     if experiment.metadata is None:
         raise ValueError("Connmanager post-run analysis requires experiment.metadata")
 
-    stack = dict(experiment.metadata["stack"])
-    stack.update(
-        {
-            "type": "vaclab",
-            "url": VICTORIA_LOGS_URL,
-            "reader": "victoria",
-            "stateful_sets": ["hub"],
-            "nodes_per_statefulset": [1],
-            "container_name": "pod-0",
-            "namespace": experiment.namespace or stack.get("namespace"),
-            "extra_fields": ["kubernetes.pod_name"],
-        }
-    )
-    _require_bounded_query(stack)
-
-    puller = DataPuller().with_kwargs(stack)
-    wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None
-    workdir = experiment.output_folder / "deployment_yamls"
-
-    analyzer = (
-        ConnManagerAnalyzer(dump_analysis_dir=workdir / "analysis_data")
-        .with_data_puller(puller)
-        .with_hub_analysis(
-            hub_pod="hub-0",
-            grace_period_s=experiment.config.grace_period_s,
-            protected_peer_ids=experiment.config.protected_peer_ids or None,
-            wave_sets=wave_sets,
+    try:
+        stack = dict(experiment.metadata["stack"])
+        stack.update(
+            {
+                "type": "vaclab",
+                "url": VICTORIA_LOGS_URL,
+                "reader": "victoria",
+                "stateful_sets": ["hub"],
+                "nodes_per_statefulset": [1],
+                "container_name": "pod-0",
+                "namespace": experiment.namespace or stack.get("namespace"),
+                "extra_fields": ["kubernetes.pod_name"],
+            }
         )
-    )
+        _require_bounded_query(stack)
 
-    results = analyzer.run()
+        puller = DataPuller().with_kwargs(stack)
+        wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None
+        if experiment.output_folder is None:
+            raise ValueError("Connmanager post-run analysis requires experiment.output_folder")
+        workdir = experiment.output_folder / "deployment_yamls"
 
-    out_dir = workdir / "plots"
-    out_dir.mkdir(parents=True, exist_ok=True)
+        analyzer = (
+            ConnManagerAnalyzer(
+                dump_analysis_dir=workdir / "analysis_data",
+            )
+            .with_data_puller(puller)
+            .with_hub_analysis(
+                hub_pod="hub-0",
+                grace_period_s=experiment.config.grace_period_s,
+                protected_peer_ids=experiment.config.protected_peer_ids or None,
+                wave_sets=wave_sets,
+            )
+        )
 
-    for result in results:
-        if result.name == "connmanager" and result.intermediates:
-            conn_df = result.intermediates.get("conn_df")
-            drop_df = result.intermediates.get("drop_df")
-            if conn_df is not None and not conn_df.empty:
-                plot_connection_count(conn_df, drop_df, str(out_dir))
-                plot_direction_breakdown(conn_df, result.intermediates, str(out_dir))
-                plot_trim_timeline(conn_df, drop_df, str(out_dir))
+        results = analyzer.run()
 
-    logger.info(f"Connmanager post-run analysis complete. Plots saved to {out_dir}")
+        out_dir = workdir / "plots"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        for res in results:
+            if res.name == "connmanager" and res.intermediates:
+                conn_df = res.intermediates.get("conn_df")
+                drop_df = res.intermediates.get("drop_df")
+                if conn_df is not None and not conn_df.empty:
+                    plot_connection_count(conn_df, drop_df, str(out_dir))
+                    plot_direction_breakdown(conn_df, res.intermediates, str(out_dir))
+                    plot_trim_timeline(conn_df, drop_df, str(out_dir))
+
+        logger.info(f"Analysis complete. Plots saved to {out_dir}")
+    except Exception as e:
+        logger.error(f"Post-experiment analysis failed: {e}")

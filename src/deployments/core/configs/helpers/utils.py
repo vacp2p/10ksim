@@ -1,6 +1,6 @@
 # Python Imports
 from copy import deepcopy
-from typing import Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union, get_args
+from typing import Dict, List, Literal, Optional, Tuple, Type, TypeVar, get_args
 
 from kubernetes.client import V1Capabilities, V1Container, V1SecurityContext
 from pydantic import NonNegativeInt
@@ -162,17 +162,21 @@ def convert_to_container_config(
 
 
 def init_container_delay(
-    delay: Union[str, NonNegativeInt],
-    jitter: Union[str, NonNegativeInt],
+    delay: NonNegativeInt,
+    jitter: NonNegativeInt,
+    rate_mbit: Optional[NonNegativeInt] = None,
 ):
+    netem = f"delay {delay}ms"
+    if jitter:
+        netem += f" {jitter}ms distribution normal"
+    if rate_mbit:
+        netem += f" rate {rate_mbit}mbit"
     return V1Container(
         name="slowyourroll",
         image="soutullostatus/tc-container:1",
         image_pull_policy="IfNotPresent",
         security_context=V1SecurityContext(capabilities=V1Capabilities(add=["NET_ADMIN"])),
-        command=[
-            f"tc qdisc add dev eth0 root netem delay {str(delay)}ms {str(jitter)}ms distribution normal",
-        ],
+        command=[f"tc qdisc add dev eth0 root netem {netem}"],
     )
 
 

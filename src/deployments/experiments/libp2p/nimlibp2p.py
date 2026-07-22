@@ -45,6 +45,7 @@ class ExpConfig(BaseModel):
     bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
+    network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True
@@ -89,9 +90,11 @@ def build_nodes(
         builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
             NimLibp2p.connect_to, params.connect_to
         )
-    if params.network_delay or params.network_jitter:
+    if params.network_delay or params.network_jitter or params.network_bandwidth_mbit:
         builder = builder.with_network_delay(
-            delay=params.network_delay, jitter=params.network_jitter
+            delay=params.network_delay,
+            jitter=params.network_jitter,
+            rate_mbit=params.network_bandwidth_mbit or None,
         )
 
     return builder.build()

@@ -72,13 +72,34 @@ def _peer_env(
     return env
 
 
-def _peer_hosts(num_nodes: int, peer_env: dict, start_jitter_ms: int) -> dict:
-    """The N relay hosts (pod-0..pod-(N-1)). start_jitter_ms staggers per-pod process
+# 11.{100+s//250}.{s%250}.{10+h}; the 11.100+ base keeps clear of the addresses Shadow
+# assigns to unpinned hosts (bootstrap, publisher).
+_MAX_HOSTS_PER_SUBNET = 245
+_MAX_SUBNETS = (255 - 100) * 250 - 1
+
+
+def _peer_ip(index: int, hosts_per_subnet: int) -> str:
+    """Address for peer `index`, packing `hosts_per_subnet` peers into each /24."""
+    if not 1 <= hosts_per_subnet <= _MAX_HOSTS_PER_SUBNET:
+        raise ValueError(
+            f"hosts_per_subnet must be 1..{_MAX_HOSTS_PER_SUBNET}, got {hosts_per_subnet}"
+        )
+    subnet, host = divmod(index, hosts_per_subnet)
+    if subnet > _MAX_SUBNETS:
+        raise ValueError(f"IP plan exhausted at peer {index} (max {_MAX_SUBNETS + 1} subnets)")
+    return f"11.{100 + subnet // 250}.{subnet % 250}.{10 + host}"
+
+
+def _peer_hosts(
+    num_nodes: int, peer_env: dict, start_jitter_ms: int, hosts_per_subnet: int
+) -> dict:
+    """The N peer hosts (pod-0..pod-(N-1)). start_jitter_ms staggers per-pod process
     start so peers don't wake and dial at one simulated instant (lockstep wakes force
     simultaneous-dial collisions that never occur on real hosts)."""
     return {
         f"pod-{i}": {
             "network_node_id": 0,
+            "ip_addr": _peer_ip(i, hosts_per_subnet),
             "processes": [
                 {
                     "path": "./main",
@@ -190,6 +211,7 @@ def render_shadow_yaml(
     start_jitter_ms: int = 0,
     latency_ms: Optional[int] = None,
     bandwidth_mbit: Optional[int] = None,
+    hosts_per_subnet: int = 1,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
     """Build the shadow.yaml dict: N peer hosts running `./main` + a publisher host
@@ -200,7 +222,9 @@ def render_shadow_yaml(
 
     discovery selects mesh formation: "static" dials CONNECTTO peers by pod-N
     hostname; "kad-dht" adds a `bootstrap-0` anchor host that peers discover
-    through (Shadow resolves it by hostname, so no k8s Service is needed)."""
+    through (Shadow resolves it by hostname, so no k8s Service is needed).
+
+    hosts_per_subnet: 1 gives every peer its own /24; raise it to share prefixes."""
     if connect_to >= num_nodes:
         raise ValueError(f"connect_to ({connect_to}) must be smaller than num_nodes ({num_nodes}).")
 
@@ -213,7 +237,7 @@ def render_shadow_yaml(
         metrics_interval_s=metrics_interval_s,
         lsquic_tick_floor_us=lsquic_tick_floor_us,
     )
-    hosts = _peer_hosts(num_nodes, peer_env, start_jitter_ms)
+    hosts = _peer_hosts(num_nodes, peer_env, start_jitter_ms, hosts_per_subnet)
     if discovery == "kad-dht":
         hosts["bootstrap-0"] = _bootstrap_host(
             num_nodes=num_nodes,

@@ -76,10 +76,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
     def _get_metadata(self) -> dict:
         return ServiceDiscoveryBridge().get_metadata(self.events_log_path)
 
-    def log_event(self, event):
-        logger.info(event)
-        return super().log_event(event)
-
     async def _deploy_bootstrap(self, image: Image):
         bootstrap_service = (
             ServiceBuilder()

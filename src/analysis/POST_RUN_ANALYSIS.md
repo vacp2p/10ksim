@@ -9,7 +9,7 @@ Experiment behavior lives in `BaseExperiment.run()`.
 The current order is:
 
 ```text
-BaseExperiment.run()
+BaseExperiment.run(run_post_analysis=True)
   _setup_log_paths()
   _dump_initial_metadata()
 
@@ -22,7 +22,8 @@ BaseExperiment.run()
 
   log run_finished
   _dump_metadata()
-  run_post_analysis(self)
+  if run_post_analysis:
+    run_post_analysis(self)
 ```
 
 The important rule is: `_run()` should perform the experiment and log domain events. Post-run analysis should consume finalized metadata and run analyzers from `src.analysis`, outside the experiment class.
@@ -37,6 +38,8 @@ This PR wires this flow for:
 - `ShadowGossipsubExperiment`
 
 Other existing experiments can be migrated in follow-up changes by adding a `post_run_analysis` class attribute and moving analyzer construction under `src/analysis/post_run/`.
+
+`Multiple` uses the same mechanism but changes the timing for child experiments. It runs each child with `run_post_analysis=False`, records the children that completed successfully, and runs their configured analyses only after the full sweep finishes. This keeps data pulling and plotting out of the deployment critical path for multi-experiment runs.
 
 ## What `_run()` Should Do
 

@@ -215,3 +215,43 @@ async def test_run_preserves_completed_experiment_when_post_analysis_fails(
     assert json.loads(exp.metadata_log_path.read_text())["stack"]["name"] == "analysis-dummy"
     assert "Post-run analysis failed" in caplog.text
     assert "analysis failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_run_can_skip_configured_post_analysis(tmp_path, monkeypatch):
+    calls = []
+    module_name = "tests_base_experiment_skipped_post_run_analysis"
+    module = ModuleType(module_name)
+
+    def analysis(experiment):
+        calls.append(experiment)
+
+    module.analysis = analysis
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    class SkippedPostAnalysisExperiment(BaseExperiment[DummyCfg]):
+        name: ClassVar[str] = "skipped-analysis-test"
+        config: DummyCfg
+        post_run_analysis: ClassVar[str] = f"{module_name}:analysis"
+
+        async def _run(self):
+            self.log_event("run_start")
+
+        def _get_metadata(self) -> dict:
+            return {
+                "stack": {"name": "analysis-dummy"},
+                "experiment": {"name": "analysis-dummy"},
+            }
+
+    exp = SkippedPostAnalysisExperiment(
+        api_client=ApiClient(),
+        config=DummyCfg(),
+        namespace="ns",
+        output_folder=tmp_path / "run",
+    )
+
+    await exp.run(run_post_analysis=False)
+
+    assert exp.metadata_log_path.exists()
+    assert exp.metadata is not None
+    assert calls == []

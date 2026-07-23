@@ -32,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
-from src.analysis.post_run_analysis import run_post_analysis
+from src.analysis.post_run_analysis import run_post_analysis as run_configured_post_analysis
 from src.analysis.utils.log_utils import log_to_path
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.k8s_cleanup import (
@@ -334,7 +334,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         for path in [self.out_log_path, self.events_log_path, self.metadata_log_path]:
             path.parent.mkdir(parents=True, exist_ok=True)
 
-    async def run(self):
+    async def run(self, *, run_post_analysis: bool = True):
         self._deployed.clear()
         self._setup_log_paths()
         self._dump_initial_metadata()
@@ -349,7 +349,8 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         self.log_event("run_finished")
         self._dump_metadata()
-        run_post_analysis(self)
+        if run_post_analysis:
+            run_configured_post_analysis(self)
 
     @abstractmethod
     async def _run(self):

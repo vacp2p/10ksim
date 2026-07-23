@@ -29,6 +29,15 @@ The important rule is: `_run()` should perform the experiment and log domain eve
 
 Do not call analyzers from inside `_run()` unless there is a specific reason to analyze before normal metadata finalization.
 
+Post-run analysis is best-effort during an experiment run. If the configured analysis reference cannot be loaded, or if the analysis function raises, `run_post_analysis()` logs the exception with the experiment type, analysis reference, metadata path, and output folder, then returns `None`. The completed experiment remains completed. Calling `run_post_analysis()` before `experiment.metadata` exists is still a lifecycle error and raises `ValueError`.
+
+This PR wires this flow for:
+
+- `ConnManagerExperiment`
+- `ShadowGossipsubExperiment`
+
+Other existing experiments can be migrated in follow-up changes by adding a `post_run_analysis` class attribute and moving analyzer construction under `src/analysis/post_run/`.
+
 ## What `_run()` Should Do
 
 `_run()` should:
@@ -170,31 +179,45 @@ class ServiceDiscoveryBridge(EventWindowBridge):
 Example:
 
 ```python
-class ServiceDiscovery(BaseExperiment[ExpConfig]):
+from typing import ClassVar
+
+
+class ConnManagerExperiment(BaseExperiment[ExpConfig]):
     post_run_analysis: ClassVar[str] = (
-        "src.analysis.post_run.service_discovery:run_service_discovery_analysis"
+        "src.analysis.post_run.connmanager:run_connmanager_analysis"
     )
 ```
 
 The analysis function stays outside the experiment:
 
 ```python
-def run_service_discovery_analysis(experiment):
+def run_connmanager_analysis(experiment):
     stack = dict(experiment.metadata["stack"])
     stack["url"] = "https://vlselect.lab.vac.dev/select/logsql/query"
+    stack["reader"] = "victoria"
 
     puller = DataPuller().with_kwargs(stack).with_source_type("victoria")
 
     analyzer = (
-        ServiceDiscoveryAnalyzer(dump_analysis_dir=experiment.output_folder / "analysis_data")
+        ConnManagerAnalyzer(
+            dump_analysis_dir=experiment.output_folder / "deployment_yamls" / "analysis_data"
+        )
         .with_data_puller(puller)
-        .with_discovery_analysis()
+        .with_hub_analysis(hub_pod="hub-0")
     )
 
     analyzer.run()
 ```
 
 Use `dict(experiment.metadata["stack"])` so analysis-specific additions like `url` do not mutate the stored metadata unexpectedly.
+
+The import string must contain exactly one `:` and both parts must be non-empty:
+
+```text
+module.path:function_name
+```
+
+Malformed values such as `:analysis`, `module:`, or `module:thing:extra` are rejected by `load_post_run_analysis()` with `ValueError`.
 
 ## Data Puller
 
@@ -246,6 +269,7 @@ Each check returns an `AnalysisResult` with:
 - `intermediates`: debug or result details
 
 If a step is configured with `on_fail="stop"`, analyzer execution raises when that check fails or errors.
+When the analyzer is invoked through automatic post-run analysis, that exception is logged and suppressed by `run_post_analysis()` after the completed experiment metadata has already been written.
 
 ## Cleanup Timing
 

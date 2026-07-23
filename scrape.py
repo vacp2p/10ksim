@@ -2,13 +2,18 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Dict, Iterable, Union
 
 from src.analysis.metrics.config import ScrapeConfig
 from src.analysis.metrics.libp2p import gossipsub_summary
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
+from src.analysis.plotting.latency_plotter import (
+    LatencyPlotConfig,
+    LatencyPlotter,
+    latency_table,
+)
 from src.analysis.plotting.metrics_plotter import MetricsPlotter
 from src.analysis.utils.file_utils import extract_exps, get_folders
 from src.analysis.utils.log_utils import init_logger
@@ -33,6 +38,21 @@ def get_nimlibp2p_exps(folder: Union[str, Path]) -> Iterable[dict]:
         yield exp
 
 
+def run_folder(exp: dict) -> Path:
+    """Folder holding the run's reliability dump, from the experiment's metadata path."""
+    return Path(exp["metadata"]["path"]).parent
+
+
+def unique_label(labels: Dict[str, Path], name: str) -> str:
+    """Distinct curve label, so repeated muxers don't overwrite each other."""
+    if name not in labels:
+        return name
+    n = 2
+    while f"{name} ({n})" in labels:
+        n += 1
+    return f"{name} ({n})"
+
+
 def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
     folders = [
         # TODO: Put paths here.
@@ -42,6 +62,7 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
         exps.extend(get_nimlibp2p_exps(folder))
 
     scrapes: ScrapeConfig = []
+    latency_runs: Dict[str, Path] = {}
     dump_fmt = "test_results/libp2p/1.16.0"
     if len(exps) > 1:
         dump_fmt += "_run_{i}"
@@ -55,6 +76,7 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
             .build()
         )
         scrapes.append(config)
+        latency_runs[unique_label(latency_runs, config.name)] = run_folder(exp)
         scrapper = Scrapper(k8s_config, config)
         scrapper.query_and_dump_metrics()
 
@@ -97,6 +119,9 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
     )
 
     MetricsPlotter(configs=[in_plot, out_plot]).create_plots()
+
+    LatencyPlotter(configs=[LatencyPlotConfig(name="latency", runs=latency_runs)]).create_plots()
+    logger.info(f"Delivery latency (ms):\n{latency_table(latency_runs).to_string()}")
 
 
 def default_kubeconfig_path() -> str:

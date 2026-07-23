@@ -7,6 +7,7 @@ versus gossip pull sit orders of magnitude apart), so a CDF reads better than a 
 plot and this does not fit MetricsPlotter.
 """
 
+import argparse
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -110,3 +111,35 @@ def latency_table(runs: Dict[str, Union[str, Path]], percentiles=DEFAULT_PERCENT
     return pd.DataFrame(
         {label: latency_percentiles(run, percentiles) for label, run in runs.items()}
     )
+
+
+def main() -> None:
+    """CDF + percentile table for any set of run folders, on either platform."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(
+        description="Plot delivery latency as a CDF across runs and print the percentile table."
+    )
+    parser.add_argument(
+        "runs",
+        nargs="+",
+        metavar="LABEL=RUN_DIR",
+        help="Curve label and run folder, e.g. mplex=out/n1000-mplex-kad__rand_195553",
+    )
+    parser.add_argument("--name", default="latency", help="Output file stem.")
+    args = parser.parse_args()
+
+    runs: Dict[str, Path] = {}
+    for item in args.runs:
+        label, sep, path = item.partition("=")
+        if not sep or not path:
+            parser.error(f"expected LABEL=RUN_DIR, got `{item}`")
+        if label in runs:
+            parser.error(f"duplicate label `{label}`")
+        runs[label] = Path(path)
+
+    LatencyPlotter(configs=[LatencyPlotConfig(name=args.name, runs=runs)]).create_plots()
+    print(latency_table(runs).to_string())
+
+
+if __name__ == "__main__":
+    main()

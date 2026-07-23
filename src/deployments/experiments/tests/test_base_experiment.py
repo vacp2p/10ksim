@@ -1,6 +1,11 @@
+import json
+import sys
+from types import ModuleType
+from typing import ClassVar
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from kubernetes.client import ApiClient
 from pydantic import BaseModel
 
 from src.deployments.experiments.base_experiment import BaseExperiment
@@ -121,3 +126,92 @@ async def test_deploy_flattens_input_shapes(deployments, expected):
 
     kinds = [item.kwargs["deployment"].kind for item in exp._deploy.await_args_list]
     assert kinds == expected
+
+
+@pytest.mark.asyncio
+async def test_run_writes_final_metadata_before_configured_post_analysis(tmp_path, monkeypatch):
+    observed = {}
+    module_name = "tests_base_experiment_post_run_analysis"
+    module = ModuleType(module_name)
+
+    def analysis(experiment):
+        observed["experiment"] = experiment
+        observed["metadata"] = experiment.metadata
+        observed["metadata_file_exists"] = experiment.metadata_log_path.exists()
+        observed["metadata_file"] = json.loads(experiment.metadata_log_path.read_text())
+
+    module.analysis = analysis
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    class AnalysisExperiment(BaseExperiment[DummyCfg]):
+        name: ClassVar[str] = "analysis-test"
+        config: DummyCfg
+        post_run_analysis: ClassVar[str] = f"{module_name}:analysis"
+
+        async def _run(self):
+            self.log_event("run_start")
+
+        def _get_metadata(self) -> dict:
+            return {
+                "stack": {"name": "analysis-dummy"},
+                "experiment": {"name": "analysis-dummy"},
+                "metadata": {"namespace": self.namespace},
+            }
+
+    exp = AnalysisExperiment(
+        api_client=ApiClient(),
+        config=DummyCfg(),
+        namespace="ns",
+        output_folder=tmp_path / "run",
+    )
+
+    await exp.run()
+
+    assert observed["experiment"] is exp
+    assert observed["metadata"] == exp.metadata
+    assert observed["metadata_file_exists"] is True
+    assert observed["metadata_file"]["stack"]["name"] == "analysis-dummy"
+    assert observed["metadata_file"]["experiment"]["dump"]["_type"] == exp._type
+
+
+@pytest.mark.asyncio
+async def test_run_preserves_completed_experiment_when_post_analysis_fails(
+    tmp_path, monkeypatch, caplog
+):
+    module_name = "tests_base_experiment_failing_post_run_analysis"
+    module = ModuleType(module_name)
+
+    def analysis(_experiment):
+        raise RuntimeError("analysis failed")
+
+    module.analysis = analysis
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    class FailingPostAnalysisExperiment(BaseExperiment[DummyCfg]):
+        name: ClassVar[str] = "failing-analysis-test"
+        config: DummyCfg
+        post_run_analysis: ClassVar[str] = f"{module_name}:analysis"
+
+        async def _run(self):
+            self.log_event("run_start")
+
+        def _get_metadata(self) -> dict:
+            return {
+                "stack": {"name": "analysis-dummy"},
+                "experiment": {"name": "analysis-dummy"},
+            }
+
+    exp = FailingPostAnalysisExperiment(
+        api_client=ApiClient(),
+        config=DummyCfg(),
+        namespace="ns",
+        output_folder=tmp_path / "run",
+    )
+
+    with caplog.at_level("ERROR", logger="src.analysis.post_run_analysis"):
+        await exp.run()
+
+    assert exp.metadata_log_path.exists()
+    assert json.loads(exp.metadata_log_path.read_text())["stack"]["name"] == "analysis-dummy"
+    assert "Post-run analysis failed" in caplog.text
+    assert "analysis failed" in caplog.text

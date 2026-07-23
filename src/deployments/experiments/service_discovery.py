@@ -24,7 +24,7 @@ READINESS_PROBE = V1Probe(
 
 
 class ExpConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore") # TODO Para que es esto
+    model_config = ConfigDict(extra="ignore")
 
     # Bootstrap
     num_bootstraps: NonNegativeInt = 1

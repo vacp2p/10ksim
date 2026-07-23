@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 from src.analysis.metrics.shadow_metrics import scrape_run_metrics
+from src.analysis.plotting.latency_plotter import plot_dump_latency
 
 if TYPE_CHECKING:
     from src.deployments.experiments.libp2p.shadow_gossipsub import ShadowGossipsubExperiment
@@ -44,3 +45,7 @@ def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> No
         )
     except Exception:
         logger.exception("Shadow message analysis failed")
+    try:
+        plot_dump_latency(run_dir / "analysis_data", label=cfg.muxer)
+    except Exception:
+        logger.exception("Shadow latency plot failed")

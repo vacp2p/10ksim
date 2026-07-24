@@ -1,19 +1,10 @@
 import asyncio
 import logging
-import os
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 
 from kubernetes.client import V1Probe, V1ServicePort, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
-from src.analysis.connmanager_analysis import (
-    plot_connection_count,
-    plot_direction_breakdown,
-    plot_trim_timeline,
-)
-from src.analysis.mesh_analysis.analyzers.connmanager_analyzer import ConnManagerAnalyzer
-from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.experiments.base_experiment import BaseExperiment
@@ -118,6 +109,7 @@ class ConnManagerExperiment(BaseExperiment[ExpConfig]):
     """Connection manager experiment"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.connmanager:run_connmanager_analysis"
 
     def _get_metadata(self) -> dict:
         return Libp2pBridge().get_metadata(self.events_log_path)
@@ -141,7 +133,6 @@ class ConnManagerExperiment(BaseExperiment[ExpConfig]):
 
     async def _run(self):
         self.log_event("run_start")
-        start_time = datetime.now(timezone.utc)
 
         image = Image(repo=self.config.image_repo, tag=self.config.image_tag)
 
@@ -166,59 +157,6 @@ class ConnManagerExperiment(BaseExperiment[ExpConfig]):
             raise ValueError(f"Unknown run: {self.config.run}. Expected A–G.")
 
         self.log_event("internal_run_finished")
-        end_time = datetime.now(timezone.utc)
-
-        self._run_analysis(self.config, start_time, end_time)
-
-    def _run_analysis(self, config, start_time, end_time):
-        logger.info("Running post-experiment analysis...")
-        try:
-            stack = {
-                "type": "vaclab",
-                "url": "https://vlselect.lab.vac.dev/select/logsql/query",
-                "start_time": start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "end_time": end_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "reader": "victoria",
-                "stateful_sets": ["hub"],
-                "nodes_per_statefulset": [1],
-                "container_name": "pod-0",
-                "namespace": self.namespace,
-                "extra_fields": ["kubernetes.pod_name"],
-            }
-
-            puller = DataPuller().with_kwargs(stack)
-            wave_sets = ["wave1", "wave2"] if config.run.upper() == "B" else None
-
-            analyzer = (
-                ConnManagerAnalyzer(
-                    dump_analysis_dir=os.path.join(self._workdir, "analysis_data"),
-                )
-                .with_data_puller(puller)
-                .with_hub_analysis(
-                    hub_pod="hub-0",
-                    grace_period_s=config.grace_period_s,
-                    protected_peer_ids=config.protected_peer_ids or None,
-                    wave_sets=wave_sets,
-                )
-            )
-
-            results = analyzer.run()
-
-            out_dir = os.path.join(self._workdir, "plots")
-            os.makedirs(out_dir, exist_ok=True)
-
-            for res in results:
-                if res.name == "connmanager" and res.intermediates:
-                    conn_df = res.intermediates.get("conn_df")
-                    drop_df = res.intermediates.get("drop_df")
-                    if conn_df is not None and not conn_df.empty:
-                        plot_connection_count(conn_df, drop_df, out_dir)
-                        plot_direction_breakdown(conn_df, res.intermediates, out_dir)
-                        plot_trim_timeline(conn_df, drop_df, out_dir)
-
-            logger.info(f"Analysis complete. Plots saved to {out_dir}")
-        except Exception as e:
-            logger.error(f"Post-experiment analysis failed: {e}")
 
     # -------------------------------------------------------------------------
     # Run A: Watermark basics, scoring, performance, oscillation

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from src.analysis.post_run_analysis import run_post_analysis
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.registry import registry as experiment_registry
@@ -77,6 +78,7 @@ class Multiple(BaseExperiment[Config]):
         assert (
             self.config.delay
         ), "Delay between experiments must be specified either in the subclass or the cli args (--delay)"
+        completed_experiments = []
         for params in param_list:
             this_time = datetime.now(dt_timezone.utc)
             logger.info(f"UTC time: {this_time.hour:02d}:{this_time.minute:02d}")
@@ -109,12 +111,17 @@ class Multiple(BaseExperiment[Config]):
                 f"Running experiment. name `{info.name}` file: `{info.metadata['module_path']}`"
             )
             try:
-                await experiment.run()
+                await experiment.run(run_post_analysis=False)
             except Exception as e:
                 logger.error(f"Experiment failed. Exception: {e} {traceback.format_exc()}")
+            else:
+                completed_experiments.append(experiment)
 
             logger.info(f"sleeping {self.config.delay} between experiments")
             await asyncio.sleep(self.config.delay)
+
+        for experiment in completed_experiments:
+            run_post_analysis(experiment)
 
     @abstractmethod
     def get_params_list(self) -> List[dict]:

@@ -1,13 +1,10 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
 import logging
-from typing import Literal, Optional
+from typing import ClassVar, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PositiveInt
 
-from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
-from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
-from src.analysis.metrics.shadow_metrics import scrape_run_metrics
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.shadow.builders import (
@@ -71,6 +68,9 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
     """Run a GossipSub mesh + publisher inside the Shadow simulator."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[str] = (
+        "src.analysis.post_run.shadow_gossipsub:run_shadow_gossipsub_analysis"
+    )
 
     async def _run(self):
         self.log_event("run_start")
@@ -179,35 +179,3 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             raise RuntimeError(f"Shadow Job `{namespace}/{job_name}` failed")
 
         self.log_event("internal_run_finished")
-
-    async def run(self):
-        await super().run()
-        self._run_analysis()
-
-    def _run_analysis(self) -> None:
-        """Post-run analysis (best-effort; never fails the run): bandwidth CSVs via the
-        ephemeral-VM metrics path + message reliability from the flattened logs."""
-        cfg = self.config
-        run_dir = self.output_folder
-        try:
-            scrape_run_metrics(
-                run_dir=run_dir, namespace=self.namespace, interval_s=cfg.metrics_interval_s
-            )
-        except Exception as e:
-            logger.error(f"Shadow metrics analysis failed: {e}")
-        try:
-            puller = DataPuller().with_local(run_dir / "shadow_logs" / "logs")
-            (
-                Nimlibp2pAnalyzer(dump_analysis_dir=str(run_dir / "analysis_data"))
-                .with_data_puller(puller)
-                .with_ss_check(["pod"], [cfg.num_nodes])
-                .with_reliability_check(
-                    stateful_sets=["pod"],
-                    nodes_per_ss=[cfg.num_nodes],
-                    expected_num_peers=cfg.num_nodes,
-                    expected_num_messages=cfg.num_messages,
-                )
-                .run()
-            )
-        except Exception as e:
-            logger.error(f"Shadow message analysis failed: {e}")

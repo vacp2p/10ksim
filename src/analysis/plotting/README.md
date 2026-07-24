@@ -1,40 +1,81 @@
-# Plotting configuration structure
+# Plotting
 
-The structure of data dumping should be the following:
+`src/analysis/plotting` contains CSV-based plotting helpers for data dumped by
+the metrics scraper or by log analyzers.
+
+## Metrics Plots
+
+`MetricsPlotter` expects one `PlotConfig` per output image. Each config names:
+
+- `folder`: one or more root folders that contain metric subfolders.
+- `data`: metric subfolders to plot, for example `libp2p-in` or `libp2p-out`.
+- `include_files`: CSV basenames to include from each metric folder.
+- display options such as labels, scaling, point count, outlier handling, and
+  figure size.
+
+The expected input layout is:
+
+```text
+ExperimentOrVersionFolder/
+  MetricFolder/
+    RunName.csv
 ```
-SoftwareFolder/
-  Metric/
-    ExperimentFileName.csv
-```
-For example, we can have:
-```
-Waku-v0.25/
+
+Example:
+
+```text
+nimlibp2p-1.16.0/
   libp2p-in/
-    1000Nodes.csv
-    2000Nodes.csv
-Waku-v0.26/
-  libp2p-in/
-    1000Nodes.csv
-    2000Nodes.csv
+    yamux.csv
+    quic.csv
+  libp2p-out/
+    yamux.csv
+    quic.csv
 ```
 
-Configuration Example:
-```yaml
-plotting:
-  "bandwidth_example": # <-- File name of the plot.
-    "folder":  # <-- Folder to get the data from
-      - "test/nwaku/" # <-- Last folder name will be used to classify the data
-      - "test/nwaku0.26/"
-    "data": # <-- Metrics folder to plot, inside `folder`
-      - "libp2p-in" # <-- These will be used as a title in the plot
-      - "libp2p-out" # <-- These will be used as a title in the plot
-  "plot_2":
-    "folder":
-      ...
+The current code usually builds plot configs in Python:
+
+```python
+from pathlib import Path
+
+from src.analysis.plotting.config import PlotConfigBuilder
+from src.analysis.plotting.metrics_plotter import MetricsPlotter
+
+plot = (
+    PlotConfigBuilder(name="bandwidth-in")
+    .with_metric("libp2p-in")
+    .with_folders([Path("test_results/libp2p/1.16.0")])
+    .with_include_files(["yamux", "quic"])
+    .build()
+)
+
+MetricsPlotter(configs=[plot]).create_plots()
 ```
 
-We will have as many plots as keywords under `plotting`.
-Inside each plot, we will have as many subplots as metrics in `data`.
+`scrape.py` uses the same API through `PlotConfigBuilder.with_data_from_scrapes`
+to add freshly scraped result folders.
 
-Note that in order to compare the experiments, the files inside `data` folders should be named equally, 
-as they will be used for naming the displayed data inside each subplot.
+## Latency Plots
+
+`LatencyPlotter` is separate from `MetricsPlotter`. It reads delivery latency
+from `analysis_data/summary/received.csv`, plots a CDF per run, and can produce
+percentile tables.
+
+```python
+from pathlib import Path
+
+from src.analysis.plotting.latency_plotter import LatencyPlotConfig, LatencyPlotter
+
+config = LatencyPlotConfig(
+    name="latency",
+    runs={
+        "baseline": Path("runs/baseline"),
+        "candidate": Path("runs/candidate"),
+    },
+)
+
+LatencyPlotter(configs=[config]).create_plots()
+```
+
+If a run path points directly to a CSV, that file is used. Otherwise the plotter
+looks for `analysis_data/summary/received.csv` under the run directory.

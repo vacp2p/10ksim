@@ -1,135 +1,140 @@
-# Experiment Deployment & Analysis Toolkit
+# 10ksim
 
-## Overview
-This repository contains internal tools for running, managing, and analyzing experiments on distributed systems.
-It is currently used to:
-- Launch experiments on Kubernetes clusters
-- Collect metrics and logs from previously run experiments
-- Analyze experiment metrics (e.g., bandwidth analysis, message reliability, message latency, etc.)
+10ksim is a Python toolkit for running distributed-system experiments on
+Kubernetes and analyzing the logs or metrics produced by those runs.
 
-These tools were originally designed to test scalability for nim-libp2p and Waku, but adaptable for a wide variety of experiments.
+At a high level:
 
-Note: This is a work in progress. Tooling and folder structure may change in the future.
+```text
+deployment.py
+  -> experiment._run()
+  -> events.log
+  -> bridge-generated metadata.json
+  -> post-run analysis
+  -> analysis data and plots
+```
 
----
+The code is split by responsibility:
 
-## Dependencies
+- `src/deployments/`: experiment registration, Kubernetes object generation,
+  deployment, cleanup, event logging, and metadata bridges.
+- `src/analysis/`: post-run analysis dispatch, metadata window selection,
+  log/metric pulling, analyzers, and plotting helpers.
+- `deployment-utilities/`: Docker images, Kubernetes manifests, and older
+  support scripts used by specific experiments.
+- `dst_dashboard/`: FastAPI and frontend app for publishing and visualizing
+  experiment results.
 
-### uv
+Use the package READMEs for details:
 
-Install [uv](https://docs.astral.sh/uv/#installation) and just run:
+- `src/deployments/README.md`: how experiments are discovered, configured, run,
+  and cleaned up.
+- `src/analysis/README.md`: how metadata is consumed by post-run analysis and
+  how analysis windows are selected.
+- `src/analysis/POST_RUN_ANALYSIS.md`: detailed lifecycle notes for bridges,
+  metadata, `DataPuller`, and analyzer hooks.
+- `dst_dashboard/README.md`: dashboard API and experiment publishing workflow.
+
+## Setup
+
+Install dependencies with `uv`:
+
 ```shell
 uv sync
 ```
-Required python version will be installed if not present in the system, alongside with the necessary requirements.
+
+The project requires Python 3.11 or newer. Experiment deployment also expects
+`kubectl` access to the target cluster through the kubeconfig passed with
+`--config`.
+
+## Running Experiments
+
+The main entrypoint is `deployment.py`.
+
+```shell
+uv run python deployment.py --help
+uv run python deployment.py <experiment-name> --help
+```
+
+Example:
+
+```shell
+uv run python deployment.py -vv \
+  --config ~/.kube/config \
+  --values path/to/values.yaml \
+  --out-folder runs/service-discovery-demo \
+  service-discovery \
+  --namespace nimlibp2p
+```
+
+`--values` is optional. Values from YAML are merged with CLI arguments, and CLI
+arguments win. If `--out-folder` is relative, it is resolved under
+`src/deployments/experiments/out/`.
+
+For long-running runs on a laptop, keep the machine awake. On macOS:
+
+```shell
+caffeinate -s -m -i uv run python deployment.py -vv --config ~/.kube/config service-discovery --namespace nimlibp2p
+```
+
+## Run Output
+
+Each run writes:
+
+- `out.log`: Python logs.
+- `events.log`: raw lifecycle and deployment events.
+- `metadata.json`: finalized stack, params, named windows, and serialized
+  experiment config.
+- `deployment_yamls/`: generated Kubernetes objects.
+- `analysis_data/`: analyzer output, when automatic analysis runs.
+- `plots/`: generated plots, when an analyzer produces them.
+- `shadow_logs/`: pulled Shadow simulator output for Shadow experiments.
 
 ## Repository Structure
 
-```
-analysis/
-  ├── scrape.py               # Scrape tool
-  ├── example_log_analysis.py # Analysis tool
-  ├── scrape.yaml             # Scrape config
-deployment/
-  ├── docker_utilities/       # Dockerfiles & resources to build experiment containers
-  ├── kubernetes-utilities/   # Services required on Kubernetes for certain experiments
-  ├── experiment_scripts/     # Legacy bash scripts for deployments
-experiments/
-  ├── deployment.py           # Experiment deployment script (generates & deploys)
-  ├── README.md               # Usage guide for deployment script
+```text
+deployment.py                     # Main experiment CLI.
+scrape.py                         # Manual Prometheus/VictoriaMetrics scrape helper.
+log_multi_analysis.py             # Manual batch log-analysis helper.
+src/
+  deployments/                    # Experiment framework and Kubernetes builders.
+  analysis/                       # Post-run analysis and plotting.
+  utils/                          # Shared generic helpers.
+deployment-utilities/             # Docker/Kubernetes assets and legacy scripts.
+dst_dashboard/                    # Experiment publishing dashboard.
 ```
 
----
+## Development
 
-### `./experiments/`
-Python scripts and Kubernetes templates for generating deployments and running experiments.
-
-`deployment.py`:
-- Generates Kubernetes manifests for experiments
-- Deploys them to the cluster
-- Automatically cleans up resources on completion or abort
-
-See `./experiments/README.md` for usage instructions.
-
----
-
-### `./analysis/`
-Tools for scraping metrics and analyzing results.
-
-#### Scraping
-`scrape.py`:
-- Queries metric sources and creates plots.
-- Metrics to scrape and plots to generate are defined in `scrape.yaml`
-
-#### Analysis
-`log_analysis.py`
-- Processes scraped data
-- Further analyses (eg. check that messages appear in store nodes)
-- Generates plots (eg. message time distribution plots)
-
----
-
-## Typical Workflow
-
-1. Run an experiment
-   ```
-   cd experiments
-   python ./deployment.py --config ~/sapphire.yaml waku-regression-nodes --workdir ./workdir
-   ```
-
-2. Scrape data from the finished experiment
-   ```
-   cd analysis
-   python3 scrape.py
-   ```
-
-3. Analyze results
-   ```
-   python3 log_analysis.py
-   ```
-
----
-
-## Contributing
-
-### CI
-
-Every pull request targeting `master` is checked automatically by GitHub Actions:
-- **Lint** — unused imports (autoflake), import order (isort), formatting (black)
-- **Tests** — all unit tests under `src/`
-
-PRs with failing checks should be fixed before merging.
-
-### Local setup (one-time)
-
-Install the pre-push git hook so formatting issues are caught before they reach GitHub:
+Install the pre-push hook once:
 
 ```shell
 make install-hooks
 ```
 
-### Before committing
-
-Run the auto-formatter — it fixes unused imports, import order, and code style in one shot:
+Format code:
 
 ```shell
 make format
 ```
 
-To check without modifying files (same checks CI runs):
+Check formatting without modifying files:
 
 ```shell
 make check
 ```
 
-### Running tests locally
+Run tests:
 
 ```shell
 uv run pytest
 ```
 
-To include a coverage report:
+Run tests with coverage:
 
 ```shell
 uv run pytest --cov=src --cov-report=term-missing
 ```
+
+GitHub Actions run formatting checks and tests for pull requests targeting
+`master`.

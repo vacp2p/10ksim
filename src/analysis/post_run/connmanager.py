@@ -50,6 +50,7 @@ def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:
             "extra_fields": ["kubernetes.pod_name"],
         }
     )
+    _require_bounded_query(stack)
 
     puller = DataPuller().with_kwargs(stack)
     wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None

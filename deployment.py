@@ -54,7 +54,10 @@ async def run_experiment(
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="A tool to run experiments. Generates deployment yaml with helm and deploys using the given kubeconfig. Dependencies: helm must be installed and in $PATH."
+        description=(
+            "A tool to run experiments. Generates deployment YAML and deploys "
+            "using the given kubeconfig."
+        )
     )
 
     subparsers = parser.add_subparsers(dest="experiment", required=True)

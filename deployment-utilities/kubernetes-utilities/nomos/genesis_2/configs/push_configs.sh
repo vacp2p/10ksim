@@ -1,0 +1,27 @@
+kubectl cp -n nomos-genesis deployment-settings.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_0.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_1.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_2.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_3.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_4.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_5.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_6.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_7.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_8.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_9.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_10.yaml nomos-genesis-0:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_11.yaml nomos-genesis-0:/data/volumes/nomos/
+
+kubectl cp -n nomos-genesis deployment-settings.yaml nomos-genesis-1:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_0.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_1.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_2.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_3.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_4.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_5.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_6.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_7.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_8.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_9.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_10.yaml nomos-genesis-2:/data/volumes/nomos/
+kubectl cp -n nomos-genesis user_config_11.yaml nomos-genesis-2:/data/volumes/nomos/

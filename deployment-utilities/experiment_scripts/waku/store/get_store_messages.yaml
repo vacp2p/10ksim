@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: get-store-messages
+  namespace: zerotesting
+spec:
+  restartPolicy: Never
+  dnsConfig:
+    searches:
+      - zerotesting-service.zerotesting.svc.cluster.local
+  containers:
+    - name: container
+      image: soutullostatus/get_store_messages:v0.1.10
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - python /app/store_msg_retriever.py

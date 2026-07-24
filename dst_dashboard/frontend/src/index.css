@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+[data-theme="dst"] {
+    --content-secondary: #475651;
+    --content-tertiary: #848e88;
+}
+
+[data-theme="dst-dark"] {
+    --content-secondary: #b8bdb8;
+    --content-tertiary: #848e88;
+}
+
+code {
+    font-family: 'DM Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+}

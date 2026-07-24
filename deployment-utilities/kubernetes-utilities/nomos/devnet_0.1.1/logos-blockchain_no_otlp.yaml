@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nomos-otlp
+  namespace: nomos-testnet
+spec:
+  serviceName: nomos-service
+  replicas: 1
+  ordinals:
+    start: 15
+  selector:
+    matchLabels:
+      app: nomos
+      pool: d
+  template:
+    metadata:
+      labels:
+        app: nomos
+        pool: d
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: nomos
+      containers:
+        - name: nomos
+          image: soutullostatus/logos-blockchain-mem-debug-shrink:805cfcf5
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "1000m"
+            limits:
+              memory: "4096Mi"
+              cpu: "2000m"
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          #readinessProbe:
+          #  exec:
+          #    command:
+          #      - /bin/sh
+          #      - -c
+          #      - |
+          #        curl -fsS http://localhost:8080/cryptarchia/info | grep -q '"mode":"Online"'
+          #  initialDelaySeconds: 10
+          #  periodSeconds: 5
+          #  timeoutSeconds: 3
+          #  failureThreshold: 12
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo
+              ORD="${HOSTNAME##*-}"
+              BASE=31000
+              SWARM=$((BASE + 2*ORD))
+              BLEND=$((SWARM + 1))
+              
+              logos-blockchain-node init \
+                --net-port "${SWARM}" \
+                --blend-port "${BLEND}" \
+                --external-address "/ip4/${HOST_IP}/udp/${SWARM}/quic-v1" \
+                  -p /ip4/65.109.51.37/udp/3000/quic-v1/p2p/12D3KooWL7a8LBbLRYnabptHPFBCmAs49Y7cVMqvzuSdd43tAJk8 \
+                  -p /ip4/65.109.51.37/udp/3001/quic-v1/p2p/12D3KooWPLeAcachoUm68NXGD7tmNziZkVeMmeBS5NofyukuMRJh \
+                  -p /ip4/65.109.51.37/udp/3002/quic-v1/p2p/12D3KooWKFNe4gS5DcCcRUVGdMjZp3fUWu6q6gG5R846Ui1pccHD \
+                  -p /ip4/65.109.51.37/udp/3003/quic-v1/p2p/12D3KooWAnriLgXyQnGTYz1zPWPkQL3rthTKYLzuAP7MMnbgsxzR
+            
+              exec logos-blockchain-node user_config.yaml

@@ -37,22 +37,22 @@ def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:
     if experiment.metadata is None:
         raise ValueError("Connmanager post-run analysis requires experiment.metadata")
 
-    try:
-        stack = dict(experiment.metadata["stack"])
-        stack.update(
-            {
-                "type": "vaclab",
-                "url": VICTORIA_LOGS_URL,
-                "reader": "victoria",
-                "stateful_sets": ["hub"],
-                "nodes_per_statefulset": [1],
-                "container_name": "pod-0",
-                "namespace": experiment.namespace or stack.get("namespace"),
-                "extra_fields": ["kubernetes.pod_name"],
-            }
-        )
-        _require_bounded_query(stack)
+    stack = dict(experiment.metadata["stack"])
+    stack.update(
+        {
+            "type": "vaclab",
+            "url": VICTORIA_LOGS_URL,
+            "reader": "victoria",
+            "stateful_sets": ["hub"],
+            "nodes_per_statefulset": [1],
+            "container_name": "pod-0",
+            "namespace": experiment.namespace or stack.get("namespace"),
+            "extra_fields": ["kubernetes.pod_name"],
+        }
+    )
+    _require_bounded_query(stack)
 
+    try:
         puller = DataPuller().with_kwargs(stack)
         wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None
         if experiment.output_folder is None:

@@ -4,7 +4,11 @@ from typing import List, Self
 import pandas as pd
 
 # Project Imports
-from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer, PatternGroup, TracePair
+from src.analysis.mesh_analysis.readers.tracers.message_tracer import (
+    MessageTracer,
+    PatternGroup,
+    TracePair,
+)
 
 
 class ServiceDiscoveryTracer(MessageTracer):
@@ -23,7 +27,7 @@ class ServiceDiscoveryTracer(MessageTracer):
                 name="start_discovery",
                 trace_pairs=[
                     TracePair(
-                        regex=r'^NTC\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+[+-]\d{2}:\d{2}).*?\bserviceId=([^\s]+)',
+                        regex=r"^NTC\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+[+-]\d{2}:\d{2}).*?\bserviceId=([^\s]+)",
                         convert=self._extract_starting_discovery_time,
                     ),
                 ],
@@ -52,7 +56,7 @@ class ServiceDiscoveryTracer(MessageTracer):
                 name="found_advertiser",
                 trace_pairs=[
                     TracePair(
-                        regex=r'^NTC\s+(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+[+-]\d{2}:\d{2})(?=.*\bpeerId=(?P<peerId>\S+))(?=.*\bserviceId=(?P<serviceId>\S+))',
+                        regex=r"^NTC\s+(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+[+-]\d{2}:\d{2})(?=.*\bpeerId=(?P<peerId>\S+))(?=.*\bserviceId=(?P<serviceId>\S+))",
                         convert=self._extract_found_peer_discovery_time,
                     ),
                 ],

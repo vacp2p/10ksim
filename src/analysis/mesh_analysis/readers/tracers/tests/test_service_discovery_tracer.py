@@ -1,4 +1,6 @@
-from src.analysis.mesh_analysis.readers.tracers.service_discovery_tracer import ServiceDiscoveryTracer
+from src.analysis.mesh_analysis.readers.tracers.service_discovery_tracer import (
+    ServiceDiscoveryTracer,
+)
 
 
 def test_extract_found_peer_discovery_time_keeps_first_discovery_per_peer_and_service():

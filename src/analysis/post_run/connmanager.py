@@ -87,5 +87,5 @@ def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:
                     plot_trim_timeline(conn_df, drop_df, str(out_dir))
 
         logger.info(f"Analysis complete. Plots saved to {out_dir}")
-    except Exception as e:
-        logger.error(f"Post-experiment analysis failed: {e}")
+    except Exception:
+        logger.exception("Post-experiment analysis failed")

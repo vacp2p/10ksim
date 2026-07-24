@@ -26,8 +26,8 @@ def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> No
         scrape_run_metrics(
             run_dir=run_dir, namespace=experiment.namespace, interval_s=cfg.metrics_interval_s
         )
-    except Exception as e:
-        logger.error(f"Shadow metrics analysis failed: {e}")
+    except Exception:
+        logger.exception("Shadow metrics analysis failed")
     try:
         puller = DataPuller().with_local(run_dir / "shadow_logs" / "logs")
         (
@@ -42,5 +42,5 @@ def run_shadow_gossipsub_analysis(experiment: "ShadowGossipsubExperiment") -> No
             )
             .run()
         )
-    except Exception as e:
-        logger.error(f"Shadow message analysis failed: {e}")
+    except Exception:
+        logger.exception("Shadow message analysis failed")

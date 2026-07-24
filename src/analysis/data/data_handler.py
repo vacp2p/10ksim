@@ -51,7 +51,7 @@ class DataHandler:
         return self._ignore_columns
 
     @staticmethod
-    def prepare_dataframe_for_boxplot(dataframe: pd.DataFrame, class_name="class") -> pd.DataFrame:
-        prepared_df = pd.melt(dataframe, class_name)
-
-        return prepared_df
+    def prepare_dataframe_for_boxplot(
+        dataframe: pd.DataFrame, class_name: str = "class"
+    ) -> pd.DataFrame:
+        return pd.melt(dataframe, id_vars=[class_name], var_name="variable", value_name="value")

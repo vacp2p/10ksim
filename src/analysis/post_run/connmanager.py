@@ -17,6 +17,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 VICTORIA_LOGS_URL = "https://vlselect.lab.vac.dev/select/logsql/query"
+REQUIRED_TIME_WINDOW_KEYS = ("start_time", "end_time")
+
+
+def _require_bounded_query(stack: dict) -> None:
+    missing = [key for key in REQUIRED_TIME_WINDOW_KEYS if not stack.get(key)]
+    if missing:
+        raise ValueError(
+            "Connmanager post-run analysis requires a bounded metadata stack; "
+            f"missing: {missing}. Refusing to run an unbounded VictoriaLogs query."
+        )
 
 
 def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:

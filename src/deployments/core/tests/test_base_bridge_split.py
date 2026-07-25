@@ -1,9 +1,14 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.deployments.core.base_bridge import BaseBridge
+from src.deployments.core.base_bridge import BaseBridge, format_duration
 from src.deployments.core.event_mapping import EventMapping
+from src.deployments.core.metadata_times import (
+    format_metadata_timestamps,
+    grafana_link,
+    victorialogs_link,
+)
 
 
 def write_events_log(tmp_path, events):
@@ -136,3 +141,51 @@ def test_base_bridge_preserves_full_metadata_flow_with_event_mappings(tmp_path):
         "complete": {"start": "2026-01-01T12:00:00", "end": "2026-01-01T12:20:30"},
         "stable": {"start": "2026-01-01T12:06:00", "end": "2026-01-01T12:14:30"},
     }
+
+
+def test_base_bridge_apply_extras_adds_duration_and_links():
+    bridge = BaseBridge()
+    metadata = {"start": datetime(2026, 1, 1, 12, 0, 0), "end": datetime(2026, 1, 1, 13, 2, 3)}
+
+    result = bridge.apply_extras_func(
+        metadata,
+        duration=True,
+        grafana=True,
+        vlogs=True,
+        namespace="vaclab",
+    )
+
+    assert result["duration"] == "1h 2m 3s"
+    assert result["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=vaclab" in result["grafana"]
+    assert result["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "kubernetes.pod_namespace%3Avaclab" in result["victoria_logs"]
+
+
+def test_format_duration():
+    assert format_duration(timedelta(hours=2, minutes=3, seconds=4)) == "2h 3m 4s"
+
+
+def test_format_metadata_timestamps_vquery_and_url():
+    metadata = {"root": {"start": datetime(2026, 1, 1, 12, 0, 1, 123456)}}
+
+    assert format_metadata_timestamps(metadata, "vquery") == {
+        "root": {"start": "2026-01-01T12:00:01"}
+    }
+    assert format_metadata_timestamps(metadata, "url") == {
+        "root": {"start": "2026-01-01T12:00:01.123Z"}
+    }
+
+
+def test_grafana_and_victoria_links():
+    start = datetime(2026, 1, 1, 12, 0, 0)
+    end = datetime(2026, 1, 1, 12, 20, 30)
+
+    grafana = grafana_link(start, end, namespace="vaclab")
+    victoria = victorialogs_link(start, end, namespace="vaclab")
+
+    assert grafana.startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=vaclab" in grafana
+    assert victoria.startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "g0.range_input=20m30s" in victoria
+    assert "kubernetes.pod_namespace%3Avaclab" in victoria

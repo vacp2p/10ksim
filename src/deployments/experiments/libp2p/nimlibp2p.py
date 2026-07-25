@@ -46,6 +46,7 @@ class ExpConfig(BaseModel):
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
+    network_loss_pct: NonNegativeFloat = 0  # 0 = lossless; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True
@@ -90,11 +91,17 @@ def build_nodes(
         builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
             NimLibp2p.connect_to, params.connect_to
         )
-    if params.network_delay or params.network_jitter or params.network_bandwidth_mbit:
+    if (
+        params.network_delay
+        or params.network_jitter
+        or params.network_bandwidth_mbit
+        or params.network_loss_pct
+    ):
         builder = builder.with_network_delay(
             delay=params.network_delay,
             jitter=params.network_jitter,
             rate_mbit=params.network_bandwidth_mbit or None,
+            loss_pct=params.network_loss_pct or None,
         )
 
     return builder.build()
@@ -185,6 +192,9 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
+    async def _mid_run(self, nodes: V1StatefulSet) -> None:
+        """Runs alongside the publish loop. Scenarios override this to disturb the network."""
+
     async def _run(self):
         self.log_event("run_start")
 
@@ -226,6 +236,8 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         self.log_event("start_messages")
 
+        mid_run = asyncio.create_task(self._mid_run(nodes))
+
         tasks = []
         for msg_index in range(self.config.num_messages):
             index = random.randint(0, self.config.num_relay_nodes - 1)
@@ -236,6 +248,8 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         await asyncio.gather(*tasks)
 
         self.log_event("publisher_messages_finished")
+
+        await mid_run
 
         await asyncio.sleep(self.config.post_publish_dwell)
         self.log_event("publisher_wait_finished")

@@ -131,7 +131,7 @@ def dict_apply(
             if path == Path():
                 new_dict = new_value
             else:
-                dict_set(new_dict, path, new_value)
+                dict_set(new_dict, path, new_value, replace_leaf=True)
 
     dict_visit(obj, apply, path, order=order)
     return new_dict

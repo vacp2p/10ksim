@@ -26,6 +26,9 @@ class EventWindow:
     end: EventBound
 
 
+EventNotFound = "EventNotFound"
+
+
 class EventWindowBridge(BaseBridge):
     interval: str = "complete"
     container_name: str
@@ -39,8 +42,8 @@ class EventWindowBridge(BaseBridge):
 
         try:
             selected_interval = events[self.interval]
-            metadata["stack"]["start_time"] = selected_interval["start"]
-            metadata["stack"]["end_time"] = selected_interval["end"]
+            metadata["stack"]["start_time"] = selected_interval.get("start", EventNotFound)
+            metadata["stack"]["end_time"] = selected_interval.get("end", EventNotFound)
         except KeyError as e:
             raise ValueError(
                 f"Missing `{self.interval}` analysis window in events metadata. "
@@ -62,4 +65,6 @@ class EventWindowBridge(BaseBridge):
             for window in self.event_windows()
             for bound_name, bound in (("start", window.start), ("end", window.end))
         ]
-        return self._get_metadata_from_events_list(events_log_path, events_list)
+        return self._get_metadata_from_events_list(
+            events_log_path, events_list, duration=True, grafana=True, vlogs=True
+        )

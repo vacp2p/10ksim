@@ -1,8 +1,10 @@
 # Python Imports
 import logging
 from collections import defaultdict
+from copy import deepcopy
+from functools import partial
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -12,19 +14,79 @@ from src.deployments.core.event_mapping import EventMapping
 from src.deployments.core.metadata_times import (
     format_metadata_timestamps,
     get_valid_shifted_times,
+    grafana_link,
+    victorialogs_link,
 )
+from src.utils.dict_utils import dict_apply
 
 logger = logging.getLogger(__name__)
 
 PROJ_ROOT = Path(__file__).parent.parent.parent
 
 
+def format_duration(duration):
+    total_seconds = int(duration.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+
 class BaseBridge(BaseModel):
     statefulsets_key: str = "stateful_sets"
     nodes_key: str = "nodes_per_statefulset"
 
+    def apply_extras_func(
+        self,
+        metadata: dict,
+        *,
+        duration: bool = False,
+        grafana: bool = False,
+        vlogs: bool = False,
+        namespace: Optional[str] = None,
+    ):
+        def apply_args(metadata, key, func):
+            try:
+                new_metadata = deepcopy(metadata)
+                new_metadata[key] = func(
+                    **{
+                        "start_time": metadata["start"],
+                        "end_time": metadata["end"],
+                        "namespace": namespace,
+                    }
+                )
+                return new_metadata
+            except Exception as e:
+                return new_metadata
+
+        if grafana:
+            func = partial(apply_args, key="grafana", func=grafana_link)
+            metadata = dict_apply(metadata, func)
+        if vlogs:
+            func = partial(apply_args, key="victoria_logs", func=victorialogs_link)
+            metadata = dict_apply(metadata, func)
+
+        def apply_duration(metadata, key):
+            try:
+                new_metadata = deepcopy(metadata)
+                new_metadata[key] = format_duration(metadata["end"] - metadata["start"])
+                return new_metadata
+            except Exception:
+                return new_metadata
+
+        if duration:
+            duration_func = partial(apply_duration, key="duration")
+            metadata = dict_apply(metadata, duration_func)
+
+        return metadata
+
     def _get_metadata_from_events_list(
-        self, events_log_path: Path, events_list: List[EventMapping]
+        self,
+        events_log_path: Path,
+        events_list: List[EventMapping],
+        *,
+        duration: bool = False,
+        grafana: bool = False,
+        vlogs: bool = False,
     ) -> dict:
         """Extract events in from a given event log."""
         # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].
@@ -36,6 +98,10 @@ class BaseBridge(BaseModel):
         shifted = get_valid_shifted_times(deltatime_map, metadata)
         metadata.update(shifted)
 
+        namespace = metadata.get("metadata", {}).get("namespace")
+        metadata = self.apply_extras_func(
+            metadata, duration=duration, grafana=grafana, vlogs=vlogs, namespace=namespace
+        )
         metadata = format_metadata_timestamps(metadata, "vquery")
 
         return metadata
@@ -72,7 +138,7 @@ class BaseBridge(BaseModel):
             "kubernetes.pod_node_name",
         ]
         try:
-            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT).as_posix()
         except ValueError as e:
             logger.info(e)
         metadata["stack"]["name"] = self._get_name(metadata)

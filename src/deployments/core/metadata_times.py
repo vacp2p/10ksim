@@ -2,6 +2,7 @@
 from copy import deepcopy
 from datetime import timedelta
 from typing import Dict, Literal
+from urllib.parse import quote, urlencode
 
 # Project Imports
 from src.utils.dict_utils import dict_apply, dict_get, dict_set, dict_visit
@@ -55,6 +56,69 @@ def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict)
     dict_visit(shifted, collect_valid_interval)
 
     return filtered
+
+
+def grafana_link(start_time, end_time, namespace=None):
+    base = "https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku"
+    params = {
+        "orgId": 1,
+        "from": start_time,
+        "to": end_time,
+        "timezone": "utc",
+        "refresh": "1m",
+        "var-libp2p_peers_top5": "$__all",
+        "var-libp2p_peers_bottom5": "$__all",
+        "var-libp2p_traffic_in_top5": "$__all",
+        "var-libp2p_traffic_in_bottom5": "$__all",
+        "var-libp2p_traffic_out_top5": "$__all",
+        "var-libp2p_traffic_out_bottom5": "$__all",
+        "var-libp2p_open_streams_top5": "",
+        "var-libp2p_open_streams_bottom5": "$__all",
+        "var-container_network_receive_top5": "$__all",
+        "var-container_network_receive_bottom5": "$__all",
+        "var-container_network_transmit_top5": "",
+        "var-container_network_transmit_bottom5": "$__all",
+        "var-container_memory_usage_bytes_top5": "$__all",
+        "var-container_memory_usage_bytes_bottom5": "$__all",
+        "var-nim_gc_mem_bytes_bottom5": "$__all",
+        "var-nim_gc_mem_bytes_top5": "$__all",
+        "var-discv5_in_top5": "$__all",
+        "var-discv5_in_bottom5": "$__all",
+        "var-discv5_out_bottom5": "$__all",
+        "var-discv5_out_top5": "$__all",
+        "var-top_discv5_discovered": "$__all",
+        "var-bottom_discv5_discovered": "$__all",
+    }
+    if namespace is not None:
+        params["var-namespace"] = namespace
+    return base + "?" + urlencode(params, doseq=True)
+
+
+def victorialogs_link(start_time, end_time, namespace=None):
+    query = "kubernetes.pod_namespace:* | order by (_time)"
+    if namespace is not None:
+        query = f"kubernetes.pod_namespace:{namespace} | order by (_time)"
+
+    delta = end_time - start_time
+    total_seconds = max(0, int(delta.total_seconds()))
+    hours, rem = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    range_input = ""
+    if hours:
+        range_input += f"{hours}h"
+    if minutes:
+        range_input += f"{minutes}m"
+    if seconds or not range_input:
+        range_input += f"{seconds}s"
+
+    params = {
+        "query": query,
+        "g0.range_input": range_input,
+        "g0.end_input": end_time.replace(microsecond=0).isoformat(),
+        "g0.relative_time": "none",
+        "limit": 10000,
+    }
+    return "https://vlselect.lab.vac.dev/select/vmui/#/?" + urlencode(params, quote_via=quote)
 
 
 def add_links(metadata, links_map):

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zerotesting-lightpush-server
+  namespace: zerotesting
+spec:
+  clusterIP: None
+  selector:
+    app: zerotenkay-lightpush-server
+  ports:
+  - protocol: TCP
+    port: 8645
+    targetPort: 8645

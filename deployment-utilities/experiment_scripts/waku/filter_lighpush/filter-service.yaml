@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zerotesting-filter
+  namespace: zerotesting
+spec:
+  clusterIP: None
+  selector:
+    app: zerotenkay-filter
+  ports:
+  - protocol: TCP
+    port: 8645
+    targetPort: 8645

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useInView } from '../hooks/useInView';
@@ -27,7 +27,7 @@ function ThumbnailSkeleton() {
 function ExperimentThumbnail({ experimentId }) {
     const { isDark } = useTheme();
     const [ref, inView] = useInView();
-    const [options, setOptions] = useState([]);
+    const [rawOptions, setRawOptions] = useState([]);
     const [index, setIndex] = useState(0);
     const [failed, setFailed] = useState(false);
 
@@ -52,11 +52,11 @@ function ExperimentThumbnail({ experimentId }) {
                     )
                 );
             })
-            .then((rawOptions) => {
-                if (cancelled || !rawOptions) return;
-                const built = rawOptions.filter(Boolean).map((raw) => buildThumbnailOption(raw, isDark));
-                if (built.length) {
-                    setOptions(built);
+            .then((fetched) => {
+                if (cancelled || !fetched) return;
+                const valid = fetched.filter(Boolean);
+                if (valid.length) {
+                    setRawOptions(valid);
                 } else {
                     setFailed(true);
                 }
@@ -68,7 +68,15 @@ function ExperimentThumbnail({ experimentId }) {
         return () => {
             cancelled = true;
         };
-    }, [inView, experimentId, isDark]);
+    }, [inView, experimentId]);
+
+    // Re-theming on a dark/light toggle is just recoloring already-fetched
+    // data, so it's a cheap useMemo rather than something the fetch effect
+    // above needs to re-run for.
+    const options = useMemo(
+        () => rawOptions.map((raw) => buildThumbnailOption(raw, isDark)),
+        [rawOptions, isDark]
+    );
 
     useEffect(() => {
         if (options.length <= 1) return undefined;

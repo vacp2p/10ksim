@@ -32,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
-from src.analysis.post_run_analysis import run_post_analysis as run_configured_post_analysis
+from src.analysis.post_run_analysis import run_post_analysis
 from src.analysis.utils.log_utils import log_to_path
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.k8s_cleanup import (
@@ -69,6 +69,10 @@ logger = logging.getLogger(__name__)
 
 
 TCfg = TypeVar("TCfg", bound=BaseModel)
+
+
+def dispatch_post_analysis(experiment: "BaseExperiment") -> Any:
+    return run_post_analysis(experiment)
 
 
 def kind_of(dep):
@@ -350,7 +354,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         self.log_event("run_finished")
         self._dump_metadata()
         if run_post_analysis:
-            run_configured_post_analysis(self)
+            dispatch_post_analysis(self)
 
     @abstractmethod
     async def _run(self):

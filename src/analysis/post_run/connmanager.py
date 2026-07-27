@@ -52,33 +52,40 @@ def run_connmanager_analysis(experiment: "ConnManagerExperiment") -> None:
     )
     _require_bounded_query(stack)
 
-    puller = DataPuller().with_kwargs(stack)
-    wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None
-    workdir = experiment.output_folder / "deployment_yamls"
+    try:
+        puller = DataPuller().with_kwargs(stack)
+        wave_sets = ["wave1", "wave2"] if experiment.config.run.upper() == "B" else None
+        if experiment.output_folder is None:
+            raise ValueError("Connmanager post-run analysis requires experiment.output_folder")
+        workdir = experiment.output_folder / "deployment_yamls"
 
-    analyzer = (
-        ConnManagerAnalyzer(dump_analysis_dir=workdir / "analysis_data")
-        .with_data_puller(puller)
-        .with_hub_analysis(
-            hub_pod="hub-0",
-            grace_period_s=experiment.config.grace_period_s,
-            protected_peer_ids=experiment.config.protected_peer_ids or None,
-            wave_sets=wave_sets,
+        analyzer = (
+            ConnManagerAnalyzer(
+                dump_analysis_dir=workdir / "analysis_data",
+            )
+            .with_data_puller(puller)
+            .with_hub_analysis(
+                hub_pod="hub-0",
+                grace_period_s=experiment.config.grace_period_s,
+                protected_peer_ids=experiment.config.protected_peer_ids or None,
+                wave_sets=wave_sets,
+            )
         )
-    )
 
-    results = analyzer.run()
+        results = analyzer.run()
 
-    out_dir = workdir / "plots"
-    out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = workdir / "plots"
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-    for result in results:
-        if result.name == "connmanager" and result.intermediates:
-            conn_df = result.intermediates.get("conn_df")
-            drop_df = result.intermediates.get("drop_df")
-            if conn_df is not None and not conn_df.empty:
-                plot_connection_count(conn_df, drop_df, str(out_dir))
-                plot_direction_breakdown(conn_df, result.intermediates, str(out_dir))
-                plot_trim_timeline(conn_df, drop_df, str(out_dir))
+        for res in results:
+            if res.name == "connmanager" and res.intermediates:
+                conn_df = res.intermediates.get("conn_df")
+                drop_df = res.intermediates.get("drop_df")
+                if conn_df is not None and not conn_df.empty:
+                    plot_connection_count(conn_df, drop_df, str(out_dir))
+                    plot_direction_breakdown(conn_df, res.intermediates, str(out_dir))
+                    plot_trim_timeline(conn_df, drop_df, str(out_dir))
 
-    logger.info(f"Connmanager post-run analysis complete. Plots saved to {out_dir}")
+        logger.info(f"Analysis complete. Plots saved to {out_dir}")
+    except Exception:
+        logger.exception("Post-experiment analysis failed")

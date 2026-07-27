@@ -172,7 +172,7 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             self.log_event({"event": "logs_pulled", "dest": str(logs_dir)})
         except Exception as e:
             # don't let a log-pull failure mask the run state
-            logger.error(f"Failed to pull Shadow logs: {e}")
+            logger.exception("Failed to pull Shadow logs")
             self.log_event({"event": "logs_pull_failed", "error": str(e)})
 
         if state == "failed":

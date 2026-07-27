@@ -1,6 +1,9 @@
 # Python imports
 from typing import List, Literal, Optional, Self
 
+from kubernetes.client import (
+    V1EnvVar,
+)
 from pydantic import PositiveInt
 
 # Project imports
@@ -35,22 +38,25 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
         self.config.stateful_set_spec.replicas = num_nodes
         return self
 
-    def with_regression(self) -> Self:
+    def with_regression(self, cmd_type: int, num_enrs: int) -> Self:
         if not self.config.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
-        self.with_args(RegressionNodes.create_args())
-        self.with_enr(3, [f"zerotesting-bootstrap.{self.config.namespace}"])
+        self.with_args(RegressionNodes.create_args(cmd_type))
+        self.with_enr(num_enrs, [f"zerotesting-bootstrap.{self.config.namespace}"])
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_service(
+            f"zerotesting-bootstrap.{self.config.namespace}.svc.cluster.local"
+        )
         container = find_waku_container_config(self.config)
         container.with_resources(Nodes.create_resources())
         return self
 
-    def with_bootstrap(self) -> Self:
+    def with_bootstrap(self, cmd_type: int) -> Self:
         if not self.config.name:
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
         WakuBootstrapNode.apply_stateful_set_config(
             self.config, self.config.namespace, overwrite=True
         )
-        self.with_args(WakuBootstrapNode.create_args())
+        self.with_args(WakuBootstrapNode.create_args(cmd_type))
         return self
 
     def with_store(self) -> Self:
@@ -104,4 +110,9 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
     def with_pull_policy(self, policy: Literal["IfNotPresent", "Always", "Never"]) -> Self:
         config = find_waku_container_config(self.config)
         config.image_pull_policy = policy
+        return self
+
+    def with_env(self, key: str, value: str) -> Self:
+        config = find_waku_container_config(self.config)
+        config.with_env_var(V1EnvVar(name=key, value=str(value)))
         return self

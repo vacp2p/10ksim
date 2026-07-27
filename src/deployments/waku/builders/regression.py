@@ -1,8 +1,7 @@
 class RegressionNodes:
     @staticmethod
-    def create_args() -> dict:
-        return {
-            "--cluster-id": 2,
+    def create_args(cmd_type: int) -> dict:
+        base = {
             "--discv5-discovery": True,
             "--discv5-enr-auto-update": True,
             "--log-level": "INFO",
@@ -14,5 +13,19 @@ class RegressionNodes:
             "--rest-address": "0.0.0.0",
             "--rest-admin": True,
             "--rest": True,
-            "--shard": 0,
         }
+
+        if cmd_type == 1:
+            return {
+                **base,
+                "--cluster-id": 2,
+                "--shard": 0,
+            }
+        elif cmd_type == 2:
+            return {
+                **base,
+                "--num-shards-in-network": 1,
+                "--shard": 0,
+            }
+
+        raise ValueError(f"Invalid cmd_type: `{cmd_type}`")

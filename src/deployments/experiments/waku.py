@@ -96,19 +96,16 @@ def build_nodes(namespace: str, config: ExpConfig) -> Dict[str, V1Deployable]:
 
 
 async def grab_metrics(namespace, pod_name, metrics_port: int = 8008) -> str:
-    try:
-        command = exec_command_in_pod(
-            namespace,
-            pod_name,
-            ["/bin/sh", "-c", f"curl -s localhost:{metrics_port}/metrics"],
-        )
-        await command.collect_output_async()
-        if not command.ok:
-            raise RuntimeError(f"Command failed: {command}")
-        logger.debug(f"Retreived /metrics from pod: `{pod_name}` response: `{command.output}`")
-        return command.output
-    except client.exceptions.ApiException as e:
-        logger.error(f"Exception when grabbing /metrics: {e}")
+    command = exec_command_in_pod(
+        namespace,
+        pod_name,
+        ["/bin/sh", "-c", f"curl -s localhost:{metrics_port}/metrics"],
+    )
+    await command.collect_output_async()
+    if not command.ok:
+        raise RuntimeError(f"Command failed: {command}")
+    logger.debug(f"Retreived /metrics from pod: `{pod_name}` response: `{command.output}`")
+    return command.output
 
 
 def build_store_nodes(namespace: str) -> dict:
@@ -173,8 +170,11 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
 
         async def _dump(node_index: int):
             logger.debug(f"Grabbing metrics for {node_name}-{node_index}")
-            metrics = await grab_metrics(self.namespace, f"{node_name}-{node_index}")
-            self.dump(metrics, folder_prefix / f"metrics_{node_name}-{node_index}.log")
+            try:
+                metrics = await grab_metrics(self.namespace, f"{node_name}-{node_index}")
+                self.dump(metrics, folder_prefix / f"metrics_{node_name}-{node_index}.log")
+            except client.exceptions.ApiException as e:
+                logger.error(f"Exception when grabbing /metrics: {e}")
 
         for index in range(0, num_nodes):
             # Running as a batch causes failures, so run one at a time.

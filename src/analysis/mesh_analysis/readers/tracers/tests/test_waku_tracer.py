@@ -55,7 +55,7 @@ def test_received_regex_matches_json():
 
     line = (
         '{"lvl":"DBG",'
-        '"ts":2026-07-16 15:10:00.145+00:00,'
+        '"ts":"2026-07-16 15:10:00.145+00:00",'
         '"msg":"received relay message",'
         '"topics":"waku relay",'
         '"tid":7,'

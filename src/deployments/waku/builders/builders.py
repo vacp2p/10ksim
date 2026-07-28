@@ -43,7 +43,7 @@ class WakuStatefulSetBuilder(StatefulSetBuilder):
             raise ValueError(f"Must configure node first. Config: `{self.config}`")
         self.with_args(RegressionNodes.create_args(cmd_type))
         self.with_enr(num_enrs, [f"zerotesting-bootstrap.{self.config.namespace}"])
-        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_service(
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_dns_search(
             f"zerotesting-bootstrap.{self.config.namespace}.svc.cluster.local"
         )
         container = find_waku_container_config(self.config)

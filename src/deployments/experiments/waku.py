@@ -208,9 +208,9 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
         relay_name = relay_nodes.metadata.name
         bootstrap_name = deployments["bootstrap"].metadata.name
         namespace = relay_nodes.metadata.namespace
-        logger.info(f"Starting disconnect+publish loop for nodes in `{relay_name}`")
+        logger.info(f"Starting publish loop for nodes in `{relay_name}`")
 
-        if grab_metrics:
+        if self.config.grab_metrics:
             await self.dump_metrics(relay_name, 10, "pre_publish")
 
         self.log_event("start_messages")
@@ -234,7 +234,7 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
         await asyncio.sleep(20)
         self.log_event("publisher_wait_finished")
 
-        if grab_metrics:
+        if self.config.grab_metrics:
             logger.info("Grabbing some metrics")
             for name, num_nodes, desc in [
                 (relay_name, self.config.num_relay_nodes, "relay metrics"),

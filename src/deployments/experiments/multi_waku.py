@@ -110,8 +110,8 @@ class MultiWaku(Multiple):
 
     def get_name_from_params(self, params: dict) -> str:
         version = params["image"].tag
-        keys = ["num_nodes", "num_messages"]
-        used_keys = filter(lambda item: item in keys, params.items())
+        keys = ["num_relay_nodes"]
+        used_keys = filter(lambda item: item[0] in keys, params.items())
         param_list = [f"{key}_{value}" for key, value in used_keys]
         param_list.append(f"version_{version}")
         return "__".join(param_list)

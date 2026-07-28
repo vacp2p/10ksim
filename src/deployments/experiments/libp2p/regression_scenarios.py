@@ -77,6 +77,17 @@ class NodeChurn(NimLibp2pExperiment):
 
     config: ChurnConfig
 
+    def _publishable_nodes(self) -> int:
+        """Keep the publisher off the churned nodes.
+
+        They come back on new addresses, and the publisher connects to the address it
+        looked up, so publishing to one that has just been replaced hangs until the
+        request times out. That is our harness tripping over the scenario rather than
+        anything about the protocol, and it starves the run of published messages.
+        """
+        churned = int(self.config.num_relay_nodes * self.config.churn_fraction)
+        return self.config.num_relay_nodes - churned
+
     async def _mid_run(self, nodes: V1StatefulSet) -> None:
         await asyncio.sleep(self.config.churn_at)
 

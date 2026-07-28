@@ -195,6 +195,10 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     async def _mid_run(self, nodes: V1StatefulSet) -> None:
         """Runs alongside the publish loop. Scenarios override this to disturb the network."""
 
+    def _publishable_nodes(self) -> int:
+        """How many of the relays the publisher may target, counted from index 0."""
+        return self.config.num_relay_nodes
+
     async def _run(self):
         self.log_event("run_start")
 
@@ -241,7 +245,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         tasks = []
         for msg_index in range(self.config.num_messages):
-            index = random.randint(0, self.config.num_relay_nodes - 1)
+            index = random.randint(0, self._publishable_nodes() - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))

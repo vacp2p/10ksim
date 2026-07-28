@@ -87,10 +87,11 @@ def test_event_window_bridge_extracts_results_and_selected_interval(tmp_path):
 
     metadata = ExampleWindowBridge().get_metadata(log_path)
 
-    assert metadata["results"] == {
-        "complete": {"start": "2026-01-01T12:00:00", "end": "2026-01-01T12:30:30"},
-        "stable": {"start": "2026-01-01T12:08:00", "end": "2026-01-01T12:19:30"},
-    }
+    assert metadata["results"]["complete"]["start"] == "2026-01-01T12:00:00"
+    assert metadata["results"]["complete"]["end"] == "2026-01-01T12:30:30"
+    assert metadata["results"]["stable"]["start"] == "2026-01-01T12:08:00"
+    assert metadata["results"]["stable"]["end"] == "2026-01-01T12:19:30"
+
     assert metadata["stack"]["start_time"] == "2026-01-01T12:08:00"
     assert metadata["stack"]["end_time"] == "2026-01-01T12:19:30"
     assert metadata["stack"]["container_name"] == "example-container"

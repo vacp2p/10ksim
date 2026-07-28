@@ -17,7 +17,7 @@ from src.deployments.core.metadata_times import (
     grafana_link,
     victorialogs_link,
 )
-from src.utils.dict_utils import dict_apply
+from src.utils.dict_utils import dict_transform
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +60,10 @@ class BaseBridge(BaseModel):
 
         if grafana:
             func = partial(apply_args, key="grafana", func=grafana_link)
-            metadata = dict_apply(metadata, func)
+            metadata = dict_transform(metadata, func)
         if vlogs:
             func = partial(apply_args, key="victoria_logs", func=victorialogs_link)
-            metadata = dict_apply(metadata, func)
+            metadata = dict_transform(metadata, func)
 
         def apply_duration(metadata, key):
             try:
@@ -75,7 +75,7 @@ class BaseBridge(BaseModel):
 
         if duration:
             duration_func = partial(apply_duration, key="duration")
-            metadata = dict_apply(metadata, duration_func)
+            metadata = dict_transform(metadata, duration_func)
 
         return metadata
 

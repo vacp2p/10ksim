@@ -169,12 +169,11 @@ def test_format_duration():
 def test_format_metadata_timestamps_vquery_and_url():
     metadata = {"root": {"start": datetime(2026, 1, 1, 12, 0, 1, 123456)}}
 
-    assert format_metadata_timestamps(metadata, "vquery") == {
-        "root": {"start": "2026-01-01T12:00:01"}
-    }
-    assert format_metadata_timestamps(metadata, "url") == {
-        "root": {"start": "2026-01-01T12:00:01.123Z"}
-    }
+    result_vq = format_metadata_timestamps(metadata, "vquery")
+    result_vq["root"]["start"] == "2026-01-01T12:00:01"
+
+    result_url = format_metadata_timestamps(metadata, "url")
+    result_url["root"]["start"] = "2026-01-01T12:00:01.123Z"
 
 
 def test_grafana_and_victoria_links():

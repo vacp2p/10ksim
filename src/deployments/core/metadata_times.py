@@ -1,19 +1,20 @@
 # Python Imports
 from copy import deepcopy
-from datetime import timedelta
-from typing import Dict, Literal
+from datetime import datetime, timedelta
+from typing import Dict, Literal, Optional
 from urllib.parse import quote, urlencode
 
 # Project Imports
-from src.utils.dict_utils import dict_apply, dict_get, dict_set, dict_visit
+from src.utils.dict_utils import KeepNode, dict_get, dict_set, dict_transform, dict_visit
 
 
 def format_timestamp_vquery(input_timestamp) -> str:
     """Format a timestamp for use in Victoria queries."""
     try:
-        return input_timestamp.strftime("%Y-%m-%dT%H:%M:%S")
+        result = input_timestamp.strftime("%Y-%m-%dT%H:%M:%S")
+        return result
     except (AttributeError, TypeError):
-        pass
+        raise KeepNode()
 
 
 def format_timestamp_url(node):
@@ -21,13 +22,13 @@ def format_timestamp_url(node):
     try:
         return node.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     except AttributeError:
-        pass
+        raise KeepNode()
 
 
 def format_metadata_timestamps(metadata: dict, format: Literal["vquery", "url"]) -> dict:
     formater_map = {"vquery": format_timestamp_vquery, "url": format_timestamp_url}
     try:
-        return dict_apply(metadata, formater_map[format])
+        return dict_transform(metadata, formater_map[format])
     except KeyError as e:
         raise ValueError(f"Unknown format option passed to function. format: `{format}`") from e
 
@@ -58,12 +59,12 @@ def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict)
     return filtered
 
 
-def grafana_link(start_time, end_time, namespace=None):
+def grafana_link(start_time: datetime, end_time: datetime, namespace: Optional[str] = None) -> str:
     base = "https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku"
     params = {
         "orgId": 1,
-        "from": start_time,
-        "to": end_time,
+        "from": start_time.isoformat(),
+        "to": end_time.isoformat(),
         "timezone": "utc",
         "refresh": "1m",
         "var-libp2p_peers_top5": "$__all",
@@ -94,7 +95,7 @@ def grafana_link(start_time, end_time, namespace=None):
     return base + "?" + urlencode(params, doseq=True)
 
 
-def victorialogs_link(start_time, end_time, namespace=None):
+def victorialogs_link(start_time: datetime, end_time: datetime, namespace: Optional[str] = None):
     query = "kubernetes.pod_namespace:* | order by (_time)"
     if namespace is not None:
         query = f"kubernetes.pod_namespace:{namespace} | order by (_time)"

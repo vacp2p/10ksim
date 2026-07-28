@@ -20,8 +20,8 @@ from kubernetes.client import (
 )
 from pydantic import NonNegativeFloat, NonNegativeInt
 
-from src.deployments.core.k8s_cleanup import delete_network_policy, delete_pod
-from src.deployments.core.k8s_rollout import wait_for_rollout
+from src.deployments.core.k8s_cleanup import delete_network_policy
+from src.deployments.core.k8s_rollout import scale_statefulset, wait_for_rollout
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 
@@ -48,14 +48,16 @@ class DegradedNetwork(NimLibp2pExperiment):
 
 class ChurnConfig(ExpConfig):
     churn_fraction: NonNegativeFloat = 0.2
-    """Share of relay nodes killed mid-run, taken from the highest ordinals."""
+    """Share of relay nodes taken down mid-run, from the highest ordinals."""
     churn_at: NonNegativeInt = 30
-    """Seconds after the first message before killing."""
+    """Seconds after the first message before taking them down."""
+    churn_downtime: NonNegativeInt = 60
+    """Seconds to stay down before rejoining."""
     churn_rejoin_timeout: NonNegativeInt = 600
 
 
 def churn_targets(nodes: V1StatefulSet, fraction: float) -> List[str]:
-    """Highest-ordinal pod names to kill, deterministic so runs stay comparable."""
+    """Highest-ordinal pod names, which is what a scale-down removes."""
     replicas = nodes.spec.replicas
     count = int(replicas * fraction)
     return [f"{nodes.metadata.name}-{i}" for i in range(replicas - count, replicas)]
@@ -63,11 +65,13 @@ def churn_targets(nodes: V1StatefulSet, fraction: float) -> List[str]:
 
 @experiment(name="nimlibp2p-churn")
 class NodeChurn(NimLibp2pExperiment):
-    """Regression run where a share of the nodes are killed mid-run and rejoin.
+    """Regression run where a share of the nodes drop out mid-run and rejoin.
 
-    The StatefulSet recreates them, so they come back with the same names and have to
-    rediscover peers. Exercises peer management, reconnection and mesh repair
-    (prune/graft). Delivery should recover; messages published into the gap may not
+    Scaling the StatefulSet down holds them down for `churn_downtime`; deleting the
+    pods would not, because the controller replaces each one within seconds and the
+    network would only ever lose a trickle at a time. They come back with the same
+    names and have to rediscover peers, which exercises peer management, reconnection
+    and mesh repair. Delivery should recover; messages published into the gap may not
     reach the nodes that were down for it.
     """
 
@@ -78,15 +82,20 @@ class NodeChurn(NimLibp2pExperiment):
 
         targets = churn_targets(nodes, self.config.churn_fraction)
         if not targets:
-            logger.warning(f"churn_fraction {self.config.churn_fraction} kills no nodes")
+            logger.warning(f"churn_fraction {self.config.churn_fraction} takes down no nodes")
             return
 
-        self.log_event({"event": "churn_kill", "nodes": targets})
-        logger.info(f"Killing {len(targets)} nodes: {targets}")
-        for name in targets:
-            delete_pod(name, self.namespace)
-        self.log_event({"event": "churn_killed", "nodes": targets})
+        replicas = nodes.spec.replicas
+        name = nodes.metadata.name
+        self.log_event({"event": "churn_down", "nodes": targets})
+        logger.info(f"Taking down {len(targets)} nodes: {targets[0]}..{targets[-1]}")
+        scale_statefulset(name, self.namespace, replicas - len(targets), self.api_client)
+        self.log_event({"event": "churn_is_down", "nodes": targets})
 
+        await asyncio.sleep(self.config.churn_downtime)
+
+        self.log_event({"event": "churn_rejoin", "nodes": targets})
+        scale_statefulset(name, self.namespace, replicas, self.api_client)
         await wait_for_rollout(nodes, self.api_client, timeout=self.config.churn_rejoin_timeout)
         self.log_event({"event": "churn_rejoined", "nodes": targets})
 

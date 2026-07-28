@@ -134,6 +134,14 @@ async def wait_for_rollout(
         await asyncio.sleep(polling_interval)
 
 
+def scale_statefulset(name: str, namespace: str, replicas: int, api_client=None) -> None:
+    """Set a StatefulSet's replica count. Scaling down removes the highest ordinals."""
+    api = client.AppsV1Api(api_client or client.ApiClient())
+    api.patch_namespaced_stateful_set_scale(
+        name=name, namespace=namespace, body={"spec": {"replicas": replicas}}
+    )
+
+
 def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iterable[V1Pod]:
     api_client = api_client or client.ApiClient()
     apps_api = client.AppsV1Api(api_client)

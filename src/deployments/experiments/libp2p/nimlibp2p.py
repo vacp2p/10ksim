@@ -204,6 +204,12 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         )
         await self.deploy(deployment=publisher, wait_for_ready=True)
 
+        # Backs the StatefulSet's per-pod DNS and is what the publisher resolves nodes
+        # through, so both discovery modes need it, not just the static dial.
+        node_service = build_static_service(self.namespace)
+        self.dump_yaml(node_service, "nimp2p-service")
+        await self.deploy(deployment=node_service, exist_ok=True)
+
         # Bootstrap (kad-dht only): anchor node + headless discovery service. Deployed
         # before the nodes so the mesh can form through it once the nodes wake up.
         if self.config.discovery == "kad-dht":
@@ -214,11 +220,6 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             bootstrap = build_bootstrap_nodes(namespace=self.namespace, params=self.config)
             self.dump_yaml(bootstrap, "bootstrap")
             await self.deploy(deployment=bootstrap, wait_for_ready=True)
-        else:
-            # Static discovery resolves peers via this service, so deploy it first.
-            static_service = build_static_service(self.namespace)
-            self.dump_yaml(static_service, "static-service")
-            await self.deploy(deployment=static_service, exist_ok=True)
 
         # Nodes
         nodes = build_nodes(

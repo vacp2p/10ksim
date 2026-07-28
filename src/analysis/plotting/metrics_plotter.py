@@ -49,7 +49,7 @@ class MetricsPlotter(BaseModel):
                     DataPath(name=data_path.name, path=data_path.path / metric)
                     for data_path in group.data_paths
                 ]
-                logger.info(f"named_files: {named_files}")
+                logger.debug(f"named_files: {named_files}")
 
                 file_data_handler.concat_dataframes_from_files(
                     named_files, group.name, plot_specs.data_points

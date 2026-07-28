@@ -4,7 +4,15 @@ from typing import List, Optional, Self
 
 from pydantic import BaseModel, Field, PositiveInt, model_validator
 
+from src.analysis.data.data_file_handler import DataPath
 from src.analysis.metrics.config import MetricToScrape, ScrapeConfig
+from src.deployments.utils.flatten import flatten
+
+
+class DataGroup(BaseModel):
+    name: str
+    """Group name"""
+    data_paths: List[DataPath]
 
 
 class PlotConfig(BaseModel):
@@ -18,10 +26,14 @@ class PlotConfig(BaseModel):
     scale_x: PositiveInt = 1000
     fig_size: List[PositiveInt] = Field(default_factory=lambda: [20, 20])
 
-    # TODO [plotter config]: Change to paths. Edit plotter too.
-    folder: List[str] = Field(default_factory=list)
-    data: List[str] = Field(default_factory=list)
-    include_files: List[str] = Field(default_factory=list)
+    x_order: Optional[List[str]] = None
+    legend_order: Optional[List[str]] = None
+
+    groups: List[DataGroup] = Field(default_factory=list)
+    """Each group will appear as a separate item in the legend."""
+
+    metrics: List[str] = Field(default_factory=list)
+    """List of metrics to include in plots."""
 
 
 class PlotConfigBuilder(BaseModel):
@@ -35,13 +47,22 @@ class PlotConfigBuilder(BaseModel):
 
     def with_metric(self, metric: MetricToScrape | str) -> Self:
         if isinstance(metric, MetricToScrape):
-            self.config.data.append(metric.folder_name.strip("/"))
+            self.config.metrics.append(metric.name.strip("/"))
         else:
-            self.config.data.append(metric.strip("/"))
+            self.config.metrics.append(metric.strip("/"))
         return self
 
-    def with_include_files(self, includes: List[str] | str) -> Self:
-        self.config.include_files.extend(includes)
+    def with_group(self, name: str, inputs: list) -> Self:
+        """Each group corresponds to an entry in the plot legend.
+        Each DataPath entry corresponds to a point along the x-axis"""
+        data_paths = []
+        for item in flatten(inputs):
+            if isinstance(item, ScrapeConfig):
+                path_name = item.dump_location.parent.name
+                data_paths.append(DataPath(name=path_name, path=item.dump_location))
+            elif isinstance(item, DataPath):
+                data_paths.append(item)
+        self.config.groups.append(DataGroup(name=name, data_paths=data_paths))
         return self
 
     def with_folders(self, folders: List[str | Path] | str | Path) -> Self:
@@ -69,7 +90,6 @@ class PlotConfigBuilder(BaseModel):
     def with_data_from_scrapes(self, scrape_configs: List[ScrapeConfig] | ScrapeConfig) -> Self:
         if isinstance(scrape_configs, ScrapeConfig):
             scrape_configs = [scrape_configs]
-        self.config.include_files.extend([config.name for config in scrape_configs])
         self.with_folders([config.dump_location for config in scrape_configs])
         return self
 

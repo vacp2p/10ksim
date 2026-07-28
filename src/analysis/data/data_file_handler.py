@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
+from pydantic import BaseModel
 from result import Err, Ok, Result
 
 # Project Imports
@@ -13,8 +14,14 @@ from src.analysis.utils import file_utils
 logger = logging.getLogger(__name__)
 
 
-class DataFileHandler(DataHandler):
+class DataPath(BaseModel):
+    name: str
+    """Name associated with data (eg. experiment name)"""
+    path: Path
+    """Data path"""
 
+
+class DataFileHandler(DataHandler):
     def __init__(self, ignore_columns: Optional[List] = None, include_files: Optional[List] = None):
         super().__init__(ignore_columns)
         self._include_files = include_files
@@ -60,3 +67,35 @@ class DataFileHandler(DataHandler):
         target_df = self.concat_data_as_mean(target_df, file_df, file_path.name)
 
         return Ok(target_df)
+
+    def concat_dataframes_from_files(
+        self,
+        named_files: List[DataPath],
+        group_name: str,
+        points: int,
+    ):
+        for data_file in named_files:
+            file_path = Path(data_file.path)
+            if not file_path.exists():
+                logger.error(f"{file_path} cannot be loaded.")
+                continue
+
+            logger.info(f"Reading {file_path} with {points} datapoints")
+            file_df = pd.read_csv(file_path, parse_dates=["Time"], index_col="Time", nrows=points)
+            if len(file_df) < points:
+                logger.warning(f"Not enough datapoints in {file_path}")
+
+            if self._ignore_columns:
+                columns_to_drop = [
+                    col
+                    for col in file_df.columns
+                    if any(col.startswith(prefix) for prefix in self._ignore_columns)
+                ]
+                if columns_to_drop:
+                    logger.info(f"Dropping {len(columns_to_drop)} columns: {columns_to_drop}")
+                    file_df = file_df.drop(columns=columns_to_drop)
+
+            file_df = file_df.reset_index(drop=True)
+            file_df["class"] = group_name
+            file_df["variable"] = data_file.name
+            self._dataframe = pd.concat([self._dataframe, file_df], ignore_index=True)

@@ -34,7 +34,7 @@ def dict_set(
     path: str | List[str] | Path,
     value: Any,
     *,
-    replace_leaf: bool = False,
+    replace_leaf: bool = True,
     replace_nondict_stems: bool = False,
     sep: Optional[str] = "/",
 ) -> Optional[Any]:
@@ -131,7 +131,7 @@ def dict_apply(
             if path == Path():
                 new_dict = new_value
             else:
-                dict_set(new_dict, path, new_value, replace_leaf=True)
+                dict_set(new_dict, path, new_value)
 
     dict_visit(obj, apply, path, order=order)
     return new_dict

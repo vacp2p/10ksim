@@ -1,7 +1,7 @@
 # Python Imports
 from copy import deepcopy
 from datetime import datetime, timedelta
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 from urllib.parse import quote, urlencode
 
 # Project Imports
@@ -133,3 +133,62 @@ def add_links(metadata, links_map):
                 )
         except KeyError:
             pass
+
+
+def _is_interval_node(node: Any) -> bool:
+    """
+    True if `node` is a dict with 'start' and 'end' both being datetime objects.
+    We do not check end > start here.
+    """
+    if not isinstance(node, dict):
+        return False
+    start = node.get("start")
+    end = node.get("end")
+    return isinstance(start, datetime) and isinstance(end, datetime)
+
+
+def _format_duration(duration: timedelta) -> str:
+    total_seconds = int(duration.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+
+def _enrich_interval_node(node: Any, *, namespace: Optional[str]) -> Any:
+    """
+    If `node` is an interval dict with end > start:
+      - format timestamps for vquery,
+      - add duration, grafana, victoria_logs.
+    Otherwise: leave unchanged.
+    """
+    if not _is_interval_node(node):
+        raise KeepNode()
+
+    start = node["start"]
+    end = node["end"]
+
+    if end < start:
+        raise KeepNode()
+
+    return {
+        **node,
+        "start": format_timestamp_vquery(start),
+        "end": format_timestamp_vquery(end),
+        "duration": _format_duration(end - start),
+        "grafana": grafana_link(start, end, namespace),
+        "victoria_logs": victorialogs_link(start, end, namespace),
+    }
+
+
+def enrich_intervals(metadata: Dict[str, Any], *, namespace: Optional[str]) -> Dict[str, Any]:
+    """
+    Return a new metadata dict where every valid interval node (end > start) is:
+      - formatted via format_timestamp_vquery,
+      - enriched with duration, grafana, victoria_logs.
+    Invalid or incomplete intervals are left unchanged.
+    """
+
+    def transform(node: Any) -> Any:
+        return _enrich_interval_node(node, namespace=namespace)
+
+    return dict_transform(metadata, transform)

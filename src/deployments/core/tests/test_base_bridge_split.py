@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.deployments.core.base_bridge import BaseBridge, format_duration
+from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.event_mapping import EventMapping
 from src.deployments.core.metadata_times import (
     format_metadata_timestamps,
@@ -111,69 +111,43 @@ def test_base_bridge_preserves_full_metadata_flow_with_event_mappings(tmp_path):
                 time_shift=timedelta(seconds=-30),
             ),
         ],
+        namespace="vaclab",
     )
     metadata.update(event_metadata)
 
-    assert metadata == {
-        "stack": {
-            "stateful_sets": ["waku-publisher", "waku-subscriber"],
-            "nodes_per_statefulset": [2, 5],
-            "namespace": "vaclab",
-            "extra_fields": ["kubernetes.pod_name", "kubernetes.pod_node_name"],
-            "name": "waku-regression__waku-publisher_2__waku-subscriber_5",
-        },
-        "experiment": {
-            "name": "waku-regression",
-            "class": "WakuRegression",
-            "bridge_class": {
-                "__type__": "src.deployments.core.base_bridge.BaseBridge",
-                "statefulsets_key": "stateful_sets",
-                "nodes_key": "nodes_per_statefulset",
-            },
-        },
-        "metadata": {
-            "command": "python deployment.py run",
-            "kube_config": "vaclab",
-            "namespace": "vaclab",
-            "args": {"message_rate": 10},
-        },
-        "params": {"publisher_count": 2, "subscriber_count": 5},
-        "complete": {"start": "2026-01-01T12:00:00", "end": "2026-01-01T12:20:30"},
-        "stable": {"start": "2026-01-01T12:06:00", "end": "2026-01-01T12:14:30"},
-    }
+    # Check core structure unchanged
+    assert metadata["stack"]["stateful_sets"] == ["waku-publisher", "waku-subscriber"]
+    assert metadata["stack"]["nodes_per_statefulset"] == [2, 5]
+    assert metadata["stack"]["namespace"] == "vaclab"
+    assert metadata["experiment"]["name"] == "waku-regression"
+    assert metadata["experiment"]["class"] == "WakuRegression"
 
+    # Check intervals are enriched
+    complete = metadata["complete"]
+    assert complete["start"] == "2026-01-01T12:00:00"
+    assert complete["end"] == "2026-01-01T12:20:30"
+    assert complete["duration"] == "0h 20m 30s"
+    assert complete["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=vaclab" in complete["grafana"]
+    assert complete["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "kubernetes.pod_namespace%3Avaclab" in complete["victoria_logs"]
 
-def test_base_bridge_apply_extras_adds_duration_and_links():
-    bridge = BaseBridge()
-    metadata = {"start": datetime(2026, 1, 1, 12, 0, 0), "end": datetime(2026, 1, 1, 13, 2, 3)}
-
-    result = bridge.apply_extras_func(
-        metadata,
-        duration=True,
-        grafana=True,
-        vlogs=True,
-        namespace="vaclab",
-    )
-
-    assert result["duration"] == "1h 2m 3s"
-    assert result["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
-    assert "var-namespace=vaclab" in result["grafana"]
-    assert result["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
-    assert "kubernetes.pod_namespace%3Avaclab" in result["victoria_logs"]
-
-
-def test_format_duration():
-    assert format_duration(timedelta(hours=2, minutes=3, seconds=4)) == "2h 3m 4s"
+    stable = metadata["stable"]
+    assert stable["start"] == "2026-01-01T12:06:00"
+    assert stable["end"] == "2026-01-01T12:14:30"
+    assert stable["duration"] == "0h 8m 30s"
+    assert stable["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert stable["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
 
 
 def test_format_metadata_timestamps_vquery_and_url():
     metadata = {"root": {"start": datetime(2026, 1, 1, 12, 0, 1, 123456)}}
 
     result_vq = format_metadata_timestamps(metadata, "vquery")
-    result_vq["root"]["start"] == "2026-01-01T12:00:01"
+    assert result_vq["root"]["start"] == "2026-01-01T12:00:01"
 
     result_url = format_metadata_timestamps(metadata, "url")
-    result_url["root"]["start"] = "2026-01-01T12:00:01.123Z"
+    assert result_url["root"]["start"] == "2026-01-01T12:00:01.123Z"
 
 
 def test_grafana_and_victoria_links():

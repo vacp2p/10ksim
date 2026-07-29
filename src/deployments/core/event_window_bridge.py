@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 # Project Imports
 from src.deployments.core.base_bridge import BaseBridge, EventMapping
@@ -38,7 +38,8 @@ class EventWindowBridge(BaseBridge):
 
     def get_metadata(self, events_log_path: Path) -> dict:
         metadata = super().get_metadata(events_log_path)
-        events = self._get_metadata_events(events_log_path)
+        namespace = metadata.get("metadata", {}).get("namespace")
+        events = self._get_metadata_events(events_log_path, namespace=namespace)
 
         try:
             selected_interval = events[self.interval]
@@ -55,7 +56,9 @@ class EventWindowBridge(BaseBridge):
 
         return metadata
 
-    def _get_metadata_events(self, events_log_path: Path) -> dict:
+    def _get_metadata_events(
+        self, events_log_path: Path, *, namespace: Optional[str] = None
+    ) -> dict:
         events_list = [
             EventMapping(
                 key=bound.key,
@@ -66,5 +69,5 @@ class EventWindowBridge(BaseBridge):
             for bound_name, bound in (("start", window.start), ("end", window.end))
         ]
         return self._get_metadata_from_events_list(
-            events_log_path, events_list, duration=True, grafana=True, vlogs=True
+            events_log_path, events_list, namespace=namespace
         )

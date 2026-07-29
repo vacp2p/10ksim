@@ -10,6 +10,7 @@ from src.deployments.core.metadata_times import (
     format_timestamp_vquery,
     get_valid_shifted_times,
     grafana_link,
+    victorialogs_link,
 )
 from src.utils.dict_utils import KeepNode
 
@@ -32,9 +33,9 @@ def test_format_timestamp_url_formats_datetime_for_urls():
 def test_format_metadata_timestamps_formats_nested_datetime_values():
     metadata = {"stable": {"start": datetime(2026, 1, 1, 12, 0, 0)}}
 
-    # assert format_metadata_timestamps(metadata, "vquery") == {
-    #     "stable": {"start": "2026-01-01T12:00:00"}
-    # }
+    assert format_metadata_timestamps(metadata, "vquery") == {
+        "stable": {"start": "2026-01-01T12:00:00"}
+    }
 
     assert format_metadata_timestamps(metadata, "url") == {
         "stable": {"start": "2026-01-01T12:00:00.000Z"}
@@ -97,3 +98,14 @@ def test_grafana_link_encodes_from_and_to_from_datetime():
     assert params["from"] == [start.isoformat()]
     assert params["to"] == [end.isoformat()]
     assert params["var-namespace"] == ["ns"]
+
+
+def test_victorialogs_link_encodes_range_and_namespace():
+    start = datetime(2026, 1, 1, 12, 0, 0)
+    end = datetime(2026, 1, 1, 12, 20, 30)
+
+    url = victorialogs_link(start, end, namespace="ns")
+
+    assert url.startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "g0.range_input=20m30s" in url
+    assert "kubernetes.pod_namespace%3Ans" in url

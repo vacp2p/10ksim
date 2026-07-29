@@ -87,11 +87,25 @@ def test_event_window_bridge_extracts_results_and_selected_interval(tmp_path):
 
     metadata = ExampleWindowBridge().get_metadata(log_path)
 
-    assert metadata["results"]["complete"]["start"] == "2026-01-01T12:00:00"
-    assert metadata["results"]["complete"]["end"] == "2026-01-01T12:30:30"
-    assert metadata["results"]["stable"]["start"] == "2026-01-01T12:08:00"
-    assert metadata["results"]["stable"]["end"] == "2026-01-01T12:19:30"
+    # Check complete interval
+    complete = metadata["results"]["complete"]
+    assert complete["start"] == "2026-01-01T12:00:00"
+    assert complete["end"] == "2026-01-01T12:30:30"
+    assert complete["duration"] == "0h 30m 30s"
+    assert complete["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=test" in complete["grafana"]
+    assert complete["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "kubernetes.pod_namespace%3Atest" in complete["victoria_logs"]
 
+    # Check stable interval
+    stable = metadata["results"]["stable"]
+    assert stable["start"] == "2026-01-01T12:08:00"
+    assert stable["end"] == "2026-01-01T12:19:30"
+    assert stable["duration"] == "0h 11m 30s"
+    assert stable["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert stable["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+
+    # Check selected interval promoted to stack
     assert metadata["stack"]["start_time"] == "2026-01-01T12:08:00"
     assert metadata["stack"]["end_time"] == "2026-01-01T12:19:30"
     assert metadata["stack"]["container_name"] == "example-container"

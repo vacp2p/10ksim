@@ -7,6 +7,7 @@ versus gossip pull sit orders of magnitude apart), so a CDF reads better than a 
 plot and this does not fit MetricsPlotter.
 """
 
+import argparse
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -34,6 +35,8 @@ class LatencyPlotConfig(BaseModel):
     xlabel_name: str = "Delivery latency (ms)"
     ylabel_name: str = "Share of deliveries"
     fig_size: List[PositiveInt] = Field(default_factory=lambda: [10, 6])
+    out_dir: Optional[Path] = None
+    """Where to write the plot. Defaults to the working directory."""
 
 
 def _received_csv(run: Path) -> Path:
@@ -99,7 +102,8 @@ class LatencyPlotter(BaseModel):
         plt.ylabel(config.ylabel_name)
         plt.legend()
         plt.tight_layout()
-        out = Path(f"{config.name}.jpg")
+        out = Path(config.out_dir or ".") / f"{config.name}.jpg"
+        out.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(out)
         plt.close()
         return out
@@ -110,3 +114,58 @@ def latency_table(runs: Dict[str, Union[str, Path]], percentiles=DEFAULT_PERCENT
     return pd.DataFrame(
         {label: latency_percentiles(run, percentiles) for label, run in runs.items()}
     )
+
+
+def plot_dump_latency(dump_dir: Path, *, label: str = "run") -> Optional[Path]:
+    """CDF and percentile table for one reliability dump, written beside it.
+
+    `dump_dir` is the analysis dump folder holding `summary/received.csv`, which is
+    what both platforms produce: Shadow dumps under the run folder, cluster runs
+    under their own analysis folder. Returns None when there is no delivery data,
+    the normal case for a run whose reliability analysis produced nothing.
+    """
+    csv = dump_dir / "summary" / "received.csv"
+    if load_delays(csv).empty:
+        logger.warning(f"latency: no delivery data in {csv}")
+        return None
+
+    LatencyPlotter(
+        configs=[LatencyPlotConfig(name="latency", runs={label: csv}, out_dir=dump_dir)]
+    ).create_plots()
+    logger.info(f"Delivery latency (ms) for {label}:\n{latency_table({label: csv}).to_string()}")
+    return dump_dir / "latency.jpg"
+
+
+def main() -> None:
+    """CDF + percentile table for any set of run folders, on either platform."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(
+        description="Plot delivery latency as a CDF across runs and print the percentile table."
+    )
+    parser.add_argument(
+        "runs",
+        nargs="+",
+        metavar="LABEL=RUN_DIR",
+        help="Curve label and run folder, e.g. mplex=out/n1000-mplex-kad__rand_195553",
+    )
+    parser.add_argument("--name", default="latency", help="Output file stem.")
+    parser.add_argument("--out-dir", type=Path, default=None, help="Where to write the plot.")
+    args = parser.parse_args()
+
+    runs: Dict[str, Path] = {}
+    for item in args.runs:
+        label, sep, path = item.partition("=")
+        if not sep or not path:
+            parser.error(f"expected LABEL=RUN_DIR, got `{item}`")
+        if label in runs:
+            parser.error(f"duplicate label `{label}`")
+        runs[label] = Path(path)
+
+    LatencyPlotter(
+        configs=[LatencyPlotConfig(name=args.name, runs=runs, out_dir=args.out_dir)]
+    ).create_plots()
+    print(latency_table(runs).to_string())
+
+
+if __name__ == "__main__":
+    main()

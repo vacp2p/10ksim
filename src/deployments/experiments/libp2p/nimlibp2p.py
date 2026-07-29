@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 import traceback
-from typing import Literal
+from typing import ClassVar, Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
@@ -179,6 +179,8 @@ async def publish(config, namespace, random_name):
 @experiment(name="nimlibp2p")
 class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.nimlibp2p:run_nimlibp2p_analysis"
 
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)

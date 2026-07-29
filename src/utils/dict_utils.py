@@ -35,7 +35,7 @@ def dict_set(
     path: str | List[str] | Path,
     value: Any,
     *,
-    replace_leaf: bool = True,
+    replace_leaf: bool = False,
     replace_nondict_stems: bool = False,
     sep: Optional[str] = "/",
 ) -> Optional[Any]:

@@ -19,7 +19,7 @@ from kubernetes.client import (
     V1ObjectMeta,
     V1StatefulSet,
 )
-from pydantic import NonNegativeFloat, NonNegativeInt
+from pydantic import NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.k8s_cleanup import delete_network_policy
 from src.deployments.core.k8s_rollout import (
@@ -28,7 +28,11 @@ from src.deployments.core.k8s_rollout import (
     scale_statefulset,
     wait_for_rollout,
 )
-from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
+from src.deployments.experiments.libp2p.nimlibp2p import (
+    BOOTSTRAP_NAME,
+    ExpConfig,
+    NimLibp2pExperiment,
+)
 from src.deployments.registry import experiment
 
 logger = logging.getLogger(__name__)
@@ -130,10 +134,25 @@ class PartitionConfig(ExpConfig):
     need to get in front of, so the split is set up on existence instead."""
     delay_cold_start: NonNegativeFloat = 700
     """Long enough to cover pod creation, the start delay above, and each half meshing."""
+    bootstrap_nodes: NonNegativeInt = 2
+    """One anchor per side. A single shared anchor is itself a relaying mesh node, so it
+    bridges the split and every message reaches both halves regardless of the policies."""
+
+    @model_validator(mode="after")
+    def _check_bootstrap_per_side(self):
+        if self.bootstrap_nodes < 2:
+            raise ValueError("A partition run needs at least 2 bootstrap nodes, one per side")
+        return self
 
 
 SIDE_LABEL = "partition-side"
 NAMESPACE_NAME_LABEL = "kubernetes.io/metadata.name"
+
+
+def bootstrap_sides(count: int) -> tuple[List[str], List[str]]:
+    """Split the anchors between the two sides, alternating by ordinal."""
+    names = [f"{BOOTSTRAP_NAME}-{i}" for i in range(count)]
+    return names[0::2], names[1::2]
 
 
 def partition_sides(nodes: V1StatefulSet, fraction: float) -> tuple[List[str], List[str]]:
@@ -147,9 +166,12 @@ def build_partition_policy(name: str, namespace: str, side: str, far_side: str) 
     """Deny pods labelled `side` any ingress from pods labelled `far_side`.
 
     Applied to both sides so the split is bidirectional. Only ingress is restricted, so
-    DNS and other egress still work. Pods with no side label (publisher, bootstrap) match
-    `NotIn` and stay reachable, as do other namespaces, which keeps metrics scraping
-    alive across the split.
+    DNS and other egress still work. Unlabelled pods match `NotIn` and stay reachable from
+    both sides, as do other namespaces, which keeps the publisher working and metrics
+    scraping alive across the split. That exemption is only safe for things that do not
+    relay: every gossipsub node, anchors included, has to be on one side or the other, or
+    it carries messages over the split and delivery stays at 100% however good the
+    policies are.
 
     The side label is one we set ourselves rather than a per-pod identifier like
     `statefulset.kubernetes.io/pod-name`: the CNI does not give per-pod-unique labels a
@@ -232,6 +254,10 @@ class NetworkPartition(NimLibp2pExperiment):
             return
 
         await self._wait_for_pods_to_exist(nodes)
+        # Anchors are relaying mesh nodes too, so each side needs its own on its own side.
+        anchors_a, anchors_b = bootstrap_sides(self.config.bootstrap_nodes)
+        side_a, side_b = side_a + anchors_a, side_b + anchors_b
+
         labelled = label_pods(side_a, self.namespace, {SIDE_LABEL: "a"}, self.api_client)
         labelled += label_pods(side_b, self.namespace, {SIDE_LABEL: "b"}, self.api_client)
         self.log_event({"event": "partition_labelled", "pods": labelled})

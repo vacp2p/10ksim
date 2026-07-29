@@ -192,6 +192,14 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
+    async def _after_nodes(self, nodes: V1StatefulSet) -> None:
+        """Runs once the nodes are up, before the cold start they form the mesh during.
+
+        Scenarios override this to shape the network the mesh will form over. Nodes hold
+        off dialling for `node_start_delay`, so anything done here lands before they
+        connect, provided that delay outlasts the deploy.
+        """
+
     async def _mid_run(self, nodes: V1StatefulSet) -> None:
         """Runs alongside the publish loop. Scenarios override this to disturb the network."""
 
@@ -234,6 +242,8 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         namespace = nodes.metadata.namespace
 
         await self.deploy(deployment=nodes, wait_for_ready=self.config.wait_nodes_ready)
+
+        await self._after_nodes(nodes)
 
         await asyncio.sleep(self.config.delay_cold_start)
 

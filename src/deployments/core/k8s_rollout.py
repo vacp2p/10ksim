@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterable, Optional, Tuple
 
 from kubernetes import client
@@ -132,6 +133,24 @@ async def wait_for_rollout(
             raise TimeoutError(f"Timeout waiting for {kind} `{name}`.")
 
         await asyncio.sleep(polling_interval)
+
+
+def label_pods(names: Iterable[str], namespace: str, labels: dict, api_client=None) -> int:
+    """Add labels to the named pods, in parallel. Returns how many were labelled."""
+    api = client.CoreV1Api(api_client or client.ApiClient())
+    body = {"metadata": {"labels": labels}}
+
+    def patch(name: str) -> bool:
+        try:
+            api.patch_namespaced_pod(name=name, namespace=namespace, body=body)
+            return True
+        except ApiException as e:
+            logger.warning(f"Could not label pod `{name}`: {e.status}")
+            return False
+
+    names = list(names)
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        return sum(pool.map(patch, names))
 
 
 def scale_statefulset(name: str, namespace: str, replicas: int, api_client=None) -> None:

@@ -6,6 +6,7 @@ does to it, so delivery, latency and mesh health stay comparable to a plain run.
 
 import asyncio
 import logging
+import time
 from typing import List
 
 from kubernetes.client import (
@@ -21,7 +22,12 @@ from kubernetes.client import (
 from pydantic import NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.k8s_cleanup import delete_network_policy
-from src.deployments.core.k8s_rollout import scale_statefulset, wait_for_rollout
+from src.deployments.core.k8s_rollout import (
+    get_pods_for_statefulset,
+    label_pods,
+    scale_statefulset,
+    wait_for_rollout,
+)
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 
@@ -113,14 +119,20 @@ class NodeChurn(NimLibp2pExperiment):
 
 class PartitionConfig(ExpConfig):
     partition_fraction: NonNegativeFloat = 0.5
-    """Share of relay nodes on the smaller side of the split."""
-    partition_at: NonNegativeInt = 30
-    """Seconds after the first message before splitting."""
-    partition_duration: NonNegativeInt = 60
-    """Seconds to hold the split before healing."""
+    """Share of relay nodes on the first side of the split."""
+    heal_at: NonNegativeInt = 120
+    """Seconds after the first message before the two halves are allowed to meet."""
+    node_start_delay: NonNegativeInt = 240
+    """Must outlast pod creation: the halves are labelled once every pod exists, and a
+    node that dialled before its label was on would sit across the split and stay there."""
+    wait_nodes_ready: bool = False
+    """Readiness here means the node already has a healthy mesh, which is exactly what we
+    need to get in front of, so the split is set up on existence instead."""
+    delay_cold_start: NonNegativeFloat = 700
+    """Long enough to cover pod creation, the start delay above, and each half meshing."""
 
 
-POD_NAME_LABEL = "statefulset.kubernetes.io/pod-name"
+SIDE_LABEL = "partition-side"
 NAMESPACE_NAME_LABEL = "kubernetes.io/metadata.name"
 
 
@@ -131,15 +143,17 @@ def partition_sides(nodes: V1StatefulSet, fraction: float) -> tuple[List[str], L
     return names[:split], names[split:]
 
 
-def build_partition_policy(
-    name: str, namespace: str, side: List[str], far_side: List[str]
-) -> V1NetworkPolicy:
-    """Deny `side` any ingress from `far_side`, leaving every other source alone.
+def build_partition_policy(name: str, namespace: str, side: str, far_side: str) -> V1NetworkPolicy:
+    """Deny pods labelled `side` any ingress from pods labelled `far_side`.
 
     Applied to both sides so the split is bidirectional. Only ingress is restricted, so
-    DNS and other egress still work. Pods without the ordinal label (publisher,
-    bootstrap) match `NotIn` and stay reachable, as do other namespaces, which keeps
-    metrics scraping alive through the split.
+    DNS and other egress still work. Pods with no side label (publisher, bootstrap) match
+    `NotIn` and stay reachable, as do other namespaces, which keeps metrics scraping
+    alive across the split.
+
+    The side label is one we set ourselves rather than a per-pod identifier like
+    `statefulset.kubernetes.io/pod-name`: the CNI does not give per-pod-unique labels a
+    security identity, so a policy selecting on one is accepted and then never enforced.
     """
     return V1NetworkPolicy(
         api_version="networking.k8s.io/v1",
@@ -147,11 +161,7 @@ def build_partition_policy(
         metadata=V1ObjectMeta(name=name, namespace=namespace),
         spec=V1NetworkPolicySpec(
             policy_types=["Ingress"],
-            pod_selector=V1LabelSelector(
-                match_expressions=[
-                    V1LabelSelectorRequirement(key=POD_NAME_LABEL, operator="In", values=side)
-                ]
-            ),
+            pod_selector=V1LabelSelector(match_labels={SIDE_LABEL: side}),
             ingress=[
                 V1NetworkPolicyIngressRule(
                     _from=[
@@ -159,7 +169,7 @@ def build_partition_policy(
                             pod_selector=V1LabelSelector(
                                 match_expressions=[
                                     V1LabelSelectorRequirement(
-                                        key=POD_NAME_LABEL, operator="NotIn", values=far_side
+                                        key=SIDE_LABEL, operator="NotIn", values=[far_side]
                                     )
                                 ]
                             )
@@ -184,18 +194,36 @@ def build_partition_policy(
 
 @experiment(name="nimlibp2p-partition")
 class NetworkPartition(NimLibp2pExperiment):
-    """Regression run split into two halves mid-run, then healed.
+    """Regression run where the network forms as two halves that later meet.
 
-    Tests whether the mesh reconverges and delivery recovers once the split lifts.
-    Messages published while split should only reach the publisher's own side, so
-    expect a delivery dip over the split window and full delivery after it.
+    The split is in place before the nodes dial, so each half discovers and meshes only
+    within itself, and the two are allowed to meet part way through publishing. What it
+    measures is convergence: how fast the halves merge and whether delivery returns to
+    everyone once they do.
+
+    It is deliberately not a cut of a live mesh. A policy only decides whether a
+    connection may be opened, so adding one to an already-meshed network leaves every
+    existing link running and changes nothing (measured: delivery, latency and peer
+    counts all unmoved). Cutting live connections needs packet-level drops instead.
     """
 
     config: PartitionConfig
 
-    async def _mid_run(self, nodes: V1StatefulSet) -> None:
-        await asyncio.sleep(self.config.partition_at)
+    async def _wait_for_pods_to_exist(self, nodes: V1StatefulSet, timeout: int = 600) -> None:
+        """Existence, not readiness: a node is only Ready once it has a healthy mesh, and
+        the split has to be in place well before that."""
+        name, wanted = nodes.metadata.name, nodes.spec.replicas
+        deadline = time.monotonic() + timeout
+        while True:
+            found = len(list(get_pods_for_statefulset(name, self.namespace, self.api_client)))
+            if found >= wanted:
+                logger.info(f"All {wanted} pods exist; labelling the split")
+                return
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"Only {found}/{wanted} pods exist after {timeout}s")
+            await asyncio.sleep(5)
 
+    async def _after_nodes(self, nodes: V1StatefulSet) -> None:
         side_a, side_b = partition_sides(nodes, self.config.partition_fraction)
         if not side_a or not side_b:
             logger.warning(
@@ -203,20 +231,29 @@ class NetworkPartition(NimLibp2pExperiment):
             )
             return
 
+        await self._wait_for_pods_to_exist(nodes)
+        labelled = label_pods(side_a, self.namespace, {SIDE_LABEL: "a"}, self.api_client)
+        labelled += label_pods(side_b, self.namespace, {SIDE_LABEL: "b"}, self.api_client)
+        self.log_event({"event": "partition_labelled", "pods": labelled})
+        if labelled != len(side_a) + len(side_b):
+            raise RuntimeError(
+                f"Labelled {labelled} of {len(side_a) + len(side_b)} pods; an unlabelled pod "
+                "is not covered by the split and would bridge the two halves."
+            )
+
         policies = [
-            build_partition_policy("partition-a", self.namespace, side_a, side_b),
-            build_partition_policy("partition-b", self.namespace, side_b, side_a),
+            build_partition_policy("partition-a", self.namespace, "a", "b"),
+            build_partition_policy("partition-b", self.namespace, "b", "a"),
         ]
         for policy in policies:
             self.dump_yaml(policy, policy.metadata.name)
-
-        self.log_event({"event": "partition_apply", "side_a": side_a, "side_b": side_b})
         await self.deploy(deployment=policies, wait_for_ready=False)
-        self.log_event("partition_applied")
+        self.log_event({"event": "partition_applied", "side_a": len(side_a), "side_b": len(side_b)})
 
-        await asyncio.sleep(self.config.partition_duration)
+    async def _mid_run(self, nodes: V1StatefulSet) -> None:
+        await asyncio.sleep(self.config.heal_at)
 
         self.log_event("partition_heal")
-        for policy in policies:
-            delete_network_policy(policy.metadata.name, self.namespace)
+        for name in ("partition-a", "partition-b"):
+            delete_network_policy(name, self.namespace)
         self.log_event("partition_healed")

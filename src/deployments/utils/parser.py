@@ -106,9 +106,11 @@ def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any
             kwargs["type"] = type(choices[0])
             kwargs["choices"] = choices
 
-    if "type" not in kwargs.keys() and annotation is not bool:
-        from_str = get_from_str(annotation, field_name)
-        kwargs["type"] = from_str
+    if "type" not in kwargs and annotation is not bool:
+        if origin is not None or annotation in (list, set, dict, tuple):
+            kwargs["type"] = str
+        else:
+            kwargs["type"] = get_from_str(annotation, field_name)
 
     if field.description:
         kwargs["help"] = field.description

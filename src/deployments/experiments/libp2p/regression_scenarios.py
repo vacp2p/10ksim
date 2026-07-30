@@ -130,7 +130,13 @@ class PartitionConfig(ExpConfig):
     """Readiness here means the node already has a healthy mesh, which is exactly what we
     need to get in front of, so the split is set up on existence instead."""
     delay_cold_start: NonNegativeFloat = 700
-    """Long enough to cover pod creation, the start delay above, and each half meshing."""
+    """Long enough to cover pod creation, the start delay above, and each half meshing.
+
+    Meshing inside a half is slow: the shared anchor hands out far-side addresses too, so
+    roughly half of every DHT lookup is spent on peers that cannot be dialled. At 30 nodes
+    a half was still on one or two peers after four minutes of dialling and only reached a
+    healthy mesh after seven, so do not trim this to the point where publishing starts
+    before both halves have converged."""
     bootstrap_nodes: NonNegativeInt = 1
     """One shared anchor, left unlabelled so both halves can reach it. It is the only
     rendezvous through which they can learn each other's addresses, and it cannot carry

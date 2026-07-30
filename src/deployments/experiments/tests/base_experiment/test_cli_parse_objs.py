@@ -1,6 +1,6 @@
 import argparse
 import logging
-from typing import ClassVar, Type
+from typing import Annotated, ClassVar, Optional, Type
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
@@ -217,3 +217,157 @@ class TestParserTypeWiring:
 
             _, kwargs = _field_to_arg("field", field_info)
             assert kwargs["type"] == py_type
+
+    # Container types - should parse JSON
+    def test_list_str_parses_json(self):
+        """list[str] should parse JSON strings."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": list[str],
+                "description": "List field",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("items", field_info)
+        assert flag == "--items"
+        result = kwargs["type"]('["a", "b"]')
+        assert result == ["a", "b"]
+
+    def test_list_int_parses_json(self):
+        """list[int] should parse JSON strings."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": list[int],
+                "description": "List of ints",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("items", field_info)
+        assert flag == "--items"
+        result = kwargs["type"]("[1, 2, 3]")
+        assert result == [1, 2, 3]
+
+    def test_dict_str_str_parses_json(self):
+        """dict[str, str] should parse JSON strings."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": dict[str, str],
+                "description": "dict field",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("metadata", field_info)
+        assert flag == "--metadata"
+        result = kwargs["type"]('{"key": "value"}')
+        assert result == {"key": "value"}
+
+    def test_set_str_parses_json(self):
+        """set[str] should parse JSON strings (returns list from JSON)."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": set[str],
+                "description": "set field",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("tags", field_info)
+        assert flag == "--tags"
+        result = kwargs["type"]('["a", "b"]')
+        assert result == ["a", "b"]  # JSON gives list, Pydantic converts to set later
+
+    def test_bare_list_parses_json(self):
+        """Bare list should parse JSON strings."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": list,
+                "description": "Bare list",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("items", field_info)
+        assert flag == "--items"
+        result = kwargs["type"]('["a", 1, true]')
+        assert result == ["a", 1, True]
+
+    def test_bare_dict_parses_json(self):
+        """Bare dict should parse JSON strings."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": dict,
+                "description": "Bare dict",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("data", field_info)
+        assert flag == "--data"
+        result = kwargs["type"]('{"key": "value"}')
+        assert result == {"key": "value"}
+
+    # Typing constructs - should not crash
+    def test_optional_int_parses(self):
+        """Optional[int] should unwrap and parse as int."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": Optional[int],
+                "description": "Optional int",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("value", field_info)
+        assert flag == "--value"
+        result = kwargs["type"]("42")
+        assert result == 42
+
+    def test_annotated_str_uses_str(self):
+        """Annotated[str, ...] should unwrap and use str."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": Annotated[str, "metadata"],
+                "description": "Annotated string",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("data", field_info)
+        assert flag == "--data"
+        assert kwargs["type"] == str
+
+    def test_annotated_list_parses_json(self):
+        """Annotated[list[str], ...] should unwrap and parse JSON."""
+        field_info = type(
+            "MockFieldInfo",
+            (),
+            {
+                "annotation": Annotated[list[str], "metadata"],
+                "description": "Annotated list",
+                "default": ARG_NOT_SET,
+            },
+        )()
+
+        flag, kwargs = _field_to_arg("items", field_info)
+        assert flag == "--items"
+        result = kwargs["type"]('["a", "b"]')
+        assert result == ["a", "b"]

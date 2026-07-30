@@ -1,6 +1,7 @@
 # Python Imports
 import argparse
-from typing import Any, Literal, Union, get_args, get_origin
+import json
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
@@ -27,6 +28,15 @@ def _annotation_display(annotation) -> str:
 
 def _unwrap_optional(annotation):
     origin = get_origin(annotation)
+
+    # Unwrap Annotated[T, ...] -> T
+    if origin is Annotated:
+        args = get_args(annotation)
+        if args:
+            annotation = args[0]
+            origin = get_origin(annotation)
+
+    # Unwrap Optional[T] -> T
     if origin is Union:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
         if len(args) == 1:
@@ -36,10 +46,11 @@ def _unwrap_optional(annotation):
 
 def get_from_str(annotation: Any, field_name: str):
     def from_str(input_str: str) -> Any:
-        # Convert using model_validate_json.
         errors = []
+
+        # Convert using model_validate_json.
         try:
-            if issubclass(annotation, BaseModel):
+            if isinstance(annotation, type) and issubclass(annotation, BaseModel):
                 return annotation.model_validate_json(input_str)
         except (ValidationError, ValueError) as e:
             err = argparse.ArgumentTypeError(
@@ -49,12 +60,13 @@ def get_from_str(annotation: Any, field_name: str):
 
         # Convert using custom from_str method.
         try:
-            return annotation.from_str(input_str)
-        except AttributeError as e:
-            err = argparse.ArgumentTypeError(
-                f"No from_str method for object. Field: `{field_name}` Error: `{e}`"
-            )
-            errors.append(err)
+            if hasattr(annotation, "from_str"):
+                return annotation.from_str(input_str)
+            else:
+                err = argparse.ArgumentTypeError(
+                    f"No from_str method for object. Field: `{field_name}`"
+                )
+                errors.append(err)
         except (ValidationError, ValueError, TypeError) as e:
             err = argparse.ArgumentTypeError(
                 f"Failed to convert string with from_str. Field: `{field_name}` Error: `{e}`"
@@ -63,7 +75,14 @@ def get_from_str(annotation: Any, field_name: str):
 
         # Convert using direct instantiation.
         try:
-            return annotation(input_str)
+            # Only try direct instantiation if annotation is callable
+            if callable(annotation):
+                return annotation(input_str)
+            else:
+                err = argparse.ArgumentTypeError(
+                    f"No constructor available for annotation. Field: `{field_name}`"
+                )
+                errors.append(err)
         except (ValidationError, ValueError, TypeError) as e:
             err = argparse.ArgumentTypeError(
                 f"Failed to convert string directly. Field: `{field_name}` Error: `{e}`"
@@ -106,17 +125,23 @@ def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any
             kwargs["type"] = type(choices[0])
             kwargs["choices"] = choices
 
-    if "type" not in kwargs and annotation is not bool:
-        if origin is not None or annotation in (list, set, dict, tuple):
-            kwargs["type"] = str
-        else:
+    # Container types - parse as JSON
+    if origin in (list, set, dict, tuple) or annotation in (list, set, dict, tuple):
+        kwargs["type"] = lambda item: json.loads(item)
+
+    # Fallback for complex types (only if annotation is a class)
+    elif "type" not in kwargs and annotation is not bool:
+        if isinstance(annotation, type):
             kwargs["type"] = get_from_str(annotation, field_name)
+        # Otherwise, keep as string (typing constructs like Annotated, etc.)
+        else:
+            kwargs["type"] = str
 
     if field.description:
         kwargs["help"] = field.description
 
     type_label = _annotation_display(annotation)
-    if "type" in kwargs.keys():
+    if "type" in kwargs:
         kwargs["metavar"] = f"{type_label}"
 
     return flag, kwargs

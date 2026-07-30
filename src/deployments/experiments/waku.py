@@ -173,7 +173,7 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
             try:
                 metrics = await grab_metrics(self.namespace, f"{node_name}-{node_index}")
                 self.dump(metrics, folder_prefix / f"metrics_{node_name}-{node_index}.log")
-            except client.exceptions.ApiException as e:
+            except (client.exceptions.ApiException, RuntimeError, ValueError) as e:
                 logger.error(f"Exception when grabbing /metrics: {e}")
 
         for index in range(0, num_nodes):

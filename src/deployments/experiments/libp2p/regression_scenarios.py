@@ -13,6 +13,7 @@ from kubernetes.client import (
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1NetworkPolicy,
+    V1NetworkPolicyEgressRule,
     V1NetworkPolicyIngressRule,
     V1NetworkPolicyPeer,
     V1NetworkPolicySpec,
@@ -149,54 +150,56 @@ def partition_sides(nodes: V1StatefulSet, fraction: float) -> tuple[List[str], L
     return names[:split], names[split:]
 
 
-def build_partition_policy(name: str, namespace: str, side: str, far_side: str) -> V1NetworkPolicy:
-    """Deny pods labelled `side` any ingress from pods labelled `far_side`.
+def _not_far_side(namespace: str, far_side: str) -> List[V1NetworkPolicyPeer]:
+    """Everything except the far side: same-namespace pods that are not on it, plus any
+    other namespace. Unlabelled pods match `NotIn`, so the publisher stays reachable, and
+    allowing other namespaces keeps DNS and metrics scraping working through the split."""
+    return [
+        V1NetworkPolicyPeer(
+            pod_selector=V1LabelSelector(
+                match_expressions=[
+                    V1LabelSelectorRequirement(key=SIDE_LABEL, operator="NotIn", values=[far_side])
+                ]
+            )
+        ),
+        V1NetworkPolicyPeer(
+            namespace_selector=V1LabelSelector(
+                match_expressions=[
+                    V1LabelSelectorRequirement(
+                        key=NAMESPACE_NAME_LABEL, operator="NotIn", values=[namespace]
+                    )
+                ]
+            )
+        ),
+    ]
 
-    Applied to both sides so the split is bidirectional. Only ingress is restricted, so
-    DNS and other egress still work. Unlabelled pods match `NotIn` and stay reachable from
-    both sides, as do other namespaces, which keeps the publisher working and metrics
-    scraping alive across the split. The exemption is only safe for things that cannot
-    relay: the publisher is an HTTP client, and the anchor answers DHT queries without
-    ever mounting GossipSub, so neither can carry a message over the split. Anything that
-    does relay has to be on one side or the other.
+
+def build_partition_policy(name: str, namespace: str, side: str, far_side: str) -> V1NetworkPolicy:
+    """Cut pods labelled `side` off from pods labelled `far_side`, both directions.
+
+    Restricting ingress alone is not enough. It stops a TCP handshake, because the reply
+    never comes back, which makes a TCP probe look reassuringly blocked. quic is UDP and
+    goes straight through: with an ingress-only policy the halves kept delivering to each
+    other in single-digit milliseconds while a TCP probe to the same pods timed out. So
+    both directions are restricted, and the two policies are applied to both sides.
+
+    Egress needs the same allow-list as ingress rather than a blanket deny, or the nodes
+    lose DNS and never resolve the bootstrap service at all.
 
     The side label is one we set ourselves rather than a per-pod identifier like
     `statefulset.kubernetes.io/pod-name`: the CNI does not give per-pod-unique labels a
     security identity, so a policy selecting on one is accepted and then never enforced.
     """
+    peers = _not_far_side(namespace, far_side)
     return V1NetworkPolicy(
         api_version="networking.k8s.io/v1",
         kind="NetworkPolicy",
         metadata=V1ObjectMeta(name=name, namespace=namespace),
         spec=V1NetworkPolicySpec(
-            policy_types=["Ingress"],
+            policy_types=["Ingress", "Egress"],
             pod_selector=V1LabelSelector(match_labels={SIDE_LABEL: side}),
-            ingress=[
-                V1NetworkPolicyIngressRule(
-                    _from=[
-                        V1NetworkPolicyPeer(
-                            pod_selector=V1LabelSelector(
-                                match_expressions=[
-                                    V1LabelSelectorRequirement(
-                                        key=SIDE_LABEL, operator="NotIn", values=[far_side]
-                                    )
-                                ]
-                            )
-                        ),
-                        V1NetworkPolicyPeer(
-                            namespace_selector=V1LabelSelector(
-                                match_expressions=[
-                                    V1LabelSelectorRequirement(
-                                        key=NAMESPACE_NAME_LABEL,
-                                        operator="NotIn",
-                                        values=[namespace],
-                                    )
-                                ]
-                            )
-                        ),
-                    ]
-                )
-            ],
+            ingress=[V1NetworkPolicyIngressRule(_from=peers)],
+            egress=[V1NetworkPolicyEgressRule(to=peers)],
         ),
     )
 

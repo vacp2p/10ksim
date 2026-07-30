@@ -1,8 +1,4 @@
-"""Adverse-condition regression scenarios: degraded links, node churn, network partition.
-
-Each one reuses the nimlibp2p regression experiment and only changes what the network
-does to it, so delivery, latency and mesh health stay comparable to a plain run.
-"""
+"""Adverse-condition regression scenarios: degraded links, node churn, network partition."""
 
 import asyncio
 import logging
@@ -43,28 +39,22 @@ class DegradedConfig(ExpConfig):
 
 @experiment(name="nimlibp2p-degraded")
 class DegradedNetwork(NimLibp2pExperiment):
-    """Regression run over a high-latency, jittery, lossy link.
-
-    Exercises the timeout, retransmit and gossip-repair paths that a clean link never
-    reaches. Latency is shaped, so read delivery and mesh health rather than absolute
-    latency, and compare against another run of the same profile.
-    """
+    """Regression run over a high-latency, jittery, lossy link."""
 
     config: DegradedConfig
 
 
 class ChurnConfig(ExpConfig):
     churn_fraction: NonNegativeFloat = 0.2
-    """Share of relay nodes taken down mid-run, from the highest ordinals."""
+    """Share taken down, from the highest ordinals."""
     churn_at: NonNegativeInt = 30
-    """Seconds after the first message before taking them down."""
+    """Seconds after the first message."""
     churn_downtime: NonNegativeInt = 60
-    """Seconds to stay down before rejoining."""
     churn_rejoin_timeout: NonNegativeInt = 600
 
 
 def churn_targets(nodes: V1StatefulSet, fraction: float) -> List[str]:
-    """Highest-ordinal pod names, which is what a scale-down removes."""
+    """Highest-ordinal pods, which is what a scale-down removes."""
     replicas = nodes.spec.replicas
     count = int(replicas * fraction)
     return [f"{nodes.metadata.name}-{i}" for i in range(replicas - count, replicas)]
@@ -74,24 +64,13 @@ def churn_targets(nodes: V1StatefulSet, fraction: float) -> List[str]:
 class NodeChurn(NimLibp2pExperiment):
     """Regression run where a share of the nodes drop out mid-run and rejoin.
 
-    Scaling the StatefulSet down holds them down for `churn_downtime`; deleting the
-    pods would not, because the controller replaces each one within seconds and the
-    network would only ever lose a trickle at a time. They come back with the same
-    names and have to rediscover peers, which exercises peer management, reconnection
-    and mesh repair. Delivery should recover; messages published into the gap may not
-    reach the nodes that were down for it.
+    Scale down rather than delete: a deleted pod is replaced within seconds.
     """
 
     config: ChurnConfig
 
     def _publishable_nodes(self) -> int:
-        """Keep the publisher off the churned nodes.
-
-        They come back on new addresses, and the publisher connects to the address it
-        looked up, so publishing to one that has just been replaced hangs until the
-        request times out. That is our harness tripping over the scenario rather than
-        anything about the protocol, and it starves the run of published messages.
-        """
+        """Churned nodes return on new addresses; publishing to a stale one hangs."""
         churned = int(self.config.num_relay_nodes * self.config.churn_fraction)
         return self.config.num_relay_nodes - churned
 
@@ -120,29 +99,19 @@ class NodeChurn(NimLibp2pExperiment):
 
 class PartitionConfig(ExpConfig):
     partition_fraction: NonNegativeFloat = 0.5
-    """Share of relay nodes on the first side of the split."""
+    """Share of relay nodes on the first side."""
     heal_at: NonNegativeInt = 120
-    """Seconds after the first message before the two halves are allowed to meet."""
+    """Seconds after the first message before the halves may meet."""
     node_start_delay: NonNegativeInt = 240
-    """Must outlast pod creation: the halves are labelled once every pod exists, and a
-    node that dialled before its label was on would sit across the split and stay there."""
+    """Must outlast pod creation, or a node dials before its side label is on."""
     wait_nodes_ready: bool = False
-    """Readiness here means the node already has a healthy mesh, which is exactly what we
-    need to get in front of, so the split is set up on existence instead."""
+    """Ready means already meshed, which the split has to precede."""
     delay_cold_start: NonNegativeFloat = 700
-    """Long enough to cover pod creation, the start delay above, and each half meshing.
-
-    Meshing inside a half is slow: the shared anchor hands out far-side addresses too, so
-    roughly half of every DHT lookup is spent on peers that cannot be dialled. At 30 nodes
-    a half was still on one or two peers after four minutes of dialling and only reached a
-    healthy mesh after seven, so do not trim this to the point where publishing starts
-    before both halves have converged."""
+    """Must cover each half meshing, slow behind a split: 7 min at 30 nodes. Publishing
+    before both halves converge invalidates the run."""
     bootstrap_nodes: NonNegativeInt = 1
-    """One shared anchor, left unlabelled so both halves can reach it. It is the only
-    rendezvous through which they can learn each other's addresses, and it cannot carry
-    traffic between them: the bootstrap role returns before GossipSub is mounted, so it
-    answers DHT queries and nothing else. Give each half its own anchor and neither ever
-    hears of the other, which makes a merge impossible rather than merely slow."""
+    """One shared unlabelled anchor, the only way the halves learn each other's addresses.
+    It cannot relay: the bootstrap role returns before GossipSub is mounted."""
 
 
 SIDE_LABEL = "partition-side"
@@ -157,9 +126,8 @@ def partition_sides(nodes: V1StatefulSet, fraction: float) -> tuple[List[str], L
 
 
 def _not_far_side(namespace: str, far_side: str) -> List[V1NetworkPolicyPeer]:
-    """Everything except the far side: same-namespace pods that are not on it, plus any
-    other namespace. Unlabelled pods match `NotIn`, so the publisher stays reachable, and
-    allowing other namespaces keeps DNS and metrics scraping working through the split."""
+    """Unlabelled pods match `NotIn` so the publisher stays reachable; other namespaces
+    keep DNS and metrics working."""
     return [
         V1NetworkPolicyPeer(
             pod_selector=V1LabelSelector(
@@ -181,20 +149,11 @@ def _not_far_side(namespace: str, far_side: str) -> List[V1NetworkPolicyPeer]:
 
 
 def build_partition_policy(name: str, namespace: str, side: str, far_side: str) -> V1NetworkPolicy:
-    """Cut pods labelled `side` off from pods labelled `far_side`, both directions.
+    """Cut `side` off from `far_side`, both directions.
 
-    Restricting ingress alone is not enough. It stops a TCP handshake, because the reply
-    never comes back, which makes a TCP probe look reassuringly blocked. quic is UDP and
-    goes straight through: with an ingress-only policy the halves kept delivering to each
-    other in single-digit milliseconds while a TCP probe to the same pods timed out. So
-    both directions are restricted, and the two policies are applied to both sides.
-
-    Egress needs the same allow-list as ingress rather than a blanket deny, or the nodes
-    lose DNS and never resolve the bootstrap service at all.
-
-    The side label is one we set ourselves rather than a per-pod identifier like
-    `statefulset.kubernetes.io/pod-name`: the CNI does not give per-pod-unique labels a
-    security identity, so a policy selecting on one is accepted and then never enforced.
+    Ingress alone only stops TCP; quic is UDP and goes straight through. Egress reuses the
+    ingress allow-list, or the nodes lose DNS. The label must be one we set: the CNI does
+    not enforce policies selecting on per-pod-unique labels.
     """
     peers = _not_far_side(namespace, far_side)
     return V1NetworkPolicy(
@@ -214,22 +173,13 @@ def build_partition_policy(name: str, namespace: str, side: str, far_side: str) 
 class NetworkPartition(NimLibp2pExperiment):
     """Regression run where the network forms as two halves that later meet.
 
-    The split is in place before the nodes dial, so each half discovers and meshes only
-    within itself, and the two are allowed to meet part way through publishing. What it
-    measures is convergence: how fast the halves merge and whether delivery returns to
-    everyone once they do.
-
-    It is deliberately not a cut of a live mesh. A policy only decides whether a
-    connection may be opened, so adding one to an already-meshed network leaves every
-    existing link running and changes nothing (measured: delivery, latency and peer
-    counts all unmoved). Cutting live connections needs packet-level drops instead.
+    Measures convergence, not a live cut: a policy only gates opening a connection.
     """
 
     config: PartitionConfig
 
     async def _wait_for_pods_to_exist(self, nodes: V1StatefulSet, timeout: int = 600) -> None:
-        """Existence, not readiness: a node is only Ready once it has a healthy mesh, and
-        the split has to be in place well before that."""
+        """Existence, not readiness: Ready already means meshed."""
         name, wanted = nodes.metadata.name, nodes.spec.replicas
         deadline = time.monotonic() + timeout
         while True:

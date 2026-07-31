@@ -97,7 +97,7 @@ class EphemeralVictoriaMetrics:
 
 STABLE_OFFSET_S = 180  # same offsets as the bridge's `stable` interval
 STABLE_TAIL_S = 30
-RECEIVED_METRIC = "libp2p_gossipsub_received_total"
+RECEIVED_METRIC = "libp2p_gossipsub_received_total"  # no topic label, assumes one topic
 
 
 def first_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:

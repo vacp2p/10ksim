@@ -74,7 +74,8 @@ class MetricsPlotter(BaseModel):
 
     def _save_plot(self, plot_name: str):
         plt.tight_layout()
-        plt.savefig(plot_name)
+        # tight_layout does not reserve space for the legend outside the axes.
+        plt.savefig(plot_name, bbox_inches="tight")
 
     def _add_subplot_df_to_axs(
         self, df: pd.DataFrame, index: int, axs: np.ndarray, plot_specs: Dict, metric: str
@@ -113,7 +114,8 @@ class MetricsPlotter(BaseModel):
         box_plot.set_title(metric)
         box_plot.tick_params(labelbottom=True)
         box_plot.xaxis.set_tick_params(rotation=45)
-        box_plot.legend(loc="upper right", bbox_to_anchor=(1, 1))
+        # Outside the axes: inside, it covers the top of the rightmost box and its label.
+        box_plot.legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0)
 
         result = add_boxplot_stat_labels(box_plot, scale_by=plot_specs.get("scale_x", 1))
         if result.is_err():

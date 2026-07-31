@@ -1,0 +1,196 @@
+network:
+  backend:
+    swarm:
+      host: 0.0.0.0
+      port: 7000
+      node_key: ed1812b4d7892394e1a957f217ec57d5cfd5c3fc9cb50f0ccaee6e57e86d98ec
+      gossipsub:
+        history_length: 5
+        history_gossip: 3
+        mesh_n: 6
+        mesh_n_low: 5
+        mesh_n_high: 12
+        retain_scores: 4
+        gossip_lazy: 6
+        gossip_factor: 0.25
+        heartbeat_initial_delay:
+          secs: 5
+          nanos: 0
+        heartbeat_interval:
+          secs: 1
+          nanos: 0
+        fanout_ttl:
+          secs: 60
+          nanos: 0
+        check_explicit_peers_ticks: 300
+        duplicate_cache_time:
+          secs: 60
+          nanos: 0
+        validate_messages: false
+        allow_self_origin: false
+        do_px: false
+        prune_peers: 0
+        prune_backoff:
+          secs: 60
+          nanos: 0
+        unsubscribe_backoff:
+          secs: 10
+          nanos: 0
+        backoff_slack: 1
+        flood_publish: true
+        graft_flood_threshold:
+          secs: 10
+          nanos: 0
+        mesh_outbound_min: 2
+        opportunistic_graft_ticks: 60
+        opportunistic_graft_peers: 2
+        gossip_retransimission: 3
+        max_messages_per_rpc: null
+        max_ihave_length: 5000
+        max_ihave_messages: 10
+        iwant_followup_time:
+          secs: 3
+          nanos: 0
+        published_message_ids_cache_time:
+          secs: 10
+          nanos: 0
+      kademlia:
+        query_timeout_secs: null
+        replication_factor: null
+        parallelism: null
+        disjoint_query_paths: null
+        max_packet_size: null
+        kbucket_inserts: null
+        caching: null
+        periodic_bootstrap_interval_secs: null
+      identify:
+        agent_version: null
+        interval_secs: null
+        push_listen_addr_updates: null
+        cache_size: null
+        hide_listen_addrs: true
+      chain_sync:
+        peer_response_timeout: 60000
+      nat:
+        type: static
+        external_address: /ip4/127.0.0.2/udp/7000/quic-v1
+    initial_peers:
+      - /dns4/test-0.test/udp/7000/quic-v1
+      - /dns4/test-1.test/udp/7000/quic-v1
+      - /dns4/test-2.test/udp/7000/quic-v1
+      - /dns4/test-3.test/udp/7000/quic-v1
+      - /dns4/test-4.test/udp/7000/quic-v1
+      - /dns4/test-5.test/udp/7000/quic-v1
+      - /dns4/test-6.test/udp/7000/quic-v1
+      - /dns4/test-7.test/udp/7000/quic-v1
+      - /dns4/test-8.test/udp/7000/quic-v1
+      - /dns4/test-9.test/udp/7000/quic-v1
+blend:
+  non_ephemeral_signing_key_id: 4bb846c3b0b411ef283d83efb419fc32a205c86b303ee4a43a252cf31e47f176
+  core:
+    backend:
+      listening_address: /ip4/0.0.0.0/udp/7001/quic-v1
+      core_peering_degree:
+        start: 2
+        end: 3
+      edge_node_connection_timeout: '1.000000000'
+      max_edge_node_incoming_connections: 300
+      max_dial_attempts_per_peer: 3
+    zk:
+      secret_key_kms_id: 240502f1d2bf420ba6b985f9b13cc0bb11b7a2f2831aa02a3edd0febb49ba127
+  edge:
+    backend:
+      max_dial_attempts_per_peer_per_message: 1
+      replication_factor: 1
+cryptarchia:
+  service:
+    bootstrap:
+      prolonged_bootstrap_period: '1.000000000'
+      force_bootstrap: false
+      offline_grace_period:
+        grace_period: '1200.000000000'
+        state_recording_interval: '60.000000000'
+  network:
+    bootstrap:
+      ibd:
+        peers: []
+        delay_before_new_download:
+          secs: 10
+          nanos: 0
+    sync:
+      orphan:
+        max_orphan_cache_size: 1000
+    network:
+      max_connected_peers_to_try_download: 16
+      max_discovered_peers_to_try_download: 16
+  leader:
+    wallet:
+      max_tx_fee: 18446744073709551615
+      funding_pk: b3cbc080ad97c31bca4323e68de5737c8803033b0c94b595bcfee752c3f6af0d
+time:
+  backend:
+    server: pool.ntp.org:123
+    client:
+      timeout: '5.000000000'
+      listening_interface: 0.0.0.0
+    update_interval: '16.000000000'
+sdp:
+  declaration_id: e726b896c83ffdd2bcab45e127e9b647e91f92e9a5e3f792b40971b76d1dfb71
+  wallet:
+    max_tx_fee: 18446744073709551615
+    funding_pk: b3cbc080ad97c31bca4323e68de5737c8803033b0c94b595bcfee752c3f6af0d
+api:
+  backend:
+    listen_address: 0.0.0.0:18080
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 1000
+  testing:
+    listen_address: 127.0.0.1:20257
+    cors_origins: []
+    timeout: 30
+    max_body_size: 10485760
+    max_concurrent_requests: 1000
+storage:
+  backend:
+    folder_name: ./db
+    read_only: false
+    column_family: blocks
+kms:
+  backend:
+    keys:
+      b3cbc080ad97c31bca4323e68de5737c8803033b0c94b595bcfee752c3f6af0d: !Zk 736470ed1812b4d7892394e1a957f21700000000000000000000000000000000
+      163ada18de0e607a935b621bfa9678fcf8c69b1280242851262be73a473b541c: !Zk 952b2135c29651707e95509694ecda512aa3b5ff7a9415e9e062bbe08daeef0c
+      240502f1d2bf420ba6b985f9b13cc0bb11b7a2f2831aa02a3edd0febb49ba127: !Zk 49b846e388c94d67065c10fc234994e2e754c568c3b24334e7e4c83039aa2816
+      5511b41b1b948d98ecbf4b773f8d9b4787641ae98e25deadafb6e6745078dd06: !Zk 626eed1812b4d7892394e1a957f217ec00000000000000000000000000000000
+      a13c2623546ded778b8f47eef25fcbca5c22c9e33027d898e8dc0f48b7c6dd13: !Zk 6c64ed1812b4d7892394e1a957f217ec00000000000000000000000000000000
+      4bb846c3b0b411ef283d83efb419fc32a205c86b303ee4a43a252cf31e47f176: !Ed25519 ed1812b4d7892394e1a957f217ec57d5cfd5c3fc9cb50f0ccaee6e57e86d98ec
+wallet:
+  known_keys:
+    163ada18de0e607a935b621bfa9678fcf8c69b1280242851262be73a473b541c: 163ada18de0e607a935b621bfa9678fcf8c69b1280242851262be73a473b541c
+    a13c2623546ded778b8f47eef25fcbca5c22c9e33027d898e8dc0f48b7c6dd13: a13c2623546ded778b8f47eef25fcbca5c22c9e33027d898e8dc0f48b7c6dd13
+    b3cbc080ad97c31bca4323e68de5737c8803033b0c94b595bcfee752c3f6af0d: b3cbc080ad97c31bca4323e68de5737c8803033b0c94b595bcfee752c3f6af0d
+  voucher_master_key_id: a13c2623546ded778b8f47eef25fcbca5c22c9e33027d898e8dc0f48b7c6dd13
+tracing:
+  logger:
+    file:
+      directory: ./state/logs
+      prefix: null
+    loki: null
+    gelf: null
+    otlp:
+      endpoint: http://otel:4317/
+      service_name: test-2.test
+    stdout: true
+    stderr: false
+  tracing: None
+  filter: None
+  metrics: !Otlp
+    endpoint: http://otel-opentelemetry-collector.opentelemetry:4317/
+    authorization_header: Bearer ift-1YHBXyK0Dy6EsBzYf8DdXKPvfbJDzqjW8FyWUm
+    host_identifier: test-2.test
+  console: None
+  level: DEBUG
+state:
+  base_folder: ./state

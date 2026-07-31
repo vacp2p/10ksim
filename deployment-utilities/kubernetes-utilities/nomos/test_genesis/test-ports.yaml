@@ -1,0 +1,303 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-0
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-0
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-1
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-1
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-2
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-2
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-3
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-3
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-4
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-4
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-5
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-5
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-6
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-6
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-7
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-7
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-8
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-8
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-9
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-9
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-10
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-10
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-11
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-11
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-12
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-12
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-13
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-13
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-14
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-14
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-15
+  namespace: test
+spec:
+  type: ClusterIP
+  selector:
+    statefulset.kubernetes.io/pod-name: test-15
+  ports:
+    - name: swarm
+      protocol: UDP
+      port: 7000
+      targetPort: 7000
+    - name: blend
+      protocol: UDP
+      port: 7001
+      targetPort: 7001

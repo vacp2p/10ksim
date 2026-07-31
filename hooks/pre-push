@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+echo "Running code checks before push..."
+
+if ! make check; then
+    echo
+    echo "❌ Push blocked: formatting or import issues detected"
+    exit 1
+fi
+
+echo "✅ All checks passed"
+exit 0
+

@@ -1,0 +1,130 @@
+from copy import deepcopy
+from typing import List, Literal, Optional, TypeVar
+
+from kubernetes.client import (
+    V1Container,
+    V1ContainerPort,
+    V1EnvVar,
+    V1Probe,
+    V1ResourceRequirements,
+    V1SecurityContext,
+    V1VolumeMount,
+)
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.deployments.core.configs.command import CommandConfig, build_command
+from src.deployments.core.k8s_object import dict_to_v1probe
+
+T = TypeVar("T")
+
+
+class Image(BaseModel):
+    repo: str
+    tag: str
+
+    @staticmethod
+    def from_str(image: str):
+        repo, tag = image.split(":")
+        return Image(repo=repo, tag=tag)
+
+    def __str__(self):
+        return f"{self.repo}:{self.tag}"
+
+
+class ContainerConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    security_context: Optional[V1SecurityContext] = None
+    command_config: CommandConfig = Field(default_factory=CommandConfig)
+    readiness_probe: Optional[V1Probe] = None
+    # Optional fields default to None to avoid inclusion in the deployment yaml
+    # when we pass them to the constructor of Kubernetes objects.
+    # These fields are set to `[]` before `.append` is called if needed.
+    volume_mounts: Optional[List[V1VolumeMount]] = None
+    resources: Optional[V1ResourceRequirements] = None
+    env: Optional[List[V1EnvVar]] = None
+    name: str
+    image: Optional[Image] = None
+    ports: Optional[List[V1ContainerPort]] = None
+    image_pull_policy: Literal["IfNotPresent", "Always", "Never"]
+    security_context: Optional[V1SecurityContext] = None
+
+    def with_image(self, image: Image, *, overwrite: bool = False):
+        if self.image is not None and not overwrite:
+            raise ValueError("Image already exist for container.")
+        self.image = image
+
+    def with_port(self, port: V1ContainerPort, *, overwrite: bool = False):
+        if self.ports is None:
+            self.ports = []
+
+        current_port = next(
+            (item for item in self.ports if item.container_port == port.container_port), None
+        )
+        if current_port:
+            if not overwrite:
+                raise ValueError(
+                    "Port already exists for container. " f"Port: `{port}` config: `{self}`"
+                )
+            self.ports.remove(current_port)
+
+        self.ports.append(port)
+
+    def with_resources(self, resources: V1ResourceRequirements, *, overwrite: bool = False):
+        if self.resources is not None and not overwrite:
+            raise ValueError("Resources already exist for container.")
+        self.resources = resources
+
+    def with_volume_mount(self, mount: V1VolumeMount, *, overwrite: bool = False):
+        if self.volume_mounts is None:
+            self.volume_mounts = []
+
+        current_mount = next((item for item in self.volume_mounts if item.name == mount.name), None)
+        if current_mount:
+            if not overwrite:
+                raise ValueError(
+                    f"Volume mount already exists in {type(self)}. "
+                    f"volume mount: `{mount}` config: `{self}`"
+                )
+            self.volume_mounts.remove(current_mount)
+
+        self.volume_mounts.append(mount)
+
+    def with_env_var(self, var: V1EnvVar, *, overwrite: bool = False):
+        if self.env is None:
+            self.env = []
+        index = next(
+            iter([index for index, item in enumerate(self.env) if item.name == var.name]), None
+        )
+        if index is not None:
+            if not overwrite:
+                raise ValueError(
+                    f"Attempt to add duplicate environment variable to {type(self)}. "
+                    f"var: `{var}` config: {self}"
+                )
+            self.env[index] = var
+        else:
+            self.env.append(var)
+
+    def with_readiness_probe(self, readiness_probe: V1Probe | dict, *, overwrite=False):
+        if self.readiness_probe is not None and not overwrite:
+            raise ValueError("ContainerConfig already has readiness probe.")
+        if isinstance(readiness_probe, dict):
+            readiness_probe = dict_to_v1probe(readiness_probe)
+        self.readiness_probe = readiness_probe
+
+
+def build_container(config: ContainerConfig) -> V1Container:
+    command, args = build_command(config.command_config)
+    return V1Container(
+        name=config.name,
+        image=str(config.image),
+        security_context=config.security_context,
+        image_pull_policy=config.image_pull_policy,
+        ports=deepcopy(config.ports),
+        env=deepcopy(config.env),
+        resources=deepcopy(config.resources),
+        readiness_probe=deepcopy(config.readiness_probe),
+        volume_mounts=deepcopy(config.volume_mounts),
+        command=command,
+        args=args,
+    )

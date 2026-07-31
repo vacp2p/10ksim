@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nodes
+  namespace: zerotesting
+spec:
+  replicas: 1
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-service
+  selector:
+    matchLabels:
+      app: zerotenkay
+  template:
+    metadata:
+      labels:
+        app: zerotenkay
+    spec:
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+      volumes:
+        - name: enr-data
+          emptyDir: {}
+      initContainers:
+        - name: grabenr
+          image: soutullostatus/getenr:v0.5.0
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: enr-data
+              mountPath: /etc/enr
+          command:
+            - /app/getenr.sh
+          args:
+            - "3"
+      containers:
+        - name: waku
+          image: soutullostatus/nwaku-jq-curl:v0.33.0-rc.3
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8645
+            - containerPort: 8008
+          volumeMounts:
+            - name: enr-data
+              mountPath: /etc/enr
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  curl -s http://127.0.0.1:8008/metrics |
+                  awk '!/^#/ && /^libp2p_gossipsub_healthy_peers_topics /{
+                    print "Found gossipsub:", $0;
+                    if ($2 == 1.0) {
+                      exit 0;  # success, healthy state
+                    } else {
+                      exit 1;  # failure, unhealthy state
+                    }
+                  }'
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command:
+            - sh
+            - -c
+            - |
+              . /etc/enr/enr.env
+              echo ENRs are $ENR1 $ENR2 $ENR3
+              nice -n 19 /usr/bin/wakunode --filter=true --relay=true --max-connections=100 --rest=true --rest-admin=true --rest-address=0.0.0.0 --discv5-discovery=true --discv5-enr-auto-update=True --log-level=INFO --metrics-server=True --metrics-server-address=0.0.0.0 --discv5-bootstrap-node=$ENR1 --discv5-bootstrap-node=$ENR2 --discv5-bootstrap-node=$ENR3 --nat=extip:${IP} --cluster-id=2 --shard=0
+# --content-topic="/my-app/1/dst/proto"
+# --pubsub-topic="/waku/2/rs/2/0"
+# NTC 202NTC 2024-10-24 08:59:24.479+00:00 pushed message succesfully to all subscribers topics="waku filter" tid=7 file=protocol.nim:258 pubsubTopic=/waku/2/rs/2/0 contentTopic=/my-app/1/dst/proto msg_hash=0x4c32527af6a6dfbfda5cd598ffc72421bf28ff732d28779dc227a841d5f7b826 numPeers=4 target_peer_ids="@[\"16U*9fieFq\", \"16U*yHyirb\", \"16U*j8LTkL\", \"16U*DUT72G\"]"

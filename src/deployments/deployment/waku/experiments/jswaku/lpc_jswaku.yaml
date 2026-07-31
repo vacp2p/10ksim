@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lpclient-0
+  namespace: zerotesting
+spec:
+  replicas: 1
+  podManagementPolicy: "Parallel"
+  serviceName: zerotesting-lightpush-client
+  selector:
+    matchLabels:
+      app: zerotenkay-lightpush-client
+  template:
+    metadata:
+      labels:
+        app: zerotenkay-lightpush-client
+    spec:
+      dnsConfig:
+        searches:
+          - zerotesting-service.zerotesting.svc.cluster.local
+      volumes:
+        - name: address-data
+          emptyDir: {}
+      initContainers:
+        - name: grabaddress
+          image: pearsonwhite/get_address_2:4635b8b4eafd0f399579a1a0369f7a4961d4cac2
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: address-data
+              mountPath: /etc/addrs
+          command:
+            - python3
+            - /app/get_address.py
+          args:
+            - --num=1
+            - --service-name="zerotesting-lightpush-server.zerotesting"
+            - --output-file="/etc/addrs/addrs.env"
+            - --var-name="addrs"
+            - --websocket
+      containers:
+        - name: waku
+          # image: pearsonwhite/jswaku:dbdca49646c04d17eb99e1f4da6d3bda135cd928 # works
+          # image: pearsonwhite/jswaku:e5f51d7df101020a1a6d0787ce68fab4f28922f5 # works
+          # image: pearsonwhite/jswaku:6fcf9ea65b23f087db72b1b99b0469484e05e913 # with logging
+          image: pearsonwhite/jswaku:e8caeb1f0d82da0e0ff2c6aa661c8c2515936825 # with logging + raw error # doesn't work
+          # image: pearsonwhite/jswaku:f2ad23ad4354fb3440ca369ed91ba4d882bbacf6 # master without logging # works
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          ports:
+            - containerPort: 8645
+            - containerPort: 8008
+            - containerPort: 8080
+          volumeMounts:
+            - name: address-data
+              mountPath: /etc/addrs
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  node=127.0.0.1
+                  jswaku_external_port=8080
+                  curl -s -X GET http://$node:${jswaku_external_port}/waku/v1/peer-info \
+                      -H "Content-Type: application/json" | grep 'peerId' > /dev/null
+            successThreshold: 5
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 2
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "150m"
+            limits:
+              memory: "600Mi"
+              cpu: "400m"
+          env:
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: DEBUG
+              value: "waku:*"
+          command:
+            - sh
+            - -c
+            - |
+              . /etc/addrs/addrs.env
+              echo addrs are $addrs1
+              /usr/local/bin/docker-entrypoint.sh --cluster-id=2 --shard=0
+
+
+
+# sleep infinity
+
+# auto sharding
+              # /usr/local/bin/docker-entrypoint.sh --cluster-id=2
+
+#staic sharding
+#               /usr/local/bin/docker-entrypoint.sh --cluster-id=2 --shard=0

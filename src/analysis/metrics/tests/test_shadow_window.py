@@ -1,4 +1,8 @@
-from src.analysis.metrics.shadow_metrics import RECEIVED_METRIC, first_delivery_snapshot
+from src.analysis.metrics.shadow_metrics import (
+    RECEIVED_METRIC,
+    first_delivery_snapshot,
+    settled_window,
+)
 
 
 def _snap(received: float) -> str:
@@ -32,3 +36,20 @@ def test_handles_peers_with_different_snapshot_counts():
 
 def test_no_peers_at_all():
     assert first_delivery_snapshot([]) is None
+
+
+def _info(first, start=1000, last=1180):
+    return {"start_epoch_s": start, "last_epoch_s": last, "first_delivery_epoch_s": first}
+
+
+def test_settled_window_when_the_run_is_long_enough():
+    assert settled_window(_info(1100, last=1600)) == (1280, 1570)
+
+
+def test_falls_back_when_the_default_config_is_too_short():
+    # publisher at 90s, sim stops at 180s: the settled window would end before it starts.
+    assert settled_window(_info(1090)) == (1000, 1180)
+
+
+def test_falls_back_when_nothing_was_delivered():
+    assert settled_window(_info(None)) == (1000, 1180)

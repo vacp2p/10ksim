@@ -112,6 +112,17 @@ def first_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:
     return None
 
 
+def settled_window(info: dict) -> tuple:
+    """Settled part of the run, or all of it when the run is too short to have one."""
+    first = info.get("first_delivery_epoch_s")
+    if first is not None:
+        start, end = first + STABLE_OFFSET_S, info["last_epoch_s"] - STABLE_TAIL_S
+        if start < end:
+            return start, end
+    logger.warning("Run too short to have a settled window; scraping all of it")
+    return info["start_epoch_s"], info["last_epoch_s"]
+
+
 def import_shadow_metrics(
     *,
     hosts_dir: Path,
@@ -193,15 +204,7 @@ def scrape_run_metrics(
         info = import_shadow_metrics(
             hosts_dir=hosts, vm_url=vm.url, namespace=namespace, interval_s=interval_s
         )
-        first_delivery = info.get("first_delivery_epoch_s")
-        if first_delivery is None:
-            logger.warning("No delivery found in the Shadow metrics; scraping the whole run")
-            start_epoch, end_epoch = info["start_epoch_s"], info["last_epoch_s"]
-        else:
-            start_epoch = first_delivery + STABLE_OFFSET_S
-            end_epoch = info["last_epoch_s"] - STABLE_TAIL_S
-            if start_epoch >= end_epoch:
-                raise ValueError(f"Settled window is empty: {start_epoch} >= {end_epoch}")
+        start_epoch, end_epoch = settled_window(info)
         start_dt = datetime.fromtimestamp(start_epoch, tz=timezone.utc)
         end_dt = datetime.fromtimestamp(end_epoch, tz=timezone.utc)
         config = (

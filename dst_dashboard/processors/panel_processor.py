@@ -189,7 +189,7 @@ class PanelProcessor(DatasetProcessor):
                 "emphasis": {"iconStyle": {"borderColor": "#00d4ff"}},
             },
             "dataZoom": [
-                {"type": "inside", "xAxisIndex": 0, "filterMode": "none", "disabled": False}
+                {"type": "inside", "xAxisIndex": 0, "filterMode": "filter", "disabled": False}
             ],
             "grid": {"left": "10%", "right": "10%", "bottom": "15%"},
             "xAxis": {
@@ -213,6 +213,7 @@ class PanelProcessor(DatasetProcessor):
                     "type": "boxplot",
                     "data": boxplot_data,
                     "itemStyle": {"borderColor": "#00d4ff", "borderWidth": 1.5},
+                    "clip": True,
                 }
             ],
         }

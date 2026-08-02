@@ -117,8 +117,10 @@ function stripAxisChrome(axis) {
 }
 
 // A small, chrome-free variant for card/thumbnail previews: same data and
-// series colors as the real chart, but no axes, legend, toolbox or tooltip -
-// just the shape of the data at a glance.
+// series colors as the real chart, but no axes, legend, toolbox, tooltip, or
+// zoom/pan - just the shape of the data at a glance. dataZoom in particular
+// is never interacted with here but still costs real setup (gesture
+// listeners, coordinate tracking) on every mount if left enabled.
 export function buildThumbnailOption(rawOption, isDark) {
     const option = buildChartOption(rawOption, isDark);
     return {
@@ -127,6 +129,7 @@ export function buildThumbnailOption(rawOption, isDark) {
         legend: { show: false },
         toolbox: { show: false },
         tooltip: { show: false },
+        dataZoom: [],
         xAxis: stripAxisChrome(option.xAxis),
         yAxis: stripAxisChrome(option.yAxis),
     };

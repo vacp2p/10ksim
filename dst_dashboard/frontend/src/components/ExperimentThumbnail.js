@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useInView } from '../hooks/useInView';
 import { buildThumbnailOption } from '../utils/chartOptions';
+import { getCachedRawOptions, setCachedRawOptions } from '../utils/thumbnailCache';
 import { useTheme } from '../context/ThemeContext';
 
 const ReactECharts = lazy(() => import('echarts-for-react'));
@@ -20,54 +21,73 @@ function ThumbnailSkeleton() {
 }
 
 // A quick "glance" preview of an experiment's results, rendered only once the
-// card scrolls near the viewport. Fetches up to MAX_PANELS panels once (not
-// re-fetched on re-scroll - useInView's default `once` gating), then cycles
-// through whichever came back, crossfading every few seconds so a card with
-// several panels doesn't just sit on the first one forever.
+// card scrolls near the viewport. Some panels are tiny pre-aggregated stats;
+// others (raw per-message timeseries) can be tens of MB, and some panels can
+// simply error out server-side. So every panel (up to MAX_PANELS) is fetched
+// independently and concurrently - first paint shows whichever succeeds
+// first, regardless of position, rather than waiting on or being blocked by
+// any one specific panel. Only if every attempted panel fails does the whole
+// thumbnail fall back to the "failed" placeholder.
 function ExperimentThumbnail({ experimentId }) {
     const { isDark } = useTheme();
     const [ref, inView] = useInView();
-    const [rawOptions, setRawOptions] = useState([]);
+    const cached = getCachedRawOptions(experimentId);
+    const [rawOptions, setRawOptions] = useState(cached || []);
     const [index, setIndex] = useState(0);
+    const [visible, setVisible] = useState(true);
     const [failed, setFailed] = useState(false);
 
     useEffect(() => {
-        if (!inView) return;
-        let cancelled = false;
+        if (!inView || cached) return;
+        const controller = new AbortController();
+
+        const fetchPanelOption = (panelName) =>
+            axios
+                .get(`${API_BASE_URL}/experiments/${experimentId}/panels/${panelName}`, {
+                    signal: controller.signal,
+                })
+                .then((res) => res.data?.option)
+                .catch(() => null);
 
         axios
-            .get(`${API_BASE_URL}/experiments/${experimentId}`)
+            .get(`${API_BASE_URL}/experiments/${experimentId}`, { signal: controller.signal })
             .then((res) => {
                 const panels = (res.data?.panels || []).slice(0, MAX_PANELS);
                 if (!panels.length) {
-                    if (!cancelled) setFailed(true);
-                    return null;
-                }
-                return Promise.all(
-                    panels.map((panel) =>
-                        axios
-                            .get(`${API_BASE_URL}/experiments/${experimentId}/panels/${panel.name}`)
-                            .then((res) => res.data?.option)
-                            .catch(() => null)
-                    )
-                );
-            })
-            .then((fetched) => {
-                if (cancelled || !fetched) return;
-                const valid = fetched.filter(Boolean);
-                if (valid.length) {
-                    setRawOptions(valid);
-                } else {
                     setFailed(true);
+                    return;
                 }
+
+                const accumulated = [];
+                let settledCount = 0;
+
+                panels.forEach((panel) => {
+                    fetchPanelOption(panel.name).then((option) => {
+                        if (controller.signal.aborted) return;
+                        settledCount += 1;
+                        if (option) {
+                            accumulated.push(option);
+                            setCachedRawOptions(experimentId, [...accumulated]);
+                            setRawOptions([...accumulated]);
+                        } else if (settledCount === panels.length && accumulated.length === 0) {
+                            setFailed(true);
+                        }
+                    });
+                });
             })
             .catch(() => {
-                if (!cancelled) setFailed(true);
+                if (!controller.signal.aborted) setFailed(true);
             });
 
         return () => {
-            cancelled = true;
+            controller.abort();
         };
+        // `cached` is intentionally excluded: it's only a mount-time "was this
+        // already cached" gate. Fetching a panel populates the cache, which
+        // would flip `cached` truthy and re-trigger this effect - and its
+        // cleanup aborts the very controller the other panel fetches are
+        // still using, killing them mid-flight.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [inView, experimentId]);
 
     // Re-theming on a dark/light toggle is just recoloring already-fetched
@@ -78,12 +98,24 @@ function ExperimentThumbnail({ experimentId }) {
         [rawOptions, isDark]
     );
 
+    // Rotates by updating the *same* mounted chart's option (echarts-for-react
+    // diffs and calls setOption in place) rather than remounting it - keeps
+    // the canvas/echarts instance alive instead of re-creating it every tick.
+    // The brief opacity dip in between is a plain CSS crossfade, not a remount.
     useEffect(() => {
         if (options.length <= 1) return undefined;
-        const id = setInterval(() => {
-            setIndex((i) => (i + 1) % options.length);
+        let hideTimeout;
+        const intervalId = setInterval(() => {
+            setVisible(false);
+            hideTimeout = setTimeout(() => {
+                setIndex((i) => (i + 1) % options.length);
+                setVisible(true);
+            }, 200);
         }, ROTATE_INTERVAL_MS);
-        return () => clearInterval(id);
+        return () => {
+            clearInterval(intervalId);
+            clearTimeout(hideTimeout);
+        };
     }, [options.length]);
 
     const currentOption = options[index] || null;
@@ -92,7 +124,7 @@ function ExperimentThumbnail({ experimentId }) {
         <div ref={ref} className="bg-base-100 border-b border-base-100 shrink-0 overflow-hidden" style={{ height: THUMB_HEIGHT }}>
             {currentOption ? (
                 <Suspense fallback={<ThumbnailSkeleton />}>
-                    <div key={index} className="h-full w-full animate-page-in">
+                    <div className={`h-full w-full transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
                         <ReactECharts
                             option={currentOption}
                             style={{ height: THUMB_HEIGHT, width: '100%' }}

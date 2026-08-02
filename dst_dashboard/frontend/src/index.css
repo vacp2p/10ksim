@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+    /* Always reserve the scrollbar gutter so navigating between a short page
+       (no scrollbar) and a tall one (scrollbar appears) doesn't shift fixed
+       elements like the navbar horizontally. */
+    overflow-y: scroll;
+}
+
+body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+[data-theme="dst"] {
+    --content-secondary: #475651;
+    --content-tertiary: #848e88;
+}
+
+[data-theme="dst-dark"] {
+    --content-secondary: #b8bdb8;
+    --content-tertiary: #848e88;
+}
+
+code {
+    font-family: 'DM Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+}

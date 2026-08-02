@@ -1,0 +1,23 @@
+# DST Explorer Configuration
+# Global datasources - defined once, referenced by all experiments.
+#
+# Experiments are no longer defined here - they're managed exclusively through
+# the API (see README.md "Managing experiments"). To seed the 3 example
+# experiments this file used to contain, see
+# dst_dashboard/scripts/seed_data/experiments.json and seed_experiments.py.
+
+datasources:
+  - name: victoria-logs
+    type: VictoriaLogs
+    url: https://vlselect.lab.vac.dev/select/logsql/query
+
+  - name: victoria-metrics
+    type: Prometheus
+    url: https://metrics.lab.vac.dev/select/0/prometheus/api/v1/
+
+
+
+
+
+
+

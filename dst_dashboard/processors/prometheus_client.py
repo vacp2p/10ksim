@@ -16,9 +16,10 @@ from result import Err, Ok, Result
 logger = logging.getLogger(__name__)
 
 
-def query_instant(base_url: str, query: str, timeout: int = 10) -> Result[List[Dict[str, Any]], str]:
-    """Execute a Prometheus/VictoriaMetrics instant query.
-    """
+def query_instant(
+    base_url: str, query: str, timeout: int = 10
+) -> Result[List[Dict[str, Any]], str]:
+    """Execute a Prometheus/VictoriaMetrics instant query."""
     url = base_url + "query?query=" + urllib.parse.quote(query)
 
     try:

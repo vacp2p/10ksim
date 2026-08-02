@@ -190,7 +190,9 @@ class TestVaclabProcessorSnapshot:
 
     def test_snapshot_is_empty_when_no_nodes_report(self, monkeypatch):
         self._patch_queries(monkeypatch)
-        processor = VaclabProcessor(DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/"))
+        processor = VaclabProcessor(
+            DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/")
+        )
         snapshot = processor.get_snapshot()
         assert snapshot["nodes"] == []
 
@@ -207,13 +209,13 @@ class TestVaclabProcessorSnapshot:
             "fs_size": Ok(_vec("10.0.0.1:9100", 500) + _vec("10.0.0.9:9100", 500)),
             "fs_avail": Ok(_vec("10.0.0.1:9100", 100) + _vec("10.0.0.9:9100", 100)),
             "pods": Ok(
-                _pod_vec(
-                    [(NODE_01, "libp2p-lab"), (NODE_01, "kube-system"), (METAL_01, "default")]
-                )
+                _pod_vec([(NODE_01, "libp2p-lab"), (NODE_01, "kube-system"), (METAL_01, "default")])
             ),
         }
         self._patch_queries(monkeypatch, overrides)
-        processor = VaclabProcessor(DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/"))
+        processor = VaclabProcessor(
+            DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/")
+        )
         snapshot = processor.get_snapshot()
 
         hostnames = [n["hostname"] for n in snapshot["nodes"]]
@@ -232,7 +234,9 @@ class TestVaclabProcessorSnapshot:
     def test_node_present_in_uname_but_missing_other_metrics_gets_null_blocks(self, monkeypatch):
         overrides = {"uname": Ok(_uname_vec([("10.0.0.2:9100", NODE_02)]))}
         self._patch_queries(monkeypatch, overrides)
-        processor = VaclabProcessor(DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/"))
+        processor = VaclabProcessor(
+            DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/")
+        )
         snapshot = processor.get_snapshot()
 
         node_02 = next(n for n in snapshot["nodes"] if n["hostname"] == NODE_02)

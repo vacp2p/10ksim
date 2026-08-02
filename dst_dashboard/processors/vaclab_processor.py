@@ -37,7 +37,15 @@ SYSTEM_NAMESPACE_EXACT = {
     "dst-dashboard",
     "local",
 }
-SYSTEM_NAMESPACE_PREFIXES = ("cattle-", "victorialogs", "vmetrics", "fleet-", "cluster-fleet-", "p-", "u-")
+SYSTEM_NAMESPACE_PREFIXES = (
+    "cattle-",
+    "victorialogs",
+    "vmetrics",
+    "fleet-",
+    "cluster-fleet-",
+    "p-",
+    "u-",
+)
 
 RATE_WINDOW = "5m"
 
@@ -198,7 +206,6 @@ class VaclabProcessor:
             ),
             "mem_total": "node_memory_MemTotal_bytes",
             "mem_available": "node_memory_MemAvailable_bytes",
-            
             "net_rx": (
                 f'max(rate(node_network_receive_bytes_total{{device!~"{NETWORK_DEVICE_EXCLUDE_REGEX}"}}'
                 f"[{RATE_WINDOW}])) by (instance)"
@@ -207,7 +214,6 @@ class VaclabProcessor:
                 f'max(rate(node_network_transmit_bytes_total{{device!~"{NETWORK_DEVICE_EXCLUDE_REGEX}"}}'
                 f"[{RATE_WINDOW}])) by (instance)"
             ),
-            
             "net_capacity": (
                 f'max(node_network_speed_bytes{{device!~"{NETWORK_DEVICE_EXCLUDE_REGEX}"}} > 0) by (instance)'
             ),

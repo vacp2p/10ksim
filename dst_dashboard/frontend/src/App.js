@@ -9,7 +9,8 @@ import PageTransition from './components/PageTransition';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ExperimentsPage = lazy(() => import('./pages/ExperimentsPage'));
 const ExperimentPage = lazy(() => import('./pages/ExperimentPage'));
-const ComingSoonPage = lazy(() => import('./pages/ComingSoonPage'));
+const TopologyPage = lazy(() => import('./pages/TopologyPage'));
+const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 
 function App() {
     return (
@@ -24,14 +25,8 @@ function App() {
                                     <Route path="/" element={<HomePage />} />
                                     <Route path="/experiments" element={<ExperimentsPage />} />
                                     <Route path="/experiment/:experimentId" element={<ExperimentPage />} />
-                                    <Route
-                                        path="/vaclab/topology"
-                                        element={<ComingSoonPage title="Topology" description="Interactive network topology visualization is coming soon." />}
-                                    />
-                                    <Route
-                                        path="/vaclab/networks"
-                                        element={<ComingSoonPage title="Networks" description="Live network explorer is coming soon." />}
-                                    />
+                                    <Route path="/vaclab/topology" element={<TopologyPage />} />
+                                    <Route path="/vaclab/networks" element={<ResourcesPage />} />
                                 </Routes>
                             </PageTransition>
                         </Suspense>

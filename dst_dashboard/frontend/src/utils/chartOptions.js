@@ -1,10 +1,19 @@
+// Shared byte-formatting helpers - used by panel axis/tooltip formatters below
+// and by the vaclab resources/topology pages, so both places agree on units.
+export function formatBytes(value) {
+    if (value >= 1099511627776) return (value / 1099511627776).toFixed(2) + ' TB';
+    if (value >= 1073741824) return (value / 1073741824).toFixed(2) + ' GB';
+    if (value >= 1048576) return (value / 1048576).toFixed(2) + ' MB';
+    if (value >= 1024) return (value / 1024).toFixed(2) + ' KB';
+    return value.toFixed(0) + ' B';
+}
+
+export function formatBytesPerSec(value) {
+    return formatBytes(value) + '/s';
+}
+
 const FORMATTERS = {
-    __BYTES_FORMATTER__: (value) => {
-        if (value >= 1073741824) return (value / 1073741824).toFixed(2) + ' GB/s';
-        if (value >= 1048576) return (value / 1048576).toFixed(2) + ' MB/s';
-        if (value >= 1024) return (value / 1024).toFixed(2) + ' KB/s';
-        return value.toFixed(2) + ' B/s';
-    },
+    __BYTES_FORMATTER__: (value) => formatBytesPerSec(value),
     __MS_FORMATTER__: (value) => {
         if (value >= 1000) return (value / 1000).toFixed(2) + ' s';
         return value.toFixed(2) + ' ms';

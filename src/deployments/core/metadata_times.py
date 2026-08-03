@@ -5,7 +5,7 @@ from typing import Any, Dict, Literal, Optional
 from urllib.parse import quote, urlencode
 
 # Project Imports
-from src.utils.dict_utils import KeepNode, dict_get, dict_set, dict_transform, dict_visit
+from src.utils.dict_utils import KeepNode, dict_get, dict_set, dict_transform
 
 
 def format_timestamp_vquery(input_timestamp) -> str:
@@ -33,30 +33,14 @@ def format_metadata_timestamps(metadata: dict, format: Literal["vquery", "url"])
         raise ValueError(f"Unknown format option passed to function. format: `{format}`") from e
 
 
-def get_valid_shifted_times(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
+def apply_time_shifts(deltatime_map: Dict[str, timedelta], metadata: dict) -> dict:
+    """Apply time shifts to all timestamps at the specified paths."""
     shifted = deepcopy(metadata)
     for path, delta in deltatime_map.items():
         time_value = dict_get(shifted, path, default=None, sep=".")
-        if time_value is not None:
-            shifted_time = time_value + delta
-            dict_set(shifted, path, shifted_time, sep=".", replace_leaf=True)
-
-    filtered = {}
-
-    def collect_valid_interval(path, obj):
-        try:
-            start_dt = obj["start"]
-            end_dt = obj["end"]
-            if end_dt <= start_dt:
-                return
-            dict_set(filtered, path / "start", start_dt)
-            dict_set(filtered, path / "end", end_dt)
-        except (KeyError, TypeError):
-            pass
-
-    dict_visit(shifted, collect_valid_interval)
-
-    return filtered
+        if isinstance(time_value, datetime):
+            dict_set(shifted, path, time_value + delta, sep=".", replace_leaf=True)
+    return shifted
 
 
 def grafana_link(start_time: datetime, end_time: datetime, namespace: Optional[str] = None) -> str:

@@ -10,9 +10,9 @@ from pydantic import BaseModel
 from src.deployments.core.event_log import find_events, parse_events_log
 from src.deployments.core.event_mapping import EventMapping
 from src.deployments.core.metadata_times import (
+    apply_time_shifts,
     enrich_intervals,
     format_metadata_timestamps,
-    get_valid_shifted_times,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,7 @@ class BaseBridge(BaseModel):
         metadata = parse_events_log(events_log_path, events_maps)
 
         deltatime_map = {obj.target: obj.time_shift for obj in events_list}
-        shifted = get_valid_shifted_times(deltatime_map, metadata)
-        metadata.update(shifted)
+        metadata = apply_time_shifts(deltatime_map, metadata)
 
         metadata = enrich_intervals(metadata, namespace=namespace)
         metadata = format_metadata_timestamps(metadata, format="vquery")

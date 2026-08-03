@@ -191,14 +191,14 @@ def test_service_discovery_bridge_defines_complete_and_discovery_event_windows()
     assert bridge.interval == "complete"
     assert bridge.container_name == LIBP2P_CONTAINER_NAME
     assert bridge.event_windows() == [
-        event_window_bridge.EventWindow(
+        EventWindow(
             key="complete",
-            start=event_window_bridge.EventBound("wait_for_clear_finished"),
-            end=event_window_bridge.EventBound("service_discovery_finished"),
+            start=EventBound("wait_for_clear_finished"),
+            end=EventBound("service_discovery_finished"),
         ),
-        event_window_bridge.EventWindow(
+        EventWindow(
             key="discovery",
-            start=event_window_bridge.EventBound("service_discovery_started"),
-            end=event_window_bridge.EventBound("service_discovery_finished"),
+            start=EventBound("service_discovery_started"),
+            end=EventBound("service_discovery_finished"),
         ),
     ]

@@ -1,4 +1,5 @@
 # Python Imports
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -6,6 +7,8 @@ from typing import List, Optional, Union
 
 # Project Imports
 from src.deployments.core.base_bridge import BaseBridge, EventMapping
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,16 +44,21 @@ class EventWindowBridge(BaseBridge):
         namespace = metadata.get("metadata", {}).get("namespace")
         events = self._get_metadata_events(events_log_path, namespace=namespace)
 
-        try:
-            selected_interval = events[self.interval]
-            metadata["stack"]["start_time"] = selected_interval.get("start", EventNotFound)
-            metadata["stack"]["end_time"] = selected_interval.get("end", EventNotFound)
-        except KeyError as e:
-            raise ValueError(
-                f"Missing `{self.interval}` analysis window in events metadata. "
-                f"interval: `{self.interval}` events: `{events}`"
-            ) from e
+        selected_interval = events.get(self.interval, {})
+        start = selected_interval.get("start", EventNotFound)
+        end = selected_interval.get("end", EventNotFound)
 
+        if self.interval not in events:
+            logger.warning(
+                f"Analysis window `{self.interval}` not found. " f"Available: {list(events.keys())}"
+            )
+        elif start == EventNotFound or end == EventNotFound:
+            logger.warning(
+                f"Analysis window `{self.interval}` incomplete: " f"start={start}, end={end}"
+            )
+
+        metadata["stack"]["start_time"] = start
+        metadata["stack"]["end_time"] = end
         metadata["results"] = events
         metadata["stack"]["container_name"] = self.container_name
 

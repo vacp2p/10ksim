@@ -1,11 +1,17 @@
 # Python Import
 import json
+import logging
 from datetime import timedelta
 
 import pytest
 
 # Project Import
-import src.deployments.core.event_window_bridge as event_window_bridge
+from src.deployments.core.event_window_bridge import (
+    EventBound,
+    EventNotFound,
+    EventWindow,
+    EventWindowBridge,
+)
 from src.deployments.libp2p.bridge import Bridge as Libp2pBridge
 from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 from src.deployments.libp2p.service_discovery_bridge import ServiceDiscoveryBridge
@@ -19,37 +25,37 @@ def write_events_log(tmp_path, events):
     return log_path
 
 
-class ExampleWindowBridge(event_window_bridge.EventWindowBridge):
+class ExampleWindowBridge(EventWindowBridge):
     interval: str = "stable"
     container_name: str = "example-container"
 
     def event_windows(self):
         return [
-            event_window_bridge.EventWindow(
+            EventWindow(
                 key="complete",
-                start=event_window_bridge.EventBound("experiment_started"),
-                end=event_window_bridge.EventBound("experiment_finished", timedelta(seconds=30)),
+                start=EventBound("experiment_started"),
+                end=EventBound("experiment_finished", timedelta(seconds=30)),
             ),
-            event_window_bridge.EventWindow(
+            EventWindow(
                 key="stable",
-                start=event_window_bridge.EventBound(
+                start=EventBound(
                     {"event": "messages_started", "role": "publisher"}, timedelta(minutes=3)
                 ),
-                end=event_window_bridge.EventBound("messages_finished", timedelta(seconds=-30)),
+                end=EventBound("messages_finished", timedelta(seconds=-30)),
             ),
         ]
 
 
 def test_event_bound_builds_key_from_string_event():
-    bound = event_window_bridge.EventBound("experiment_started", timedelta(seconds=5))
+    bound = EventBound("experiment_started", timedelta(seconds=5))
 
-    assert bound == event_window_bridge.EventBound("experiment_started", timedelta(seconds=5))
+    assert bound == EventBound("experiment_started", timedelta(seconds=5))
     assert bound.key == {"event": "experiment_started"}
     assert bound.time_shift == timedelta(seconds=5)
 
 
 def test_event_bound_uses_dict_event_as_key():
-    bound = event_window_bridge.EventBound({"event": "messages_started", "role": "publisher"})
+    bound = EventBound({"event": "messages_started", "role": "publisher"})
 
     assert bound.key == {"event": "messages_started", "role": "publisher"}
     assert bound.time_shift == timedelta(0)
@@ -114,7 +120,7 @@ def test_event_window_bridge_extracts_results_and_selected_interval(tmp_path):
     assert "event_windows" not in metadata["experiment"]["bridge_class"]
 
 
-def test_event_window_bridge_raises_when_selected_interval_is_missing(tmp_path):
+def test_event_window_bridge_warns_when_selected_interval_is_missing(tmp_path, caplog):
     log_path = write_events_log(
         tmp_path,
         [
@@ -136,8 +142,21 @@ def test_event_window_bridge_raises_when_selected_interval_is_missing(tmp_path):
         ],
     )
 
-    with pytest.raises(ValueError, match="Missing `stable` analysis window"):
-        ExampleWindowBridge().get_metadata(log_path)
+    with caplog.at_level(logging.WARNING):
+        metadata = ExampleWindowBridge().get_metadata(log_path)
+
+    # Should warn about missing interval
+    assert "Analysis window `stable` not found" in caplog.text
+
+    # Should still create metadata with EventNotFound for times
+    assert metadata["stack"]["start_time"] == EventNotFound
+    assert metadata["stack"]["end_time"] == EventNotFound
+    assert metadata["stack"]["container_name"] == "example-container"
+    assert metadata["experiment"]["name"] == "window-demo"
+
+    # Should have results with only the intervals that exist
+    assert "complete" in metadata["results"]
+    assert "stable" not in metadata["results"]
 
 
 @pytest.mark.parametrize(
@@ -153,17 +172,15 @@ def test_protocol_bridges_define_complete_and_stable_event_windows(bridge_cls, c
     assert bridge.interval == "complete"
     assert bridge.container_name == container_name
     assert bridge.event_windows() == [
-        event_window_bridge.EventWindow(
+        EventWindow(
             key="complete",
-            start=event_window_bridge.EventBound("wait_for_clear_finished"),
-            end=event_window_bridge.EventBound("internal_run_finished", timedelta(seconds=30)),
+            start=EventBound("wait_for_clear_finished"),
+            end=EventBound("internal_run_finished", timedelta(seconds=30)),
         ),
-        event_window_bridge.EventWindow(
+        EventWindow(
             key="stable",
-            start=event_window_bridge.EventBound("start_messages", timedelta(minutes=3)),
-            end=event_window_bridge.EventBound(
-                "publisher_messages_finished", timedelta(seconds=-30)
-            ),
+            start=EventBound("start_messages", timedelta(minutes=3)),
+            end=EventBound("publisher_messages_finished", timedelta(seconds=-30)),
         ),
     ]
 

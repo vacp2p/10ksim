@@ -371,3 +371,18 @@ class TestParserTypeWiring:
         assert flag == "--items"
         result = kwargs["type"]('["a", "b"]')
         assert result == ["a", "b"]
+
+    def test_from_str_falls_back_on_failure(self):
+        """If from_str raises an error, should fall back to constructor."""
+
+        class CustomClass:
+            @staticmethod
+            def from_str(s: str):
+                raise ValueError("intentional failure")
+
+            def __init__(self, s: str):
+                self.value = s
+
+        converter = get_from_str(CustomClass, "data")
+        result = converter("test")
+        assert result.value == "test"  # Should use constructor fallback

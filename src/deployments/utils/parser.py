@@ -53,41 +53,33 @@ def get_from_str(annotation: Any, field_name: str):
             if isinstance(annotation, type) and issubclass(annotation, BaseModel):
                 return annotation.model_validate_json(input_str)
         except (ValidationError, ValueError) as e:
-            err = argparse.ArgumentTypeError(
-                f"Failed convert string with model_validate_json. Field: `{field_name}` Error: `{e}`"
+            errors.append(
+                argparse.ArgumentTypeError(
+                    f"model_validate_json failed. Field: `{field_name}` Error: `{e}`"
+                )
             )
-            errors.append(err)
 
         # Convert using custom from_str method.
-        try:
-            if hasattr(annotation, "from_str"):
-                return annotation.from_str(input_str)
-            else:
-                err = argparse.ArgumentTypeError(
-                    f"No from_str method for object. Field: `{field_name}`"
+        from_str_method = getattr(annotation, "from_str", None)
+        if from_str_method is not None:
+            try:
+                return from_str_method(input_str)
+            except Exception as e:
+                errors.append(
+                    argparse.ArgumentTypeError(
+                        f"from_str failed. Field: `{field_name}` Error: `{e}`"
+                    )
                 )
-                errors.append(err)
-        except (ValidationError, ValueError, TypeError) as e:
-            err = argparse.ArgumentTypeError(
-                f"Failed to convert string with from_str. Field: `{field_name}` Error: `{e}`"
-            )
-            errors.append(err)
 
         # Convert using direct instantiation.
-        try:
-            # Only try direct instantiation if annotation is callable
-            if callable(annotation):
+        if callable(annotation):
+            try:
                 return annotation(input_str)
-            else:
+            except Exception as e:
                 err = argparse.ArgumentTypeError(
-                    f"No constructor available for annotation. Field: `{field_name}`"
+                    f"Failed to convert string directly. Field: `{field_name}` Error: `{e}`"
                 )
                 errors.append(err)
-        except (ValidationError, ValueError, TypeError) as e:
-            err = argparse.ArgumentTypeError(
-                f"Failed to convert string directly. Field: `{field_name}` Error: `{e}`"
-            )
-            errors.append(err)
 
         if len(errors) == 1:
             raise errors[0]

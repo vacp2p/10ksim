@@ -1,6 +1,7 @@
 # Python Imports
 import argparse
 import json
+import types
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
@@ -27,20 +28,23 @@ def _annotation_display(annotation) -> str:
 
 
 def _unwrap_optional(annotation):
+    """Recursively unwrap Annotated and Optional to get the actual type."""
     origin = get_origin(annotation)
 
-    # Unwrap Annotated[T, ...] -> T
+    # Unwrap Annotated[T, ...] -> T, then recurse
     if origin is Annotated:
         args = get_args(annotation)
         if args:
-            annotation = args[0]
-            origin = get_origin(annotation)
+            return _unwrap_optional(args[0])
 
     # Unwrap Optional[T] -> T
-    if origin is Union:
+    # Optional[T] => typing.Union
+    # T | None => types.UnionType
+    if origin is Union or origin is types.UnionType:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
         if len(args) == 1:
-            return args[0]
+            return _unwrap_optional(args[0])
+
     return annotation
 
 

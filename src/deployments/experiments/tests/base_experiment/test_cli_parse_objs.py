@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.deployments.experiments.base_experiment import BaseExperiment
-from src.deployments.utils.parser import ARG_NOT_SET, _field_to_arg, get_from_str
+from src.deployments.utils.parser import ARG_NOT_SET, _field_to_arg, _unwrap_optional, get_from_str
 
 logger = logging.getLogger(__name__)
 
@@ -386,3 +386,66 @@ class TestParserTypeWiring:
         converter = get_from_str(CustomClass, "data")
         result = converter("test")
         assert result.value == "test"  # Should use constructor fallback
+
+
+class TestUnwrapOptional:
+    """Test _unwrap_optional handles various type annotations."""
+
+    def test_unwraps_optional(self):
+        """Optional[T] should unwrap to T."""
+        result = _unwrap_optional(Optional[str])
+        assert result is str
+
+    def test_unwraps_union_pipe_syntax(self):
+        """T | None (pipe syntax) should unwrap to T."""
+        result = _unwrap_optional(str | None)
+        assert result is str
+
+    def test_unwraps_annotated(self):
+        """Annotated[T, ...] should unwrap to T."""
+        result = _unwrap_optional(Annotated[str, "meta"])
+        assert result is str
+
+    def test_unwraps_annotated_optional_nested(self):
+        """Annotated[Optional[T], ...] should unwrap to T."""
+        result = _unwrap_optional(Annotated[Optional[str], "meta"])
+        assert result is str
+
+    def test_unwraps_optional_annotated_nested(self):
+        """Optional[Annotated[T, ...]] should unwrap to T."""
+        result = _unwrap_optional(Optional[Annotated[str, "meta"]])
+        assert result is str
+
+    def test_unwraps_annotated_pipe_nested(self):
+        """Annotated[T | None, ...] should unwrap to T."""
+        result = _unwrap_optional(Annotated[str | None, "meta"])
+        assert result is str
+
+    def test_unwraps_deeply_nested(self):
+        """Annotated[Optional[Annotated[T, ...]], ...] should unwrap to T."""
+        result = _unwrap_optional(Annotated[Optional[Annotated[str, "inner"]], "outer"])
+        assert result is str
+
+    def test_unwraps_custom_class_optional(self):
+        """CustomClass | None should unwrap to CustomClass."""
+
+        class ImageConfig:
+            pass
+
+        result = _unwrap_optional(ImageConfig | None)
+        assert result is ImageConfig
+
+    def test_unwraps_annotated_custom_class(self):
+        """Annotated[CustomClass | None, ...] should unwrap to CustomClass."""
+
+        class ImageConfig:
+            pass
+
+        result = _unwrap_optional(Annotated[ImageConfig | None, "meta"])
+        assert result is ImageConfig
+
+    def test_non_wrapped_unchanged(self):
+        """Plain types should be unchanged."""
+        assert _unwrap_optional(str) is str
+        assert _unwrap_optional(int) is int
+        assert _unwrap_optional(list[str]) == list[str]

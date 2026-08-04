@@ -74,8 +74,10 @@ def delete_pod(name, namespace, *, grace_period=0):
     )
 
 
-def delete_network_policy(name, namespace):
-    client.NetworkingV1Api().delete_namespaced_network_policy(
+def delete_network_policy(
+    name: str, namespace: str, api_client: Optional[ApiClient] = None
+) -> None:
+    client.NetworkingV1Api(api_client or client.ApiClient()).delete_namespaced_network_policy(
         name=name, namespace=namespace, body=client.V1DeleteOptions()
     )
 

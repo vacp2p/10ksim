@@ -3,7 +3,12 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useInView } from '../hooks/useInView';
 import { buildThumbnailOption } from '../utils/chartOptions';
-import { getCachedRawOptions, setCachedRawOptions } from '../utils/thumbnailCache';
+import {
+    getCachedPanelList,
+    getCachedPanelOption,
+    setCachedPanelList,
+    setCachedPanelOption,
+} from '../utils/thumbnailCache';
 import { useTheme } from '../context/ThemeContext';
 
 const ReactECharts = lazy(() => import('echarts-for-react'));
@@ -31,14 +36,20 @@ function ThumbnailSkeleton() {
 function ExperimentThumbnail({ experimentId }) {
     const { isDark } = useTheme();
     const [ref, inView] = useInView();
-    const cached = getCachedRawOptions(experimentId);
-    const [rawOptions, setRawOptions] = useState(cached || []);
+    const [rawOptions, setRawOptions] = useState(() => {
+        // Panels cache independently, so on remount some may already be known
+        // (instant paint, no request) while others still need fetching - see
+        // the effect below.
+        const panels = getCachedPanelList(experimentId);
+        if (!panels) return [];
+        return panels.map((panel) => getCachedPanelOption(experimentId, panel.name)).filter(Boolean);
+    });
     const [index, setIndex] = useState(0);
     const [visible, setVisible] = useState(true);
     const [failed, setFailed] = useState(false);
 
     useEffect(() => {
-        if (!inView || cached) return;
+        if (!inView) return;
         const controller = new AbortController();
 
         const fetchPanelOption = (panelName) =>
@@ -49,27 +60,59 @@ function ExperimentThumbnail({ experimentId }) {
                 .then((res) => res.data?.option)
                 .catch(() => null);
 
-        axios
-            .get(`${API_BASE_URL}/experiments/${experimentId}`, { signal: controller.signal })
-            .then((res) => {
-                const panels = (res.data?.panels || []).slice(0, MAX_PANELS);
+        const getPanelList = () => {
+            const cachedPanels = getCachedPanelList(experimentId);
+            if (cachedPanels) return Promise.resolve(cachedPanels);
+            return axios
+                .get(`${API_BASE_URL}/experiments/${experimentId}`, { signal: controller.signal })
+                .then((res) => {
+                    const panels = (res.data?.panels || []).slice(0, MAX_PANELS);
+                    setCachedPanelList(experimentId, panels);
+                    return panels;
+                });
+        };
+
+        getPanelList()
+            .then((panels) => {
+                if (controller.signal.aborted) return;
                 if (!panels.length) {
                     setFailed(true);
                     return;
                 }
 
+                // Panels are cached individually (keyed by experimentId+panelName),
+                // not as one all-or-nothing blob for the whole experiment: panels
+                // settle independently and one slow/broken panel shouldn't cost
+                // the others their cache entry. Anything already cached renders
+                // immediately below; only the rest actually go over the network.
                 const accumulated = [];
-                let settledCount = 0;
-
+                const toFetch = [];
                 panels.forEach((panel) => {
+                    const cachedOption = getCachedPanelOption(experimentId, panel.name);
+                    if (cachedOption) {
+                        accumulated.push(cachedOption);
+                    } else {
+                        toFetch.push(panel);
+                    }
+                });
+                if (accumulated.length) setRawOptions([...accumulated]);
+
+                if (!toFetch.length) {
+                    if (accumulated.length === 0) setFailed(true);
+                    return;
+                }
+
+                let settledCount = 0;
+                toFetch.forEach((panel) => {
                     fetchPanelOption(panel.name).then((option) => {
                         if (controller.signal.aborted) return;
                         settledCount += 1;
                         if (option) {
+                            setCachedPanelOption(experimentId, panel.name, option);
                             accumulated.push(option);
-                            setCachedRawOptions(experimentId, [...accumulated]);
                             setRawOptions([...accumulated]);
-                        } else if (settledCount === panels.length && accumulated.length === 0) {
+                        }
+                        if (settledCount === toFetch.length && accumulated.length === 0) {
                             setFailed(true);
                         }
                     });
@@ -82,12 +125,6 @@ function ExperimentThumbnail({ experimentId }) {
         return () => {
             controller.abort();
         };
-        // `cached` is intentionally excluded: it's only a mount-time "was this
-        // already cached" gate. Fetching a panel populates the cache, which
-        // would flip `cached` truthy and re-trigger this effect - and its
-        // cleanup aborts the very controller the other panel fetches are
-        // still using, killing them mid-flight.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [inView, experimentId]);
 
     // Re-theming on a dark/light toggle is just recoloring already-fetched

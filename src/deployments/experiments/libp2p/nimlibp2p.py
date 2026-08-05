@@ -5,7 +5,7 @@ import traceback
 from typing import ClassVar, Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
@@ -46,7 +46,7 @@ class ExpConfig(BaseModel):
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
-    network_loss_pct: NonNegativeFloat = 0  # 0 = lossless; folded into the netem qdisc
+    network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True

@@ -10,12 +10,24 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from result import Err, Ok
+from result import Err, Ok, Result
 
 from dst_dashboard.config.data_structures import DataSourceConfig
 from dst_dashboard.processors.prometheus_client import query_instant
 
 logger = logging.getLogger(__name__)
+
+
+class VaclabDataUnavailableError(Exception):
+    """Raised when the datasource can't tell us which nodes even exist.
+
+    Every other query degrades gracefully to "no data for this metric" per
+    node, since the node set is already known. The uname query is different:
+    it's what defines that node set in the first place, so its failure can't
+    be silently treated as "zero nodes" - that would be indistinguishable
+    from a real (empty) cluster and would hide a genuine outage.
+    """
+
 
 # patterns to exclude virtual devices, loopback, and other non-physical interfaces
 NETWORK_DEVICE_EXCLUDE_REGEX = "lo|cilium.*|lxc.*|veth.*|docker.*|tunl.*|cali.*"
@@ -173,8 +185,11 @@ class VaclabProcessor:
     def __init__(self, datasource: DataSourceConfig):
         self.base_url = datasource.url
 
-    def _run_queries(self, queries: Dict[str, str]) -> Dict[str, List[Dict[str, Any]]]:
-        results: Dict[str, List[Dict[str, Any]]] = {}
+    def _run_queries(self, queries: Dict[str, str]) -> Dict[str, Result[List[Dict[str, Any]], str]]:
+        """Runs every query concurrently, keeping each one's Ok/Err outcome
+        intact - callers decide per-query whether a failure is fatal
+        (uname) or something to gracefully degrade (everything else)."""
+        results: Dict[str, Result[List[Dict[str, Any]], str]] = {}
         with ThreadPoolExecutor(max_workers=len(queries)) as executor:
             future_to_key = {
                 executor.submit(query_instant, self.base_url, expr): key
@@ -183,19 +198,23 @@ class VaclabProcessor:
             for future in as_completed(future_to_key):
                 key = future_to_key[future]
                 try:
-                    outcome = future.result()
+                    results[key] = future.result()
                 except Exception as e:
                     logger.error(f"Prometheus query '{key}' raised: {e}")
-                    results[key] = []
-                    continue
-
-                match outcome:
-                    case Ok(vector):
-                        results[key] = vector
-                    case Err(reason):
-                        logger.warning(f"Prometheus query '{key}' returned no data: {reason}")
-                        results[key] = []
+                    results[key] = Err(str(e))
         return results
+
+    @staticmethod
+    def _unwrap_or_empty(
+        outcome: Result[List[Dict[str, Any]], str], key: str
+    ) -> List[Dict[str, Any]]:
+        """For non-critical queries: log and degrade to empty on failure."""
+        match outcome:
+            case Ok(vector):
+                return vector
+            case Err(reason):
+                logger.warning(f"Prometheus query '{key}' returned no data: {reason}")
+                return []
 
     def get_snapshot(self) -> Dict[str, Any]:
         queries = {
@@ -230,18 +249,29 @@ class VaclabProcessor:
 
         results = self._run_queries(queries)
 
-        instance_to_nodename = _build_instance_to_nodename(results["uname"])
+        match results["uname"]:
+            case Ok(uname_vector):
+                instance_to_nodename = _build_instance_to_nodename(uname_vector)
+            case Err(reason):
+                raise VaclabDataUnavailableError(
+                    f"Unable to identify cluster nodes (uname query failed): {reason}"
+                )
 
-        cpu_capacity = _vector_to_dict(results["cpu_capacity"], "instance")
-        cpu_idle_fraction = _vector_to_dict(results["cpu_idle_fraction"], "instance")
-        mem_total = _vector_to_dict(results["mem_total"], "instance")
-        mem_available = _vector_to_dict(results["mem_available"], "instance")
-        net_rx = _vector_to_dict(results["net_rx"], "instance")
-        net_tx = _vector_to_dict(results["net_tx"], "instance")
-        net_capacity = _vector_to_dict(results["net_capacity"], "instance")
-        fs_size = _vector_to_dict(results["fs_size"], "instance")
-        fs_avail = _vector_to_dict(results["fs_avail"], "instance")
-        pod_counts = _count_pods_per_node(results["pods"])
+        unwrap = self._unwrap_or_empty
+        cpu_capacity = _vector_to_dict(unwrap(results["cpu_capacity"], "cpu_capacity"), "instance")
+        cpu_idle_fraction = _vector_to_dict(
+            unwrap(results["cpu_idle_fraction"], "cpu_idle_fraction"), "instance"
+        )
+        mem_total = _vector_to_dict(unwrap(results["mem_total"], "mem_total"), "instance")
+        mem_available = _vector_to_dict(
+            unwrap(results["mem_available"], "mem_available"), "instance"
+        )
+        net_rx = _vector_to_dict(unwrap(results["net_rx"], "net_rx"), "instance")
+        net_tx = _vector_to_dict(unwrap(results["net_tx"], "net_tx"), "instance")
+        net_capacity = _vector_to_dict(unwrap(results["net_capacity"], "net_capacity"), "instance")
+        fs_size = _vector_to_dict(unwrap(results["fs_size"], "fs_size"), "instance")
+        fs_avail = _vector_to_dict(unwrap(results["fs_avail"], "fs_avail"), "instance")
+        pod_counts = _count_pods_per_node(unwrap(results["pods"], "pods"))
 
         nodes = []
         for instance, hostname in sorted(instance_to_nodename.items(), key=lambda kv: kv[1]):

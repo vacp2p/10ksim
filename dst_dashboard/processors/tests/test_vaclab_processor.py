@@ -1,8 +1,10 @@
+import pytest
 from result import Err, Ok
 
 from dst_dashboard.config.data_structures import DataSourceConfig
 from dst_dashboard.processors import vaclab_processor
 from dst_dashboard.processors.vaclab_processor import (
+    VaclabDataUnavailableError,
     VaclabProcessor,
     _build_cpu,
     _build_instance_to_nodename,
@@ -188,13 +190,28 @@ class TestVaclabProcessorSnapshot:
 
         monkeypatch.setattr(vaclab_processor, "query_instant", fake_query_instant)
 
-    def test_snapshot_is_empty_when_no_nodes_report(self, monkeypatch):
+    def test_snapshot_raises_when_uname_query_fails(self, monkeypatch):
+        # An empty `nodes` list would be indistinguishable from "the cluster
+        # genuinely has zero nodes" - since uname is what defines the node
+        # set at all, its failure must surface as a real error instead.
         self._patch_queries(monkeypatch)
         processor = VaclabProcessor(
             DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/")
         )
+        with pytest.raises(VaclabDataUnavailableError):
+            processor.get_snapshot()
+
+    def test_snapshot_degrades_gracefully_when_only_a_non_uname_query_fails(self, monkeypatch):
+        # A single non-critical query failing (everything except uname here)
+        # must NOT raise - it should degrade to null blocks per node, same as
+        # the missing-metrics case below.
+        overrides = {"uname": Ok(_uname_vec([("10.0.0.1:9100", NODE_01)]))}
+        self._patch_queries(monkeypatch, overrides)
+        processor = VaclabProcessor(
+            DataSourceConfig(name="victoria-metrics", type="Prometheus", url="http://x/")
+        )
         snapshot = processor.get_snapshot()
-        assert snapshot["nodes"] == []
+        assert [n["hostname"] for n in snapshot["nodes"]] == [NODE_01]
 
     def test_snapshot_discovers_nodes_dynamically_including_non_vaclab(self, monkeypatch):
         overrides = {

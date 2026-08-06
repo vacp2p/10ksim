@@ -8,8 +8,8 @@ const NAV_LINKS = [
 ];
 
 const VACLAB_LINKS = [
-    { to: '/vaclab/topology', label: 'Network', icon: 'bi-diagram-3' },
-    { to: '/vaclab/networks', label: 'Resources', icon: 'bi-hdd-network' },
+    { to: '/vaclab/network', label: 'Network', icon: 'bi-diagram-3' },
+    { to: '/vaclab/resources', label: 'Resources', icon: 'bi-hdd-network' },
 ];
 
 const ICON_LINKS = [

@@ -25,8 +25,8 @@ function App() {
                                     <Route path="/" element={<HomePage />} />
                                     <Route path="/experiments" element={<ExperimentsPage />} />
                                     <Route path="/experiment/:experimentId" element={<ExperimentPage />} />
-                                    <Route path="/vaclab/topology" element={<TopologyPage />} />
-                                    <Route path="/vaclab/networks" element={<ResourcesPage />} />
+                                    <Route path="/vaclab/network" element={<TopologyPage />} />
+                                    <Route path="/vaclab/resources" element={<ResourcesPage />} />
                                 </Routes>
                             </PageTransition>
                         </Suspense>

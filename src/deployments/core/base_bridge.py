@@ -2,7 +2,7 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -10,8 +10,9 @@ from pydantic import BaseModel
 from src.deployments.core.event_log import find_events, parse_events_log
 from src.deployments.core.event_mapping import EventMapping
 from src.deployments.core.metadata_times import (
+    apply_time_shifts,
+    enrich_intervals,
     format_metadata_timestamps,
-    get_valid_shifted_times,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,19 +25,20 @@ class BaseBridge(BaseModel):
     nodes_key: str = "nodes_per_statefulset"
 
     def _get_metadata_from_events_list(
-        self, events_log_path: Path, events_list: List[EventMapping]
+        self,
+        events_log_path: Path,
+        events_list: List[EventMapping],
+        *,
+        namespace: Optional[str] = None,
     ) -> dict:
-        """Extract events in from a given event log."""
-        # Strip the timedelta for the conversion, to get a list of Tuple[match_dict : dict, path : str].
         events_maps = [(obj.key, obj.target) for obj in events_list]
         metadata = parse_events_log(events_log_path, events_maps)
 
-        # Get timedeltas for each path. dict of {path : timedelta}.
         deltatime_map = {obj.target: obj.time_shift for obj in events_list}
-        shifted = get_valid_shifted_times(deltatime_map, metadata)
-        metadata.update(shifted)
+        metadata = apply_time_shifts(deltatime_map, metadata)
 
-        metadata = format_metadata_timestamps(metadata, "vquery")
+        metadata = enrich_intervals(metadata, namespace=namespace)
+        metadata = format_metadata_timestamps(metadata, format="vquery")
 
         return metadata
 
@@ -72,7 +74,7 @@ class BaseBridge(BaseModel):
             "kubernetes.pod_node_name",
         ]
         try:
-            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT)
+            metadata["metadata"]["subdir"] = events_log.relative_to(PROJ_ROOT).as_posix()
         except ValueError as e:
             logger.info(e)
         metadata["stack"]["name"] = self._get_name(metadata)

@@ -27,7 +27,10 @@ class Nimlibp2pTracer(MessageTracer):
                 "received",
                 trace_pairs=[
                     TracePair(
-                        regex=r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)",
+                        # delayMs goes negative when the sender's clock is ahead of the
+                        # receiver's, so the sign has to be part of the match: `\w` alone
+                        # drops those deliveries and under-reports delivery.
+                        regex=r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=(-?[\w*]+)",
                         convert=self._trace_received_in_logs,
                     ),
                 ],

@@ -8,6 +8,7 @@ import pytest
 import src.deployments.core.event_window_bridge as event_window_bridge
 from src.deployments.libp2p.bridge import Bridge as Libp2pBridge
 from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
+from src.deployments.libp2p.service_discovery_bridge import ServiceDiscoveryBridge
 from src.deployments.waku.bridge import Bridge as WakuBridge
 from src.deployments.waku.builders.helpers import WAKU_CONTAINER_NAME
 
@@ -148,5 +149,24 @@ def test_protocol_bridges_define_complete_and_stable_event_windows(bridge_cls, c
             end=event_window_bridge.EventBound(
                 "publisher_messages_finished", timedelta(seconds=-30)
             ),
+        ),
+    ]
+
+
+def test_service_discovery_bridge_defines_complete_and_discovery_event_windows():
+    bridge = ServiceDiscoveryBridge()
+
+    assert bridge.interval == "complete"
+    assert bridge.container_name == LIBP2P_CONTAINER_NAME
+    assert bridge.event_windows() == [
+        event_window_bridge.EventWindow(
+            key="complete",
+            start=event_window_bridge.EventBound("wait_for_clear_finished"),
+            end=event_window_bridge.EventBound("service_discovery_finished"),
+        ),
+        event_window_bridge.EventWindow(
+            key="discovery",
+            start=event_window_bridge.EventBound("service_discovery_started"),
+            end=event_window_bridge.EventBound("service_discovery_finished"),
         ),
     ]

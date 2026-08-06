@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Iterable, Union
 
 from src.analysis.metrics.config import ScrapeConfig
+from src.analysis.metrics.libp2p import gossipsub_summary
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
@@ -50,11 +51,19 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
             .with_exp(exp, extract_name=True)
             .with_dump_location(dump_fmt.format(i=i))
             .with_libp2p_metrics()
+            .with_gossipsub_detail_metrics()
             .build()
         )
         scrapes.append(config)
         scrapper = Scrapper(k8s_config, config)
         scrapper.query_and_dump_metrics()
+
+        # Gossipsub control/efficiency detail (IHAVE/IWANT/GRAFT/PRUNE, duplicate ratio),
+        # the same set the Shadow runs report. Cluster counts are noisier run-to-run than
+        # Shadow's, so use them for single-run inspection, not cross-version comparison.
+        gs = gossipsub_summary.summarize(Path(config.dump_location), config.name)
+        if gs:
+            logger.info(f"Gossipsub detail (per-node median) for {config.name}: {gs}")
 
     # Data from previous reports.
     base = Path(__file__).parent / "nimlibp2pdata"

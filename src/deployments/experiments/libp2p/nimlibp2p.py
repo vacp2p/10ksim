@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 import traceback
-from typing import Literal
+from typing import ClassVar, Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
@@ -45,7 +45,9 @@ class ExpConfig(BaseModel):
     bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
+    network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
+    post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True
 
     @model_validator(mode="after")
@@ -88,9 +90,11 @@ def build_nodes(
         builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
             NimLibp2p.connect_to, params.connect_to
         )
-    if params.network_delay or params.network_jitter:
+    if params.network_delay or params.network_jitter or params.network_bandwidth_mbit:
         builder = builder.with_network_delay(
-            delay=params.network_delay, jitter=params.network_jitter
+            delay=params.network_delay,
+            jitter=params.network_jitter,
+            rate_mbit=params.network_bandwidth_mbit or None,
         )
 
     return builder.build()
@@ -176,6 +180,8 @@ async def publish(config, namespace, random_name):
 class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.nimlibp2p:run_nimlibp2p_analysis"
+
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
@@ -231,7 +237,7 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         self.log_event("publisher_messages_finished")
 
-        await asyncio.sleep(20)
+        await asyncio.sleep(self.config.post_publish_dwell)
         self.log_event("publisher_wait_finished")
 
         self.log_event("internal_run_finished")

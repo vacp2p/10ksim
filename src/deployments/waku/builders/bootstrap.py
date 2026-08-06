@@ -3,32 +3,10 @@ from kubernetes.client import V1ResourceRequirements
 
 # Project Imports
 from src.deployments.core.builders import default_readiness_probe_health
-from src.deployments.core.configs.command import CommandConfig
 from src.deployments.core.configs.container import ContainerConfig
 from src.deployments.core.configs.pod import PodSpecConfig, PodTemplateSpecConfig
 from src.deployments.core.configs.statefulset import StatefulSetConfig, StatefulSetSpecConfig
-from src.deployments.waku.builders.helpers import WAKU_COMMAND_STR, find_waku_container_config
-
-
-def apply_command_config(config: CommandConfig):
-    command = config.find_command(WAKU_COMMAND_STR)
-    if command is None:
-        raise ValueError(f"Waku command not found. CommandConfig: `{config}`")
-    command.args.extend(
-        [
-            ("--relay", False),
-            ("--rest", True),
-            ("--rest-address", "0.0.0.0"),
-            ("--max-connections", 1000),
-            ("--discv5-discovery", True),
-            ("--discv5-enr-auto-update", True),
-            ("--log-level", "INFO"),
-            ("--metrics-server", True),
-            ("--metrics-server-address", "0.0.0.0"),
-            ("--nat", "extip:$IP"),
-            ("--cluster-id", 2),
-        ]
-    )
+from src.deployments.waku.builders.helpers import find_waku_container_config
 
 
 def apply_container_config(config: ContainerConfig, *, overwrite: bool = False):
@@ -62,7 +40,6 @@ def apply_stateful_set_spec_config(
 def apply_stateful_set_config(
     config: StatefulSetConfig, namespace: str, *, overwrite: bool = False
 ):
-    config.name = "bootstrap"
     apply_stateful_set_spec_config(config.stateful_set_spec, namespace, overwrite=overwrite)
 
 
@@ -72,9 +49,8 @@ def create_resources() -> V1ResourceRequirements:
     )
 
 
-def create_args() -> dict:
-    return {
-        "--cluster-id": 2,
+def create_args(cmd_type: int) -> dict:
+    base = {
         "--discv5-discovery": True,
         "--discv5-enr-auto-update": True,
         "--log-level": "INFO",
@@ -86,3 +62,17 @@ def create_args() -> dict:
         "--rest-address": "0.0.0.0",
         "--rest": True,
     }
+    if cmd_type == 1:
+        return {
+            **base,
+            "--cluster-id": 2,
+            "--shard": 0,
+        }
+    elif cmd_type == 2:
+        return {
+            **base,
+            "--num-shards-in-network": 1,
+            "--shard": 0,
+        }
+
+    raise ValueError(f"Invalid cmd_type: `{cmd_type}`")

@@ -1,13 +1,10 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
 import logging
-from typing import Optional
+from typing import ClassVar, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, PositiveInt
 
-from src.analysis.mesh_analysis.analyzers.data_puller import DataPuller
-from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
-from src.analysis.metrics.shadow_metrics import scrape_run_metrics
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.registry import experiment
 from src.deployments.shadow.builders import (
@@ -31,11 +28,28 @@ class ExpConfig(BaseModel):
     message_size_bytes: NonNegativeInt = 1000
     delay_seconds: NonNegativeFloat = 2.0
     connect_to: NonNegativeInt = 2
+    muxer: Literal["yamux", "mplex", "quic"] = "yamux"
+    discovery: Literal["static", "kad-dht"] = "static"  # CONNECTTO dial vs kad bootstrap
+    start_sleep: NonNegativeInt = 60  # node STARTSLEEP before mesh formation
     # Timing (simulated seconds). Publisher starts after the mesh forms (~60s).
     publisher_start_s: NonNegativeInt = 90
     sim_stop_time_s: NonNegativeInt = 180
     # storeMetrics scrape cadence (s); short so the last scrape is post-traffic.
     metrics_interval_s: NonNegativeInt = 15
+    # Determinism + diagnostics. seed is rendered into shadow.yaml (Shadow default 1);
+    # strace is global and heavy — small-N diagnosis only.
+    seed: NonNegativeInt = 1
+    model_unblocked_syscall_latency: bool = False
+    strace_logging_mode: str = "off"  # off | standard | deterministic
+    # Floor (µs) for lsquic engine tick re-arms; needs the tick-floor node image.
+    # 0 = stock lsquic behavior (which livelocks quic under Shadow).
+    lsquic_tick_floor_us: NonNegativeInt = 0
+    # Per-pod process start stagger (pod-i starts at 5000 + i*jitter ms); 0 = lockstep.
+    start_jitter_ms: NonNegativeInt = 0
+    latency_ms: Optional[NonNegativeInt] = None
+    bandwidth_mbit: Optional[PositiveInt] = None
+    # Peers per /24; 1 = every peer on its own subnet.
+    hosts_per_subnet: PositiveInt = 1
     # Job-pod resources, sized for ~10 peers; bump for bigger sims.
     cpu_request: str = "2"
     cpu_limit: str = "4"
@@ -54,13 +68,18 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
     """Run a GossipSub mesh + publisher inside the Shadow simulator."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[str] = (
+        "src.analysis.post_run.shadow_gossipsub:run_shadow_gossipsub_analysis"
+    )
 
     async def _run(self):
         self.log_event("run_start")
         cfg = self.config
         namespace = self.namespace
-        # unique per run (output folder name carries a random suffix)
-        run_id = self.output_folder.name.lower().replace("_", "-")[:50].strip("-")
+        # unique per run (output folder name carries a random suffix). Cap the length
+        # so the derived `shadow-<run_id>-reader` log-reader pod stays within the k8s
+        # 63-char name limit.
+        run_id = self.output_folder.name.lower().replace("_", "-")[:45].strip("-")
         cm_name = f"shadow-{run_id}"
         job_name = f"shadow-{run_id}"
         pvc_name = f"shadow-{run_id}-data"
@@ -70,7 +89,18 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             sim_stop_time_s=cfg.sim_stop_time_s,
             publisher_start_s=cfg.publisher_start_s,
             connect_to=cfg.connect_to,
+            muxer=cfg.muxer,
+            discovery=cfg.discovery,
+            start_sleep=cfg.start_sleep,
             metrics_interval_s=cfg.metrics_interval_s,
+            seed=cfg.seed,
+            model_unblocked_syscall_latency=cfg.model_unblocked_syscall_latency,
+            strace_logging_mode=cfg.strace_logging_mode,
+            lsquic_tick_floor_us=cfg.lsquic_tick_floor_us,
+            start_jitter_ms=cfg.start_jitter_ms,
+            latency_ms=cfg.latency_ms,
+            bandwidth_mbit=cfg.bandwidth_mbit,
+            hosts_per_subnet=cfg.hosts_per_subnet,
         )
         publisher_config = render_publisher_config(
             num_nodes=cfg.num_nodes,
@@ -142,42 +172,10 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             self.log_event({"event": "logs_pulled", "dest": str(logs_dir)})
         except Exception as e:
             # don't let a log-pull failure mask the run state
-            logger.error(f"Failed to pull Shadow logs: {e}")
+            logger.exception("Failed to pull Shadow logs")
             self.log_event({"event": "logs_pull_failed", "error": str(e)})
 
         if state == "failed":
             raise RuntimeError(f"Shadow Job `{namespace}/{job_name}` failed")
 
         self.log_event("internal_run_finished")
-
-    async def run(self):
-        await super().run()
-        self._run_analysis()
-
-    def _run_analysis(self) -> None:
-        """Post-run analysis (best-effort; never fails the run): bandwidth CSVs via the
-        ephemeral-VM metrics path + message reliability from the flattened logs."""
-        cfg = self.config
-        run_dir = self.output_folder
-        try:
-            scrape_run_metrics(
-                run_dir=run_dir, namespace=self.namespace, interval_s=cfg.metrics_interval_s
-            )
-        except Exception as e:
-            logger.error(f"Shadow metrics analysis failed: {e}")
-        try:
-            puller = DataPuller().with_local(run_dir / "shadow_logs" / "logs")
-            (
-                Nimlibp2pAnalyzer(dump_analysis_dir=str(run_dir / "analysis_data"))
-                .with_data_puller(puller)
-                .with_ss_check(["pod"], [cfg.num_nodes])
-                .with_reliability_check(
-                    stateful_sets=["pod"],
-                    nodes_per_ss=[cfg.num_nodes],
-                    expected_num_peers=cfg.num_nodes,
-                    expected_num_messages=cfg.num_messages,
-                )
-                .run()
-            )
-        except Exception as e:
-            logger.error(f"Shadow message analysis failed: {e}")

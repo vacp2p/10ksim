@@ -118,7 +118,7 @@ spec:
                     print "    endpoint: \"http://otlp.lab.vac.dev:31317/\""
                     print "    protocol: \"Grpc\""
                     print "    service_name: \"" ENVIRON["HOSTNAME"] "\""
-                    print "    authorization_header: \"Bearer ift-f7X2djkoYZkfulDwS9aYITSxo8Q8VDeUb1\""
+                    print "    authorization_header: \"Bearer " ENVIRON["OTEL_CLIENT_TOKEN"] "\""
                     next
                   }
                   { print }
@@ -159,6 +159,11 @@ spec:
           image: docker.io/library/alpine:3.20
           imagePullPolicy: Always
           env:
+            - name: OTEL_CLIENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: otel-client-token
+                  key: token
             - name: HOST_IP
               valueFrom:
                 fieldRef:

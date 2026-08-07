@@ -14,6 +14,7 @@ import requests
 from src.analysis.metrics.libp2p import gossipsub_summary
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
+from src.deployments.libp2p.bridge import STABLE_END_SHIFT, STABLE_START_SHIFT
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,38 @@ class EphemeralVictoriaMetrics:
         logger.info(f"Removed ephemeral VictoriaMetrics `{self._name}`")
 
 
+RECEIVED_METRIC = "libp2p_gossipsub_received_total"  # no topic label, assumes one topic
+
+
+def first_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:
+    """Index of the snapshot where nodes first receive a message."""
+    for index in range(max((len(s) for _, s in per_peer), default=0)):
+        for _, snaps in per_peer:
+            if index >= len(snaps):
+                continue
+            for line in snaps[index].splitlines():
+                if line.startswith(RECEIVED_METRIC) and float(line.split()[-1]) > 0:
+                    return index
+    return None
+
+
+def settled_window(info: dict) -> tuple:
+    """Settled part of the run, or all of it when the run is too short to have one.
+
+    Shifts come from the bridge's `stable` window so the two platforms cannot drift apart.
+    Shadow anchors the start on the first delivery instead of `start_messages`, and the end
+    on the last sample instead of `publisher_messages_finished`, because it logs neither.
+    """
+    first = info.get("first_delivery_epoch_s")
+    if first is not None:
+        start = first + STABLE_START_SHIFT.total_seconds()
+        end = info["last_epoch_s"] + STABLE_END_SHIFT.total_seconds()
+        if start < end:
+            return start, end
+    logger.warning("Run too short to have a settled window; scraping all of it")
+    return info["start_epoch_s"], info["last_epoch_s"]
+
+
 def import_shadow_metrics(
     *,
     hosts_dir: Path,
@@ -148,11 +181,13 @@ def import_shadow_metrics(
             posted += 1
 
     requests.get(f"{vm_url}/internal/force_flush", timeout=15)  # make the import queryable now
+    first = first_delivery_snapshot(per_peer)
     summary = {
         "peers": len(per_peer),
         "snapshots_posted": posted,
         "start_epoch_s": start_epoch_s,
         "last_epoch_s": last_epoch_s,
+        "first_delivery_epoch_s": None if first is None else start_epoch_s + first * interval_s,
     }
     logger.info(f"Imported Shadow metrics: {summary}")
     return summary
@@ -174,8 +209,9 @@ def scrape_run_metrics(
         info = import_shadow_metrics(
             hosts_dir=hosts, vm_url=vm.url, namespace=namespace, interval_s=interval_s
         )
-        start_dt = datetime.fromtimestamp(info["start_epoch_s"], tz=timezone.utc)
-        end_dt = datetime.fromtimestamp(info["last_epoch_s"], tz=timezone.utc)
+        start_epoch, end_epoch = settled_window(info)
+        start_dt = datetime.fromtimestamp(start_epoch, tz=timezone.utc)
+        end_dt = datetime.fromtimestamp(end_epoch, tz=timezone.utc)
         config = (
             Nimlibp2pScrapeBuilder(
                 namespace=namespace,

@@ -3,7 +3,7 @@ from copy import deepcopy
 from typing import Dict, List, Literal, Optional, Tuple, Type, TypeVar, get_args
 
 from kubernetes.client import V1Capabilities, V1Container, V1SecurityContext
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeFloat, NonNegativeInt
 
 # Project Imports
 from src.deployments.core.configs.command import CommandConfig
@@ -165,10 +165,13 @@ def init_container_delay(
     delay: NonNegativeInt,
     jitter: NonNegativeInt,
     rate_mbit: Optional[NonNegativeInt] = None,
+    loss_pct: Optional[NonNegativeFloat] = None,
 ):
     netem = f"delay {delay}ms"
     if jitter:
         netem += f" {jitter}ms distribution normal"
+    if loss_pct:
+        netem += f" loss {loss_pct}%"
     if rate_mbit:
         netem += f" rate {rate_mbit}mbit"
     return V1Container(

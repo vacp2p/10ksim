@@ -23,14 +23,16 @@ def query_instant(
     url = base_url + "query?query=" + urllib.parse.quote(query)
 
     try:
-        response = urllib.request.urlopen(url, timeout=timeout)
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            status = response.status
+            body = response.read().decode("utf-8")
     except urllib.error.URLError as e:
         return Err(f"request failed: {e}")
 
-    if response.status != 200:
-        return Err(f"status {response.status}: {response.read().decode('utf-8')}")
+    if status != 200:
+        return Err(f"status {status}: {body}")
 
-    payload = json.loads(response.read().decode("utf-8"))
+    payload = json.loads(body)
     result = payload.get("data", {}).get("result", [])
 
     if not result:

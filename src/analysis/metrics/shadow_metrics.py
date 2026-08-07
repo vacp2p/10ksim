@@ -14,6 +14,7 @@ import requests
 from src.analysis.metrics.libp2p import gossipsub_summary
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
+from src.deployments.libp2p.bridge import STABLE_END_SHIFT, STABLE_START_SHIFT
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,6 @@ class EphemeralVictoriaMetrics:
         logger.info(f"Removed ephemeral VictoriaMetrics `{self._name}`")
 
 
-STABLE_OFFSET_S = 180  # same offsets as the bridge's `stable` interval
-STABLE_TAIL_S = 30
 RECEIVED_METRIC = "libp2p_gossipsub_received_total"  # no topic label, assumes one topic
 
 
@@ -113,10 +112,16 @@ def first_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:
 
 
 def settled_window(info: dict) -> tuple:
-    """Settled part of the run, or all of it when the run is too short to have one."""
+    """Settled part of the run, or all of it when the run is too short to have one.
+
+    Shifts come from the bridge's `stable` window so the two platforms cannot drift apart.
+    Shadow anchors the start on the first delivery instead of `start_messages`, and the end
+    on the last sample instead of `publisher_messages_finished`, because it logs neither.
+    """
     first = info.get("first_delivery_epoch_s")
     if first is not None:
-        start, end = first + STABLE_OFFSET_S, info["last_epoch_s"] - STABLE_TAIL_S
+        start = first + STABLE_START_SHIFT.total_seconds()
+        end = info["last_epoch_s"] + STABLE_END_SHIFT.total_seconds()
         if start < end:
             return start, end
     logger.warning("Run too short to have a settled window; scraping all of it")

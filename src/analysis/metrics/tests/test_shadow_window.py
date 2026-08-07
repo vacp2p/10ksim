@@ -53,3 +53,24 @@ def test_falls_back_when_the_default_config_is_too_short():
 
 def test_falls_back_when_nothing_was_delivered():
     assert settled_window(_info(None)) == (1000, 1180)
+
+
+def test_settled_window_uses_the_bridge_shifts():
+    """The shifts are the bridge's, not a copy: a change there has to move Shadow too."""
+    from datetime import timedelta
+
+    from src.analysis.metrics.shadow_metrics import settled_window
+    from src.deployments.libp2p.bridge import STABLE_END_SHIFT, STABLE_START_SHIFT
+
+    first, last = 1_000, 10_000
+    start, end = settled_window(
+        {"first_delivery_epoch_s": first, "last_epoch_s": last, "start_epoch_s": 0}
+    )
+    assert start == first + STABLE_START_SHIFT.total_seconds()
+    assert end == last + STABLE_END_SHIFT.total_seconds()
+    # and those shifts are the ones the cluster's stable window actually uses
+    from src.deployments.libp2p.bridge import Bridge
+
+    stable = next(w for w in Bridge().event_windows() if w.key == "stable")
+    assert stable.start.time_shift == STABLE_START_SHIFT == timedelta(minutes=3)
+    assert stable.end.time_shift == STABLE_END_SHIFT == timedelta(seconds=-30)

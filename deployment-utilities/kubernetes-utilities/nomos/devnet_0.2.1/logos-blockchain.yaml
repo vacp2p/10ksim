@@ -250,18 +250,17 @@ spec:
                     ;;
                 esac
               }
-          
               wait_for_wallet_note() {
                 LABEL="$1"
                 PUBLIC_KEY="$2"
-          
+  
                 BALANCE_FILE="/tmp/${LABEL}-balance.response"
                 ERROR_FILE="/tmp/${LABEL}-balance.error"
                 STATUS_FILE="/tmp/${LABEL}-balance.status"
-          
+  
                 BALANCE_RESPONSE=""
                 NOTE_ID=""
-          
+  
                 for attempt in $(seq 1 120); do
                   curl -sS \
                     -o "$BALANCE_FILE" \
@@ -269,40 +268,50 @@ spec:
                     "http://localhost:8080/wallet/${PUBLIC_KEY}/balance" \
                     >"$STATUS_FILE" \
                     2>"$ERROR_FILE" || true
-          
+  
                   HTTP_CODE="$(cat "$STATUS_FILE")"
                   BALANCE_RESPONSE="$(awk '{ printf "%s", $0 }' "$BALANCE_FILE")"
-          
+  
                   if [ "$HTTP_CODE" = "200" ]; then
                     NOTE_ID="$(
                       echo "$BALANCE_RESPONSE" |
                         jq -r '.notes | keys[0] // empty'
                     )"
-          
+  
                     if [ -n "$NOTE_ID" ]; then
-                      echo "${LABEL} wallet is ready"
-                      echo "${LABEL} note: ${NOTE_ID}"
+                      case "$NOTE_ID" in
+                        *[!0-9a-fA-F]*)
+                          echo "Invalid ${LABEL} note ID: ${NOTE_ID}" >&2
+                          return 1
+                          ;;
+                      esac
+  
+                      echo "${LABEL} wallet is ready" >&2
+                      echo "${LABEL} note: ${NOTE_ID}" >&2
+  
+                      # stdout must contain only the note ID because the caller
+                      # captures this function with $(...)
                       printf '%s\n' "$NOTE_ID"
                       return 0
                     fi
-          
-                    echo "${LABEL} wallet returned no notes yet"
+  
+                    echo "${LABEL} wallet returned no notes yet" >&2
                   else
-                    echo "${LABEL} wallet returned HTTP ${HTTP_CODE}"
-          
+                    echo "${LABEL} wallet returned HTTP ${HTTP_CODE}" >&2
+  
                     [ -n "$BALANCE_RESPONSE" ] &&
-                      echo "Response: $BALANCE_RESPONSE"
-          
+                      echo "Response: $BALANCE_RESPONSE" >&2
+  
                     [ -s "$ERROR_FILE" ] &&
-                      echo "curl error: $(cat "$ERROR_FILE")"
+                      echo "curl error: $(cat "$ERROR_FILE")" >&2
                   fi
-          
-                  echo "${LABEL} wallet not available yet (${attempt}/120)"
+  
+                  echo "${LABEL} wallet not available yet (${attempt}/120)" >&2
                   sleep 5
                 done
-          
-                echo "Could not find a note for ${LABEL} public key"
-                echo "Last ${LABEL} balance response: ${BALANCE_RESPONSE:-empty}"
+  
+                echo "Could not find a note for ${LABEL} public key" >&2
+                echo "Last ${LABEL} balance response: ${BALANCE_RESPONSE:-empty}" >&2
                 return 1
               }
           

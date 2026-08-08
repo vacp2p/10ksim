@@ -1,6 +1,7 @@
 """Regression scenario: a degraded link (latency, jitter, packet loss)."""
 
 import logging
+from typing import ClassVar
 
 from pydantic import Field, NonNegativeInt
 
@@ -21,3 +22,4 @@ class DegradedNetwork(NimLibp2pExperiment):
     """Regression run over a high-latency, jittery, lossy link."""
 
     config: DegradedConfig
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.degraded:run_degraded_analysis"

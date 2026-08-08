@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from typing import List
+from typing import ClassVar, List
 
 from kubernetes.client import (
     V1LabelSelector,
@@ -116,6 +116,7 @@ class NetworkPartition(NimLibp2pExperiment):
     """
 
     config: PartitionConfig
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.partition:run_partition_analysis"
 
     async def _wait_for_pods_to_exist(self, nodes: V1StatefulSet, timeout: int = 600) -> None:
         """Existence, not readiness: Ready already means meshed."""

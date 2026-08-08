@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import List
+from typing import ClassVar, List
 
 from kubernetes.client import V1StatefulSet
 from pydantic import Field, NonNegativeInt, model_validator
@@ -47,6 +47,7 @@ class NodeChurn(NimLibp2pExperiment):
     """
 
     config: ChurnConfig
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.churn:run_churn_analysis"
 
     def _publishable_nodes(self) -> int:
         """Churned nodes return on new addresses; publishing to a stale one hangs."""

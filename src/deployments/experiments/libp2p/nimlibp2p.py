@@ -5,7 +5,7 @@ import traceback
 from typing import ClassVar, Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, NonNegativeInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
@@ -46,6 +46,7 @@ class ExpConfig(BaseModel):
     network_delay: NonNegativeInt = 0
     network_jitter: NonNegativeInt = 0
     network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
+    network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
     wait_nodes_ready: bool = True
@@ -90,11 +91,17 @@ def build_nodes(
         builder = builder.with_option(NimLibp2p.service, "nimp2p-service").with_option(
             NimLibp2p.connect_to, params.connect_to
         )
-    if params.network_delay or params.network_jitter or params.network_bandwidth_mbit:
+    if (
+        params.network_delay
+        or params.network_jitter
+        or params.network_bandwidth_mbit
+        or params.network_loss_pct
+    ):
         builder = builder.with_network_delay(
             delay=params.network_delay,
             jitter=params.network_jitter,
             rate_mbit=params.network_bandwidth_mbit or None,
+            loss_pct=params.network_loss_pct or None,
         )
 
     return builder.build()
@@ -185,6 +192,21 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     def _get_metadata(self) -> dict:
         return Bridge().get_metadata(self.events_log_path)
 
+    async def _after_nodes(self, nodes: V1StatefulSet) -> None:
+        """Runs once the nodes are up, before the cold start they form the mesh during.
+
+        Scenarios override this to shape the network the mesh will form over. Nodes hold
+        off dialling for `node_start_delay`, so anything done here lands before they
+        connect, provided that delay outlasts the deploy.
+        """
+
+    async def _mid_run(self, nodes: V1StatefulSet) -> None:
+        """Runs alongside the publish loop. Scenarios override this to disturb the network."""
+
+    def _publishable_nodes(self) -> int:
+        """How many of the relays the publisher may target, counted from index 0."""
+        return self.config.num_relay_nodes
+
     async def _run(self):
         self.log_event("run_start")
 
@@ -193,6 +215,12 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
         )
         await self.deploy(deployment=publisher, wait_for_ready=True)
+
+        # Backs the StatefulSet's per-pod DNS and is what the publisher resolves nodes
+        # through, so both discovery modes need it, not just the static dial.
+        node_service = build_static_service(self.namespace)
+        self.dump_yaml(node_service, "nimp2p-service")
+        await self.deploy(deployment=node_service, exist_ok=True)
 
         # Bootstrap (kad-dht only): anchor node + headless discovery service. Deployed
         # before the nodes so the mesh can form through it once the nodes wake up.
@@ -204,11 +232,6 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             bootstrap = build_bootstrap_nodes(namespace=self.namespace, params=self.config)
             self.dump_yaml(bootstrap, "bootstrap")
             await self.deploy(deployment=bootstrap, wait_for_ready=True)
-        else:
-            # Static discovery resolves peers via this service, so deploy it first.
-            static_service = build_static_service(self.namespace)
-            self.dump_yaml(static_service, "static-service")
-            await self.deploy(deployment=static_service, exist_ok=True)
 
         # Nodes
         nodes = build_nodes(
@@ -220,15 +243,19 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await self.deploy(deployment=nodes, wait_for_ready=self.config.wait_nodes_ready)
 
+        await self._after_nodes(nodes)
+
         await asyncio.sleep(self.config.delay_cold_start)
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
 
         self.log_event("start_messages")
 
+        mid_run = asyncio.create_task(self._mid_run(nodes))
+
         tasks = []
         for msg_index in range(self.config.num_messages):
-            index = random.randint(0, self.config.num_relay_nodes - 1)
+            index = random.randint(0, self._publishable_nodes() - 1)
             random_name = f"{name}-{index}"
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))
@@ -236,6 +263,8 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         await asyncio.gather(*tasks)
 
         self.log_event("publisher_messages_finished")
+
+        await mid_run
 
         await asyncio.sleep(self.config.post_publish_dwell)
         self.log_event("publisher_wait_finished")

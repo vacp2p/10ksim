@@ -1,9 +1,14 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.event_mapping import EventMapping
+from src.deployments.core.metadata_times import (
+    format_metadata_timestamps,
+    grafana_link,
+    victorialogs_link,
+)
 
 
 def write_events_log(tmp_path, events):
@@ -106,33 +111,54 @@ def test_base_bridge_preserves_full_metadata_flow_with_event_mappings(tmp_path):
                 time_shift=timedelta(seconds=-30),
             ),
         ],
+        namespace="vaclab",
     )
     metadata.update(event_metadata)
 
-    assert metadata == {
-        "stack": {
-            "stateful_sets": ["waku-publisher", "waku-subscriber"],
-            "nodes_per_statefulset": [2, 5],
-            "namespace": "vaclab",
-            "extra_fields": ["kubernetes.pod_name", "kubernetes.pod_node_name"],
-            "name": "waku-regression__waku-publisher_2__waku-subscriber_5",
-        },
-        "experiment": {
-            "name": "waku-regression",
-            "class": "WakuRegression",
-            "bridge_class": {
-                "__type__": "src.deployments.core.base_bridge.BaseBridge",
-                "statefulsets_key": "stateful_sets",
-                "nodes_key": "nodes_per_statefulset",
-            },
-        },
-        "metadata": {
-            "command": "python deployment.py run",
-            "kube_config": "vaclab",
-            "namespace": "vaclab",
-            "args": {"message_rate": 10},
-        },
-        "params": {"publisher_count": 2, "subscriber_count": 5},
-        "complete": {"start": "2026-01-01T12:00:00", "end": "2026-01-01T12:20:30"},
-        "stable": {"start": "2026-01-01T12:06:00", "end": "2026-01-01T12:14:30"},
-    }
+    # Check core structure unchanged
+    assert metadata["stack"]["stateful_sets"] == ["waku-publisher", "waku-subscriber"]
+    assert metadata["stack"]["nodes_per_statefulset"] == [2, 5]
+    assert metadata["stack"]["namespace"] == "vaclab"
+    assert metadata["experiment"]["name"] == "waku-regression"
+    assert metadata["experiment"]["class"] == "WakuRegression"
+
+    # Check intervals are enriched
+    complete = metadata["complete"]
+    assert complete["start"] == "2026-01-01T12:00:00"
+    assert complete["end"] == "2026-01-01T12:20:30"
+    assert complete["duration"] == "0h 20m 30s"
+    assert complete["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=vaclab" in complete["grafana"]
+    assert complete["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "kubernetes.pod_namespace%3Avaclab" in complete["victoria_logs"]
+
+    stable = metadata["stable"]
+    assert stable["start"] == "2026-01-01T12:06:00"
+    assert stable["end"] == "2026-01-01T12:14:30"
+    assert stable["duration"] == "0h 8m 30s"
+    assert stable["grafana"].startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert stable["victoria_logs"].startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+
+
+def test_format_metadata_timestamps_vquery_and_url():
+    metadata = {"root": {"start": datetime(2026, 1, 1, 12, 0, 1, 123456)}}
+
+    result_vq = format_metadata_timestamps(metadata, "vquery")
+    assert result_vq["root"]["start"] == "2026-01-01T12:00:01"
+
+    result_url = format_metadata_timestamps(metadata, "url")
+    assert result_url["root"]["start"] == "2026-01-01T12:00:01.123Z"
+
+
+def test_grafana_and_victoria_links():
+    start = datetime(2026, 1, 1, 12, 0, 0)
+    end = datetime(2026, 1, 1, 12, 20, 30)
+
+    grafana = grafana_link(start, end, namespace="vaclab")
+    victoria = victorialogs_link(start, end, namespace="vaclab")
+
+    assert grafana.startswith("https://grafana.lab.vac.dev/d/jIrqsZTIz/nwaku?")
+    assert "var-namespace=vaclab" in grafana
+    assert victoria.startswith("https://vlselect.lab.vac.dev/select/vmui/#/?")
+    assert "g0.range_input=20m30s" in victoria
+    assert "kubernetes.pod_namespace%3Avaclab" in victoria

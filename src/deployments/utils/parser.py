@@ -1,7 +1,10 @@
 # Python Imports
-from typing import Any, Literal, Union, get_args, get_origin
+import argparse
+import json
+import types
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
 ARG_NOT_SET = object()
@@ -25,12 +28,68 @@ def _annotation_display(annotation) -> str:
 
 
 def _unwrap_optional(annotation):
+    """Recursively unwrap Annotated and Optional to get the actual type."""
     origin = get_origin(annotation)
-    if origin is Union:
+
+    # Unwrap Annotated[T, ...] -> T, then recurse
+    if origin is Annotated:
+        args = get_args(annotation)
+        if args:
+            return _unwrap_optional(args[0])
+
+    # Unwrap Optional[T] -> T
+    # Optional[T] => typing.Union
+    # T | None => types.UnionType
+    if origin is Union or origin is types.UnionType:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
         if len(args) == 1:
-            return args[0]
+            return _unwrap_optional(args[0])
+
     return annotation
+
+
+def get_from_str(annotation: Any, field_name: str):
+    def from_str(input_str: str) -> Any:
+        errors = []
+
+        # Convert using model_validate_json.
+        try:
+            if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                return annotation.model_validate_json(input_str)
+        except (ValidationError, ValueError) as e:
+            errors.append(
+                argparse.ArgumentTypeError(
+                    f"model_validate_json failed. Field: `{field_name}` Error: `{e}`"
+                )
+            )
+
+        # Convert using custom from_str method.
+        from_str_method = getattr(annotation, "from_str", None)
+        if from_str_method is not None:
+            try:
+                return from_str_method(input_str)
+            except Exception as e:
+                errors.append(
+                    argparse.ArgumentTypeError(
+                        f"from_str failed. Field: `{field_name}` Error: `{e}`"
+                    )
+                )
+
+        # Convert using direct instantiation.
+        if callable(annotation):
+            try:
+                return annotation(input_str)
+            except Exception as e:
+                err = argparse.ArgumentTypeError(
+                    f"Failed to convert string directly. Field: `{field_name}` Error: `{e}`"
+                )
+                errors.append(err)
+
+        if len(errors) == 1:
+            raise errors[0]
+        raise argparse.ArgumentTypeError(f"Failed to convert field from str. Errors: {errors}")
+
+    return from_str
 
 
 def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any]]:
@@ -41,12 +100,11 @@ def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any
         "dest": field_name,
         "default": ARG_NOT_SET,
         "required": False,
-        "type": str,
     }
 
     if annotation is bool:
         kwargs["action"] = "store_true"
-        del kwargs["type"]
+        # For bool, "type" should not be set.
 
     if annotation in (int, float, str):
         kwargs["type"] = annotation
@@ -63,11 +121,23 @@ def _field_to_arg(field_name: str, field: FieldInfo) -> tuple[str, dict[str, Any
             kwargs["type"] = type(choices[0])
             kwargs["choices"] = choices
 
+    # Container types - parse as JSON
+    if origin in (list, set, dict, tuple) or annotation in (list, set, dict, tuple):
+        kwargs["type"] = lambda item: json.loads(item)
+
+    # Fallback for complex types (only if annotation is a class)
+    elif "type" not in kwargs and annotation is not bool:
+        if isinstance(annotation, type):
+            kwargs["type"] = get_from_str(annotation, field_name)
+        # Otherwise, keep as string (typing constructs like Annotated, etc.)
+        else:
+            kwargs["type"] = str
+
     if field.description:
         kwargs["help"] = field.description
 
     type_label = _annotation_display(annotation)
-    if "type" in kwargs.keys():
+    if "type" in kwargs:
         kwargs["metavar"] = f"{type_label}"
 
     return flag, kwargs

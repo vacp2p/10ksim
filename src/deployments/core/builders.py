@@ -13,7 +13,7 @@ from kubernetes.client import (
     V1ServicePort,
     V1StatefulSet,
 )
-from pydantic import BaseModel, Field, NonNegativeInt
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
@@ -76,10 +76,11 @@ class StatefulSetBuilder(BaseModel):
         delay: NonNegativeInt,
         jitter: NonNegativeInt,
         rate_mbit: Optional[NonNegativeInt] = None,
+        loss_pct: Optional[NonNegativeFloat] = None,
         *,
         overwrite: bool = False,
     ) -> Self:
-        delay_container = init_container_delay(delay, jitter, rate_mbit)
+        delay_container = init_container_delay(delay, jitter, rate_mbit, loss_pct)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
             delay_container, overwrite=overwrite
         )

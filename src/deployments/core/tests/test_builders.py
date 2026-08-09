@@ -200,7 +200,7 @@ class TestStatefulSetBuilder:
         )
 
         builder.with_network_delay(100, 10)
-        mock_init_delay.assert_called_once_with(100, 10, None)
+        mock_init_delay.assert_called_once_with(100, 10, None, None)
 
     def test_with_network_delay_adds_init_container_to_pod_spec(self, mocker):
         """Should add init container to pod spec with correct delay and jitter values."""
@@ -234,7 +234,7 @@ class TestStatefulSetBuilder:
         )
 
         builder.with_network_delay(100, 10)
-        mock_init_delay.assert_called_once_with(100, 10, None)
+        mock_init_delay.assert_called_once_with(100, 10, None, None)
         init_containers = (
             builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
         )

@@ -9,6 +9,11 @@ from src.deployments.libp2p.builders.helpers import LIBP2P_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 
+STABLE_START_SHIFT = timedelta(minutes=3)
+"""How long after the first message the mesh is treated as settled."""
+STABLE_END_SHIFT = timedelta(seconds=-30)
+"""How far before publishing ends to stop, so teardown stays out of the window."""
+
 
 class Bridge(event_window_bridge.EventWindowBridge):
     interval: Literal["complete", "stable"] = "complete"
@@ -31,9 +36,7 @@ class Bridge(event_window_bridge.EventWindowBridge):
             ),
             event_window_bridge.EventWindow(
                 key="stable",
-                start=event_window_bridge.EventBound("start_messages", timedelta(minutes=3)),
-                end=event_window_bridge.EventBound(
-                    "publisher_messages_finished", timedelta(seconds=-30)
-                ),
+                start=event_window_bridge.EventBound("start_messages", STABLE_START_SHIFT),
+                end=event_window_bridge.EventBound("publisher_messages_finished", STABLE_END_SHIFT),
             ),
         ]

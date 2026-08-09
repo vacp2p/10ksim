@@ -172,7 +172,7 @@ _SWITCH_BANDWIDTH_MBIT = 1000
 _SWITCH_LATENCY_MS = 0
 
 
-def _wan_gml(latency_ms: int, bandwidth_mbit: int) -> LiteralScalarString:
+def _wan_gml(latency_ms: int, bandwidth_mbit: int, loss_pct: float = 0.0) -> LiteralScalarString:
     """A one-node GML graph with a self-loop, so every host (all on network_node_id 0)
     sees `latency_ms` one-way delay and `bandwidth_mbit` up/down. Shadow's GML parser
     wants multi-line GML (one attribute per line); return it as a YAML literal block so
@@ -188,6 +188,7 @@ def _wan_gml(latency_ms: int, bandwidth_mbit: int) -> LiteralScalarString:
     source 0
     target 0
     latency "{latency_ms} ms"
+    packet_loss {loss_pct / 100}
   ]
 ]
 """
@@ -211,6 +212,7 @@ def render_shadow_yaml(
     start_jitter_ms: int = 0,
     latency_ms: Optional[int] = None,
     bandwidth_mbit: Optional[int] = None,
+    loss_pct: float = 0.0,
     hosts_per_subnet: int = 1,
     requester_app_path: str = _REQUESTER_APP_PATH,
 ) -> dict:
@@ -248,18 +250,21 @@ def render_shadow_yaml(
         )
     hosts["publisher"] = _publisher_host(publisher_start_s, requester_app_path)
 
-    if latency_ms is None and bandwidth_mbit is None:
+    if latency_ms is None and bandwidth_mbit is None and not loss_pct:
         graph = {"type": "1_gbit_switch"}
     else:
         if latency_ms is not None and latency_ms < 0:
             raise ValueError(f"latency_ms must be >= 0, got {latency_ms}")
         if bandwidth_mbit is not None and bandwidth_mbit <= 0:
             raise ValueError(f"bandwidth_mbit must be > 0, got {bandwidth_mbit}")
+        if not 0 <= loss_pct <= 100:
+            raise ValueError(f"loss_pct must be 0..100, got {loss_pct}")
         graph = {
             "type": "gml",
             "inline": _wan_gml(
                 _SWITCH_LATENCY_MS if latency_ms is None else latency_ms,
                 _SWITCH_BANDWIDTH_MBIT if bandwidth_mbit is None else bandwidth_mbit,
+                loss_pct,
             ),
         }
 

@@ -1,8 +1,11 @@
 """Reduce the gossipsub control/efficiency counter CSVs (dumped by the
 `with_gossipsub_detail_metrics` scrape) into per-muxer report numbers.
 
-These are monotonic counters, so per node the total over the run is the last value; the
-mesh-health gauges reduce the same way, giving end-of-run state.
+Most of these are monotonic counters, so per node the total over the run is the last
+value. The mesh-health gauges are not: they rise and fall, and the last sample lands
+after publishing has stopped, where quic's connections have already decayed on idle. A
+gauge is therefore reduced over the window instead, which is the state while traffic
+was flowing.
 We aggregate the across-node median (the typical node) for each metric, and derive the
 duplicate ratio (duplicates / delivered), the cleanest single "how efficient was the
 mesh" number. Meant for the Shadow section, where the run is deterministic so the
@@ -40,9 +43,14 @@ GOSSIPSUB_DETAIL: Dict[str, str] = {
 }
 
 
-def _per_node_totals(metrics_dir: Path, folder: str, muxer: str) -> Optional[pd.Series]:
-    """Last value per relay node for one counter metric = its total over the run.
-    Excludes the bootstrap and publisher hosts (only `pod-<n>` are relays)."""
+# Gauges rise and fall, so the last sample is end-of-run state rather than the state
+# under load. Everything else here is a monotonic counter.
+GAUGES = frozenset({"mesh-peers", "topic-peers", "connections"})
+
+
+def _per_node_values(metrics_dir: Path, folder: str, muxer: str) -> Optional[pd.Series]:
+    """One value per relay node: a counter's total over the run, or a gauge's typical
+    value across the window. Excludes bootstrap and publisher (only `pod-<n>` are relays)."""
     csv = metrics_dir / folder / muxer
     if not csv.exists():
         logger.warning(f"gossipsub summary: missing {csv}")
@@ -51,7 +59,31 @@ def _per_node_totals(metrics_dir: Path, folder: str, muxer: str) -> Optional[pd.
     cols = [c for c in df.columns if _RELAY_POD.fullmatch(c)]
     if not cols:
         return None
-    return df[cols].ffill().iloc[-1]
+    values = df[cols].ffill()
+    if folder not in GAUGES:
+        return values.iloc[-1]
+
+    per_node = values.median()
+    _warn_if_window_runs_past_traffic(folder, muxer, values, per_node)
+    return per_node
+
+
+def _warn_if_window_runs_past_traffic(
+    folder: str, muxer: str, values: pd.DataFrame, per_node: pd.Series
+) -> None:
+    """A gauge that collapses inside the window drags the median below its value under
+    load. The median survives a small tail but not a large one, and the result stays
+    plausible while being wrong, so say so rather than let it pass silently."""
+    over_time = values.median(axis=1)
+    if over_time.empty or over_time.max() <= 0:
+        return
+    collapsed = (over_time < over_time.max() / 2).mean()
+    if collapsed > 0.2:
+        logger.warning(
+            f"{folder} ({muxer}): {collapsed:.0%} of the scrape window sits below half the "
+            f"peak, so the window runs past the traffic and this median ({per_node.median():.0f} "
+            f"against a peak of {over_time.max():.0f}) understates the value under load"
+        )
 
 
 def summarize(metrics_dir: Path, muxer: str) -> Dict[str, float]:
@@ -60,7 +92,7 @@ def summarize(metrics_dir: Path, muxer: str) -> Dict[str, float]:
     totals: Dict[str, pd.Series] = {}
     summary: Dict[str, float] = {}
     for folder, label in GOSSIPSUB_DETAIL.items():
-        series = _per_node_totals(metrics_dir, folder, muxer)
+        series = _per_node_values(metrics_dir, folder, muxer)
         if series is None or series.dropna().empty:
             continue
         totals[folder] = series

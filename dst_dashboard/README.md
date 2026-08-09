@@ -25,6 +25,11 @@ export DST_JWT_SECRET=<a real secret>                       # Required outside l
 longer defines experiments. Experiments live only in MongoDB and are managed
 exclusively through the API (see below).
 
+## Building Frontend Docker
+```bash
+docker build --build-arg REACT_APP_API_URL=https://api.dashboard.lab.vac.dev -f Dockerfile . -t mamoutoudiarra/dst-dashboard-frontend:dev-v0.8
+```
+
 ## Managing experiments
 
 Creating, updating, and deleting experiments requires an admin bearer token.

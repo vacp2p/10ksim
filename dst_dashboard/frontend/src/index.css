@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+    /* Always reserve the scrollbar gutter so navigating between a short page
+       (no scrollbar) and a tall one (scrollbar appears) doesn't shift fixed
+       elements like the navbar horizontally. */
+    overflow-y: scroll;
+}
+
 body {
     margin: 0;
     -webkit-font-smoothing: antialiased;

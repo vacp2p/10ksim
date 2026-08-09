@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Reports whether an element has scrolled into (or near) the viewport, then
-// stops observing — used to defer mounting expensive chart instances until
-// they're actually about to be seen.
-export function useInView({ rootMargin = '200px' } = {}) {
+// Reports whether an element has scrolled into (or near) the viewport.
+// By default stops observing after the first hit — used to defer mounting
+// expensive chart instances/fetches until they're actually about to be seen,
+// without re-triggering (and re-fetching) every time the user scrolls past.
+// Pass once:false for purely visual effects that should toggle both ways.
+export function useInView({ rootMargin = '200px', once = true } = {}) {
     const ref = useRef(null);
     const [inView, setInView] = useState(false);
 
     useEffect(() => {
         const node = ref.current;
-        if (!node || inView) return undefined;
+        if (!node) return undefined;
 
         if (typeof IntersectionObserver === 'undefined') {
             setInView(true);
@@ -20,7 +22,9 @@ export function useInView({ rootMargin = '200px' } = {}) {
             ([entry]) => {
                 if (entry.isIntersecting) {
                     setInView(true);
-                    observer.disconnect();
+                    if (once) observer.disconnect();
+                } else if (!once) {
+                    setInView(false);
                 }
             },
             { rootMargin }
@@ -28,7 +32,7 @@ export function useInView({ rootMargin = '200px' } = {}) {
 
         observer.observe(node);
         return () => observer.disconnect();
-    }, [inView, rootMargin]);
+    }, [rootMargin, once]);
 
     return [ref, inView];
 }

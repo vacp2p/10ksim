@@ -50,7 +50,8 @@ function ChartPanel({ experimentId, panelMeta, isDark }) {
     return (
         <div
             ref={ref}
-            className="card bg-base-200 border border-base-100 overflow-hidden hover:ring hover:ring-primary/30 transition-shadow"
+            className={`card bg-base-200 border border-base-100 overflow-hidden hover:ring hover:ring-primary/30 transition-all duration-500 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                }`}
         >
             <div className="bg-base-100 px-5 py-4 border-b border-base-300">
                 <h3 className="font-mono text-sm uppercase tracking-widest">{panelMeta.title}</h3>

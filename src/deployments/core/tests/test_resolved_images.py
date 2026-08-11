@@ -64,3 +64,12 @@ def test_an_api_error_does_not_take_the_run_down(mocker, caplog):
     with caplog.at_level(logging.WARNING):
         assert resolved_images("pod", "zerotesting") == {}
     assert "Could not resolve images" in caplog.text
+
+
+def test_a_pod_that_has_not_started_reports_nothing_rather_than_a_wrong_digest(mocker):
+    """Read before the pods run, container_statuses is empty; the caller must see that."""
+    pod = MagicMock()
+    pod.metadata.name = "pod-0"
+    pod.status.container_statuses = None
+    mocker.patch.object(k8s_rollout, "get_pods_for_statefulset", return_value=[pod])
+    assert resolved_images("pod", "zerotesting") == {}

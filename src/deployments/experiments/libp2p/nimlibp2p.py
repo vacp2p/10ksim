@@ -244,6 +244,12 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await self.deploy(deployment=nodes, wait_for_ready=self.config.wait_nodes_ready)
 
+        await self._after_nodes(nodes)
+
+        await asyncio.sleep(self.config.delay_cold_start)
+
+        # After the cold start, not the deploy: a scenario that does not wait for readiness
+        # has pods with no container status yet, which would record no digest at all.
         self.log_event(
             {
                 "event": "images_resolved",
@@ -251,10 +257,6 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
                 "resolved": resolved_images(name, namespace, self.api_client),
             }
         )
-
-        await self._after_nodes(nodes)
-
-        await asyncio.sleep(self.config.delay_cold_start)
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
 

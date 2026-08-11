@@ -27,7 +27,10 @@ class Nimlibp2pTracer(MessageTracer):
                 "received",
                 trace_pairs=[
                     TracePair(
-                        regex=r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=([\w*]+)",
+                        # delayMs goes negative when the sender's clock is ahead of the
+                        # receiver's, so the sign has to be part of the match: `\w` alone
+                        # drops those deliveries and under-reports delivery.
+                        regex=r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=(-?[\w*]+)",
                         convert=self._trace_received_in_logs,
                     ),
                 ],
@@ -61,8 +64,30 @@ class Nimlibp2pTracer(MessageTracer):
         df["sentAt"] = pd.to_datetime(df["sentAt"], unit="ns")
         df["timestamp"] = df["timestamp"].astype(np.uint64)
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ns")
+        self._warn_about_negative_delays(df)
 
         return df
+
+    @staticmethod
+    def _warn_about_negative_delays(df: pd.DataFrame) -> int:
+        """Report deliveries whose measured delay is negative. Returns how many.
+
+        delayMs is the receiver's clock minus the sender's, read on two machines, so it
+        goes negative when the receiver's host clock trails the sender's by more than the
+        transit time. The delivery is real; the latency is not measurable on that pair.
+        """
+        delays = pd.to_numeric(df["delayMs"], errors="coerce")
+        negative = delays < 0
+        count = int(negative.sum())
+        if not count:
+            return 0
+
+        logger.warning(
+            f"{count} of {len(df)} deliveries ({count / len(df):.2%}) have a negative measured "
+            f"delay, down to {delays[negative].min()}ms: the receiving hosts' clocks trail the "
+            f"senders'. The deliveries are counted, but their latency is not trustworthy."
+        )
+        return count
 
     def _trace_sent_in_logs(self, parsed_logs: List) -> pd.DataFrame:
         columns = ["msgId", "timestamp"]

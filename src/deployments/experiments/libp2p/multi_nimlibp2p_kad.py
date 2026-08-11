@@ -13,6 +13,10 @@ from src.deployments.registry import experiment
 IMAGES = {
     "2.0.0": Image(repo="radiken/dst-test-node-regression", tag="v2.0.0-kad"),
     "2.1.0": Image(repo="radiken/dst-test-node-regression", tag="v2.1.0-kad"),
+    "2.2.0": Image(repo="radiken/dst-test-node-regression", tag="v2.2.0"),
+    "2.3.0": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-1"),
+    # Same build plus -d:chronosFutureTracking, for diagnosing the kad bootstrap stall.
+    "2.3.0-futures": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-futures"),
 }
 
 

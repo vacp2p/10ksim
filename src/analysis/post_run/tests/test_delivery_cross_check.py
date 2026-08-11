@@ -114,3 +114,35 @@ class TestLogDerivedCount:
             "missing_messages": [{"messages": ["m1"], "nodes": [{"name": "pod-0"}]}],
         }
         assert _log_derived_deliveries(reliability) == 100
+
+
+class TestWindowTypes:
+    """The metadata stack carries the window as ISO strings, not datetimes. Passing those
+    straight to the query builder raised `'str' object has no attribute 'tzinfo'` on the
+    first real run, because the tests until now only fed it datetimes."""
+
+    def _ok(self, mocker):
+        mocker.patch.object(
+            dcc.scrape_utils,
+            "get_query_data",
+            return_value=Ok({"data": {"result": [{"values": [[1, "600000"]]}]}}),
+        )
+
+    def test_accepts_the_iso_strings_the_metadata_actually_holds(self, mocker):
+        self._ok(mocker)
+        assert (
+            counter_deliveries("http://vm/", "ns", "2026-08-11T15:52:06", "2026-08-11T16:26:10")
+            == 600_000
+        )
+
+    def test_still_accepts_datetimes(self, mocker):
+        self._ok(mocker)
+        assert (
+            counter_deliveries(
+                "http://vm/",
+                "ns",
+                datetime(2026, 8, 11, 15, 52, 6, tzinfo=timezone.utc),
+                datetime(2026, 8, 11, 16, 26, 10, tzinfo=timezone.utc),
+            )
+            == 600_000
+        )

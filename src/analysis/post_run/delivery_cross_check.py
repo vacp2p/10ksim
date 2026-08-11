@@ -31,10 +31,14 @@ class DeliveryCrossCheck(BaseModel):
     detail: str
 
 
-def counter_deliveries(
-    url: str, namespace: str, start: datetime, end: datetime, step: int = 60
-) -> Optional[int]:
+def _as_datetime(value) -> datetime:
+    """Metadata carries the window as ISO strings; the query builder needs datetimes."""
+    return value if isinstance(value, datetime) else datetime.fromisoformat(value)
+
+
+def counter_deliveries(url: str, namespace: str, start, end, step: int = 60) -> Optional[int]:
     """Total receives the nodes counted over the window, or None if unavailable."""
+    start, end = _as_datetime(start), _as_datetime(end)
     query = f"sum(max_over_time({RECEIVED_METRIC}{{namespace='{namespace}'}}[{step}s]))"
     match scrape_utils.get_query_data(scrape_utils.create_promql(url, query, start, end, step)):
         case Ok(data):

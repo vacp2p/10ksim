@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegative
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.k8s_rollout import resolved_images
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
@@ -242,6 +243,14 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
         namespace = nodes.metadata.namespace
 
         await self.deploy(deployment=nodes, wait_for_ready=self.config.wait_nodes_ready)
+
+        self.log_event(
+            {
+                "event": "images_resolved",
+                "requested": f"{self.config.image.repo}:{self.config.image.tag}",
+                "resolved": resolved_images(name, namespace, self.api_client),
+            }
+        )
 
         await self._after_nodes(nodes)
 

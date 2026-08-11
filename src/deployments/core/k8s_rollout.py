@@ -225,6 +225,26 @@ def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iter
     )
 
 
+def resolved_images(name: str, namespace: str, api_client=None) -> dict:
+    """Digest each container of a StatefulSet's pods actually pulled, keyed by container.
+
+    A pod spec holds a mutable tag, so it does not say which binary ran. Values are lists
+    because a mid-run rollout can leave pods on different digests.
+    """
+    digests: dict = {}
+    try:
+        pods = get_pods_for_statefulset(name, namespace, api_client)
+    except ApiException as e:
+        logger.warning(f"Could not resolve images for `{namespace}/{name}`: {e}")
+        return digests
+
+    for pod in pods:
+        for status in pod.status.container_statuses or []:
+            if status.image_id:
+                digests.setdefault(status.name, set()).add(status.image_id)
+    return {container: sorted(ids) for container, ids in digests.items()}
+
+
 def check_pod_condition(
     pod: V1Pod, condition: Optional[Tuple[str, str] | Callable[[V1Pod], bool]] = None
 ) -> bool:

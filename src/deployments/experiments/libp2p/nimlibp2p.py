@@ -45,9 +45,8 @@ class ExpConfig(BaseModel):
     bootstrap_nodes: NonNegativeInt = 1
     network_delay: NonNegativeInt = WAN_LATENCY_MS
     network_jitter: NonNegativeInt = 0
-    network_bandwidth_mbit: NonNegativeInt = (
-        WAN_BANDWIDTH_MBIT  # 0 = uncapped; folded into the netem qdisc
-    )
+    network_bandwidth_mbit: NonNegativeInt = WAN_BANDWIDTH_MBIT
+    """Link rate, folded into the netem qdisc; 0 leaves it uncapped."""
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90

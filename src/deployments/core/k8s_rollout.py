@@ -239,7 +239,7 @@ def resolved_images(name: str, namespace: str, api_client=None) -> dict:
         return digests
 
     for pod in pods:
-        for status in pod.status.container_statuses or []:
+        for status in getattr(pod.status, "container_statuses", None) or []:
             if status.image_id:
                 digests.setdefault(status.name, set()).add(status.image_id)
     return {container: sorted(ids) for container, ids in digests.items()}

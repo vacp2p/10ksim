@@ -56,3 +56,18 @@ def test_subfolders_are_not_mistaken_for_csvs(tmp_path):
     _write_csv(tmp_path / "libp2p-in" / "quic")
     (tmp_path / "libp2p-in" / "nested").mkdir()
     assert len(_concat(tmp_path / "libp2p-in")) == 3
+
+
+def test_a_dotfile_does_not_take_the_figure_down(tmp_path):
+    """Discovering files rather than naming them means junk in the folder is a hazard."""
+    _write_csv(tmp_path / "libp2p-in" / "quic")
+    (tmp_path / "libp2p-in" / ".DS_Store").write_bytes(b"\x00\x01junk")
+    assert len(_concat(tmp_path / "libp2p-in")) == 3
+
+
+def test_a_folder_of_only_dotfiles_reports_rather_than_crashing(tmp_path, caplog):
+    (tmp_path / "libp2p-in").mkdir()
+    (tmp_path / "libp2p-in" / ".DS_Store").write_bytes(b"junk")
+    with caplog.at_level(logging.ERROR):
+        assert _concat(tmp_path / "libp2p-in").empty
+    assert "holds no files" in caplog.text

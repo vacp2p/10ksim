@@ -79,9 +79,12 @@ class DataFileHandler(DataHandler):
 
         match file_utils.get_files_from_folder_path(path, self._include_files):
             case Ok(file_names):
-                if not file_names:
+                # Dotfiles are never scrape output, and one .DS_Store would take the
+                # whole figure down now that the files are discovered rather than named.
+                csv_names = [name for name in file_names if not name.startswith(".")]
+                if not csv_names:
                     logger.error(f"{path} holds no files to read.")
-                return sorted(path / name for name in file_names)
+                return sorted(path / name for name in csv_names)
             case Err(error):
                 logger.error(error)
                 return []

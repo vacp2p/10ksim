@@ -19,6 +19,7 @@ from kubernetes.client import (
 from pydantic import Field, NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.k8s_cleanup import delete_network_policy
+from src.deployments.experiments.libp2p.disturbance import check_partition_applied
 from src.deployments.core.k8s_rollout import get_pods_for_statefulset, label_pods
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
@@ -155,6 +156,9 @@ class NetworkPartition(NimLibp2pExperiment):
         for policy in policies:
             self.dump_yaml(policy, policy.metadata.name)
         await self.deploy(deployment=policies, wait_for_ready=False)
+        check_partition_applied(
+            [policy.metadata.name for policy in policies], self.namespace, self.api_client
+        )
         self.log_event({"event": "partition_applied", "side_a": len(side_a), "side_b": len(side_b)})
 
     async def _mid_run(self, nodes: V1StatefulSet) -> None:

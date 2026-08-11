@@ -50,6 +50,8 @@ class ExpConfig(BaseModel):
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
+    max_failed_publishes: NonNegativeInt = 0
+    """Publishes that may fail before the run is treated as invalid."""
     wait_nodes_ready: bool = True
 
     @model_validator(mode="after")
@@ -165,7 +167,8 @@ def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
     )
 
 
-async def publish(config, namespace, random_name):
+async def publish(config, namespace, random_name) -> bool:
+    """Publish one message. Returns whether it reached the node."""
     try:
         target = Target(
             name="libp2p-node",
@@ -176,12 +179,14 @@ async def publish(config, namespace, random_name):
         await libp2p_dst_node_publish(
             namespace=namespace, target=target, msg_size_bytes=config.message_size_bytes
         )
+        return True
     except PodApiApplicationError as e:
         logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
     except PodApiError as e:
         logger.error(f"PodApiError: {e} {traceback.format_exc()}")
     except Exception as e:
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
+    return False
 
 
 @experiment(name="nimlibp2p")
@@ -261,7 +266,9 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))
             await asyncio.sleep(self.config.delay_after_publish)
-        await asyncio.gather(*tasks)
+        published = await asyncio.gather(*tasks)
+        failed = published.count(False)
+        self.log_event({"event": "publish_summary", "attempted": len(published), "failed": failed})
 
         self.log_event("publisher_messages_finished")
 
@@ -269,5 +276,11 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await asyncio.sleep(self.config.post_publish_dwell)
         self.log_event("publisher_wait_finished")
+
+        if failed > self.config.max_failed_publishes:
+            self.fail_run(
+                f"{failed} of {len(published)} messages were never published, so delivery "
+                f"is measured against a denominator the run did not send"
+            )
 
         self.log_event("internal_run_finished")

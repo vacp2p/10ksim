@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 import traceback
 from typing import ClassVar, Literal
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegative
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.pod_logs import capture_pod_logs
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
@@ -49,6 +51,10 @@ class ExpConfig(BaseModel):
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
+    capture_pod_logs: bool = True
+    """Pull pod logs with the run, so the analysis does not depend on the log collector."""
+    log_capture_lead: NonNegativeInt = 45
+    """Seconds of the dwell reserved for the capture; 1000 pods take about 30s."""
     wait_nodes_ready: bool = True
 
     @model_validator(mode="after")
@@ -266,7 +272,33 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await mid_run
 
-        await asyncio.sleep(self.config.post_publish_dwell)
+        await self._dwell_and_capture()
         self.log_event("publisher_wait_finished")
 
         self.log_event("internal_run_finished")
+
+    async def _dwell_and_capture(self) -> None:
+        """Wait out the post-publish dwell, capturing pod logs before the pods go away.
+
+        The capture has to land inside the dwell, not after it: cleanup starts in the same
+        second the dwell ends and pulling a thousand logs takes longer than the pods last.
+        """
+        dwell = self.config.post_publish_dwell
+        if not self.config.capture_pod_logs or self.output_folder is None:
+            await asyncio.sleep(dwell)
+            return
+
+        started = time.monotonic()
+        # Let late deliveries land before reading the logs, but leave room to pull them.
+        await asyncio.sleep(max(dwell - self.config.log_capture_lead, 0))
+
+        self.log_event("log_capture_start")
+        captured = await asyncio.to_thread(
+            capture_pod_logs,
+            self.namespace,
+            self.output_folder / "kubectl_logs",
+            self.api_client,
+        )
+        self.log_event({"event": "log_capture_finished", "pods": captured})
+
+        await asyncio.sleep(max(dwell - (time.monotonic() - started), 0))

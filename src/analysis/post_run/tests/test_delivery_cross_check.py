@@ -80,10 +80,37 @@ class TestLogDerivedCount:
         }
         assert _log_derived_deliveries(reliability) == 600_000
 
-    def test_missing_messages_are_subtracted_per_node(self):
+    def test_what_each_node_missed_is_subtracted(self):
         reliability = {
             "expected_num_peers": 1000,
             "expected_num_messages": 600,
-            "missing_messages": [{"messages": ["m1", "m2"], "nodes": [{"name": "pod-0"}]}],
+            "missing_messages": [
+                {
+                    "messages": ["m1", "m2"],
+                    "nodes": [{"name": "pod-0", "missing": 2}, {"name": "pod-1", "missing": 1}],
+                }
+            ],
         }
-        assert _log_derived_deliveries(reliability) == 600_000 - 2
+        assert _log_derived_deliveries(reliability) == 600_000 - 3
+
+    def test_the_two_marginals_are_not_multiplied(self):
+        """43 nodes each missing a different message is 43 lost deliveries, not 43x43."""
+        reliability = {
+            "expected_num_peers": 1000,
+            "expected_num_messages": 600,
+            "missing_messages": [
+                {
+                    "messages": [f"m{i}" for i in range(43)],
+                    "nodes": [{"name": f"pod-{i}", "missing": 1} for i in range(43)],
+                }
+            ],
+        }
+        assert _log_derived_deliveries(reliability) == 600_000 - 43
+
+    def test_a_node_without_a_count_does_not_break_the_sum(self):
+        reliability = {
+            "expected_num_peers": 10,
+            "expected_num_messages": 10,
+            "missing_messages": [{"messages": ["m1"], "nodes": [{"name": "pod-0"}]}],
+        }
+        assert _log_derived_deliveries(reliability) == 100

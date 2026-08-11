@@ -21,6 +21,8 @@ sns.set_theme()
 class Node(BaseModel):
     name: str
     id: Optional[str]
+    missing: Optional[NonNegativeInt] = None
+    """How many of the run's messages this node never received."""
 
 
 class MissingMessages(BaseModel):
@@ -419,7 +421,7 @@ class Nimlibp2pAnalyzer(Analyzer):
             missing_hashes.extend(pivot_df[pivot_df[pod].isna()].index.tolist())
             pod_name = df[df[peer_identifier] == item[0]]["kubernetes.pod_name"].iloc[0]
             node_id = None if peer_identifier == "kubernetes.pod_name" else item[0]
-            nodes.append(Node(name=pod_name, id=node_id))
+            nodes.append(Node(name=pod_name, id=node_id, missing=int(unique_messages - count)))
             logger.warning(
                 f"Node {item[0]} ({pod_name}) {item[1]}/{unique_messages}: {missing_hashes}"
             )
@@ -444,7 +446,7 @@ class Nimlibp2pAnalyzer(Analyzer):
                 "kubernetes.pod_name"
             ].iloc[0]
             node_id = None if peer_identifier == "kubernetes.pod_name" else item[0]
-            results.append(Node(name=pod_name, id=node_id))
+            results.append(Node(name=pod_name, id=node_id, missing=int(unique_messages - count)))
             logger.warning(
                 f"Node {item[0]} ({pod_name}) {item[1]}/{unique_messages}: {missing_hashes}"
             )

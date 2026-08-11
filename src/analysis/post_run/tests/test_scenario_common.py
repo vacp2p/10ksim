@@ -1,10 +1,18 @@
+import json
+import logging
+from types import SimpleNamespace
+
 import pandas as pd
+import pytest
 
 from src.analysis.post_run.scenario_common import (
     POD_COLUMN,
+    NoDeliveries,
     load_deliveries,
     load_mesh_peers,
     mesh_peers_row,
+    prepare,
+    published_messages,
     write_table,
 )
 
@@ -67,3 +75,49 @@ def test_load_deliveries_resolves_ordinal_and_publish_time(tmp_path):
     df = load_deliveries(tmp_path)
     assert df.iloc[0]["ordinal"] == 42
     assert df.iloc[0]["sent"] == pd.Timestamp("2026-07-30 03:07:19.873477632")
+
+
+class TestPublishedMessages:
+    """Delivery must be scored against what left the publisher, not what we asked for."""
+
+    def _experiment(self, tmp_path, events, configured=600):
+        log = tmp_path / "events.log"
+        log.write_text("".join(json.dumps(e) + "\n" for e in events))
+        return SimpleNamespace(events_log_path=log, config=SimpleNamespace(num_messages=configured))
+
+    def test_uses_what_the_publisher_actually_sent(self, tmp_path):
+        exp = self._experiment(
+            tmp_path, [{"event": "publish_summary", "attempted": 600, "failed": 3}]
+        )
+        assert published_messages(exp) == 597
+
+    def test_a_clean_run_matches_the_configured_count(self, tmp_path):
+        exp = self._experiment(
+            tmp_path, [{"event": "publish_summary", "attempted": 600, "failed": 0}]
+        )
+        assert published_messages(exp) == 600
+
+    def test_a_lost_publish_is_warned_about(self, tmp_path, caplog):
+        exp = self._experiment(
+            tmp_path, [{"event": "publish_summary", "attempted": 600, "failed": 3}]
+        )
+        with caplog.at_level(logging.WARNING):
+            published_messages(exp)
+        assert "3 of 600 publishes failed" in caplog.text
+
+    def test_an_older_run_without_the_event_falls_back_and_says_so(self, tmp_path, caplog):
+        exp = self._experiment(tmp_path, [{"event": "run_start"}])
+        with caplog.at_level(logging.WARNING):
+            assert published_messages(exp) == 600
+        assert "No publish_summary event" in caplog.text
+
+
+def test_prepare_refuses_a_run_with_no_deliveries(tmp_path, mocker):
+    """An empty frame used to reach the tables and raise KeyError on a missing column."""
+    mocker.patch("src.analysis.post_run.scenario_common.run_nimlibp2p_analysis")
+    mocker.patch(
+        "src.analysis.post_run.scenario_common.load_deliveries", return_value=pd.DataFrame()
+    )
+    exp = SimpleNamespace(output_folder=tmp_path, config=SimpleNamespace())
+    with pytest.raises(NoDeliveries, match="No deliveries"):
+        prepare(exp)

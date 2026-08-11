@@ -14,6 +14,7 @@ from src.analysis.post_run.scenario_common import (
     mesh_peers_row,
     pct,
     prepare,
+    published_messages,
     write_table,
 )
 
@@ -45,6 +46,9 @@ def run_degraded_analysis(experiment: "NimLibp2pExperiment") -> None:
         dump_dir,
         "degraded_result",
         degraded_table(
-            df, cfg.num_messages, cfg.num_relay_nodes, load_mesh_peers(experiment.output_folder)
+            df,
+            published_messages(experiment),
+            cfg.num_relay_nodes,
+            load_mesh_peers(experiment.output_folder),
         ),
     )

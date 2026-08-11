@@ -1,4 +1,5 @@
-from src.analysis.post_run.churn import churn_table, longest_run
+from src.analysis.post_run.churn import churn_outages, churn_table, longest_run
+from src.analysis.post_run.scenario_common import POD_COLUMN
 
 
 def test_longest_run_picks_the_biggest_stretch():
@@ -62,3 +63,21 @@ def test_churn_handles_a_node_that_never_comes_back(deliveries, fanout):
     rows = dict((i, r) for i, _, r in churn_table(df, ["pod-2", "pod-3"], 3, 4))
     assert "missed 2.0 of 3" in rows["delivery, churned nodes"]
     assert rows["clean recovery"].startswith("0 of 2 nodes keep dropping")
+
+
+def test_a_churned_node_that_received_nothing_is_still_reported(deliveries, fanout):
+    """The worst outcome must not vanish: absent from the pivot means absent from the table."""
+    df = deliveries(fanout(1, [0, 1], 0) + fanout(2, [0, 1], 30))
+    out = churn_outages(df, ["pod-2", "pod-3"])
+
+    assert list(out[POD_COLUMN]) == ["pod-2", "pod-3"]
+    assert list(out["missed"]) == [2, 2], "each missed every message"
+
+
+def test_the_recovery_denominator_covers_every_churned_node(deliveries, fanout):
+    """Dropping absent nodes shrank the denominator with the numerator, so a total
+    failure read as a clean run."""
+    df = deliveries(fanout(1, [0, 1, 2], 0) + fanout(2, [0, 1, 2], 30))
+    rows = dict((i, r) for i, _, r in churn_table(df, ["pod-2", "pod-3", "pod-4"], 2, 5))
+
+    assert rows["clean recovery"].startswith("0 of 3 nodes keep dropping")

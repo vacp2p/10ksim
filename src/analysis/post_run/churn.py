@@ -14,6 +14,7 @@ from src.analysis.post_run.scenario_common import (
     mesh_peers_row,
     pct,
     prepare,
+    published_messages,
     write_table,
 )
 from src.deployments.core.event_log import find_events
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def longest_run(mask: Sequence[bool]) -> Tuple[Optional[int], Optional[int], int]:
-    """Start, end and length of the longest True stretch."""
+    """First index, last index and length of the longest run of consecutive misses."""
     best = (None, None, 0)
     start = None
     for i, flag in enumerate(list(mask) + [False]):
@@ -41,15 +42,22 @@ def longest_run(mask: Sequence[bool]) -> Tuple[Optional[int], Optional[int], int
 def churn_outages(df: pd.DataFrame, churned: Sequence[str]) -> pd.DataFrame:
     """Per churned node: the outage read off its own miss run, and what it missed after it.
 
+    `df` is the delivery frame: one row per message received by one pod, with `sent` resolved
+    to the publish time. Deduplicating on `msgId` alone gives the publish order, since every
+    copy of a message carries the same `sent`.
+
     Pods keep serving past the scale-down and are back before the rollout finishes, so the
     scale-down window is not a node's outage; the stretch it missed is.
+
+    Rows are reindexed over every churned node, so one that received nothing is reported as
+    having missed everything rather than dropped from the table.
     """
     order = df.drop_duplicates("msgId").sort_values("sent")
     times = order["sent"].to_numpy()
     present = (
         df[df[POD_COLUMN].isin(set(churned))]
         .pivot_table(index=POD_COLUMN, columns="msgId", values="ordinal", aggfunc="size")
-        .reindex(columns=order["msgId"])
+        .reindex(index=list(churned), columns=order["msgId"])
         .notna()
     )
 
@@ -83,7 +91,8 @@ def churn_table(
     num_nodes: int,
     mesh: Optional[pd.DataFrame] = None,
 ) -> List[Row]:
-    """Below 100%, with every miss inside the node's own outage."""
+    """Expectation-vs-result rows: delivery is below 100%, and every miss sits inside the
+    churned node's own outage rather than trailing after it."""
     is_churned = df[POD_COLUMN].isin(set(churned))
     survivors = num_nodes - len(set(churned))
     per_survivor = df[~is_churned].groupby(POD_COLUMN)["msgId"].nunique()
@@ -139,7 +148,7 @@ def run_churn_analysis(experiment: "NimLibp2pExperiment") -> None:
         churn_table(
             df,
             down[-1]["nodes"],
-            cfg.num_messages,
+            published_messages(experiment),
             cfg.num_relay_nodes,
             load_mesh_peers(experiment.output_folder),
         ),

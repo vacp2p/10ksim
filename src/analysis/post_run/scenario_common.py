@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from src.analysis.post_run.nimlibp2p import run_nimlibp2p_analysis
+from src.deployments.core.event_log import find_events
 
 if TYPE_CHECKING:
     from src.deployments.experiments.libp2p.nimlibp2p import NimLibp2pExperiment
@@ -95,10 +96,38 @@ def event_time(events: List[dict]) -> Optional[datetime]:
     return datetime.strptime(events[-1]["timestamp"], "%Y-%m-%d %H:%M:%S")
 
 
+class NoDeliveries(Exception):
+    """The run produced no delivery data, so there is nothing to build a table from."""
+
+
+def published_messages(experiment: "NimLibp2pExperiment") -> int:
+    """How many messages actually left the publisher, per the run's own event log.
+
+    The configured count is what we meant to send; a run that failed to publish would
+    otherwise be scored against a denominator it never sent.
+    """
+    summary = find_events(experiment.events_log_path, {"event": "publish_summary"})
+    if not summary:
+        logger.warning(
+            "No publish_summary event; falling back to the configured message count, which "
+            "assumes every publish succeeded"
+        )
+        return experiment.config.num_messages
+
+    attempted = summary[-1]["attempted"]
+    failed = summary[-1].get("failed", 0)
+    if failed:
+        logger.warning(f"{failed} of {attempted} publishes failed; scoring against the rest")
+    return attempted - failed
+
+
 def prepare(experiment: "NimLibp2pExperiment") -> Tuple[Path, pd.DataFrame]:
     """Run the shared delivery analysis, then load what it dumped."""
     run_nimlibp2p_analysis(experiment)
     if experiment.output_folder is None:
         raise ValueError("Scenario analysis requires experiment.output_folder")
     dump_dir = experiment.output_folder / "analysis_data"
-    return dump_dir, load_deliveries(dump_dir)
+    df = load_deliveries(dump_dir)
+    if df.empty:
+        raise NoDeliveries(f"No deliveries in {dump_dir / 'summary' / 'received.csv'}")
+    return dump_dir, df

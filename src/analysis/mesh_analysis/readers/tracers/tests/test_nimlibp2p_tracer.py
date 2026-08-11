@@ -1,3 +1,4 @@
+import logging
 import re
 
 from src.analysis.mesh_analysis.readers.tracers.nimlibp2p_tracer import Nimlibp2pTracer
@@ -40,3 +41,30 @@ def test_negative_delay_survives_conversion():
     )
     assert len(df) == 1
     assert df.iloc[0]["delayMs"] == "-1"
+
+
+class TestNegativeDelayWarning:
+    """Negative delays are kept, but they are not silent: the clocks were skewed."""
+
+    def _rows(self, delays):
+        return [
+            [str(i), "1754000000000000000", "1754000000100000000", d] for i, d in enumerate(delays)
+        ]
+
+    def test_a_negative_delay_is_warned_about(self, caplog):
+        tracer = Nimlibp2pTracer().with_extra_fields([])
+        with caplog.at_level(logging.WARNING):
+            tracer._trace_received_in_logs(self._rows(["10", "-3", "7", "-11"]))
+        assert "2 of 4 deliveries (50.00%)" in caplog.text
+        assert "-11ms" in caplog.text
+
+    def test_clean_timing_does_not_warn(self, caplog):
+        tracer = Nimlibp2pTracer().with_extra_fields([])
+        with caplog.at_level(logging.WARNING):
+            tracer._trace_received_in_logs(self._rows(["10", "7"]))
+        assert not caplog.records
+
+    def test_the_deliveries_are_still_kept(self):
+        tracer = Nimlibp2pTracer().with_extra_fields([])
+        df = tracer._trace_received_in_logs(self._rows(["10", "-3"]))
+        assert len(df) == 2

@@ -19,8 +19,8 @@ from kubernetes.client import (
 from pydantic import Field, NonNegativeFloat, NonNegativeInt, model_validator
 
 from src.deployments.core.k8s_cleanup import delete_network_policy
-from src.deployments.experiments.libp2p.disturbance import check_partition_applied
 from src.deployments.core.k8s_rollout import get_pods_for_statefulset, label_pods
+from src.deployments.experiments.libp2p.disturbance import check_partition_applied
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 

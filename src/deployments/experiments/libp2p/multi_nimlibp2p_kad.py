@@ -17,6 +17,8 @@ IMAGES = {
     "2.3.0": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-1"),
     # Same build plus -d:chronosFutureTracking, for diagnosing the kad bootstrap stall.
     "2.3.0-futures": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-futures"),
+    # release/v2.3 plus PR 2929, which landed on master only.
+    "2.3.0-2929": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929"),
 }
 
 

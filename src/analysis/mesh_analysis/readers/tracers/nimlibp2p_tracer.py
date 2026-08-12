@@ -1,10 +1,9 @@
 import logging
-from typing import ClassVar, List, Self
+from typing import ClassVar, List, Literal, Self
 
 import numpy as np
 import pandas as pd
 
-# Project Imports
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import (
     MessageTracer,
     PatternGroup,
@@ -16,41 +15,51 @@ logger = logging.getLogger(__name__)
 
 class Nimlibp2pTracer(MessageTracer):
     unknown_sender_str: ClassVar[str] = "Unknown"
+    log_field_prefix: str = "log."
 
     def with_extra_fields(self, extra_fields: List[str]) -> Self:
         self.extra_fields = extra_fields
         return self
 
-    def with_received_pattern_group(self) -> Self:
+    def _prefix_fields(self, fields: List[str]) -> List[str]:
+        return [f"{self.log_field_prefix}{field}" for field in fields]
+
+    def with_received_pattern_group(self, log_format: Literal["TEXT", "JSON"]) -> Self:
+        received_fields = (
+            self._prefix_fields(["msgId", "sentAt", "timestamp", "delayMs"])
+            if log_format == "JSON"
+            else ["_msg"]
+        )
+        regex = (
+            r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=(-?[\w*]+)"
+            if log_format == "TEXT"
+            else None
+        )
         self.patterns.append(
             PatternGroup(
-                "received",
-                trace_pairs=[
-                    TracePair(
-                        # delayMs goes negative when the sender's clock is ahead of the
-                        # receiver's, so the sign has to be part of the match: `\w` alone
-                        # drops those deliveries and under-reports delivery.
-                        regex=r"Received message.*?msgId=([\w*]+).*?sentAt=([\w*]+).*?current=([\w*]+).*?delayMs=(-?[\w*]+)",
-                        convert=self._trace_received_in_logs,
-                    ),
-                ],
+                name="received",
+                fields=received_fields,
+                trace_pairs=[TracePair(regex=regex, convert=self._trace_received_in_logs)],
                 query="Received message",
             )
         )
         return self
 
-    def with_sent_pattern_group(self) -> Self:
-        sent_pattern_group = PatternGroup(
-            name="sent",
-            trace_pairs=[
-                TracePair(
-                    regex=r"Sent message.*?msgId=([\w*]+).*?timestamp=([\w*]+)",
-                    convert=self._trace_sent_in_logs,
-                ),
-            ],
-            query="Sent message",
+    def with_sent_pattern_group(self, log_format: Literal["TEXT", "JSON"]) -> Self:
+        sent_fields = (
+            self._prefix_fields(["msgId", "timestamp"]) if log_format == "JSON" else ["_msg"]
         )
-        self.patterns.append(sent_pattern_group)
+        regex = (
+            r"Sent message.*?msgId=([\w*]+).*?timestamp=([\w*]+)" if log_format == "TEXT" else None
+        )
+        self.patterns.append(
+            PatternGroup(
+                name="sent",
+                fields=sent_fields,
+                trace_pairs=[TracePair(regex=regex, convert=self._trace_sent_in_logs)],
+                query="Sent message",
+            )
+        )
         return self
 
     def _trace_received_in_logs(self, parsed_logs: List) -> pd.DataFrame:
@@ -98,24 +107,4 @@ class Nimlibp2pTracer(MessageTracer):
         df["msgId"] = pd.to_numeric(df["msgId"], errors="coerce").fillna(-1).astype(int)
         df["timestamp"] = df["timestamp"].astype(np.uint64)
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ns")
-
-        return df
-
-    def _create_dataframe_with_timestamp(self, parsed_logs: List[str], columns: List[str]):
-        try:
-            df = pd.DataFrame(parsed_logs, columns=columns)
-            df["timestamp"] = df["timestamp"].astype(np.uint64)
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ns")
-        except ValueError as e:
-            lines = len(parsed_logs)
-            try:
-                logs_columns = len(parsed_logs[0])
-            except IndexError:
-                logs_columns = "N/A"
-            raise ValueError(
-                f"Failed to create dataframe from parsed logs.\n"
-                f"parsed_logs has {logs_columns} columns and {lines} entries\n"
-                f"expected {len(columns)} columns: {columns}"
-            ) from e
-
         return df

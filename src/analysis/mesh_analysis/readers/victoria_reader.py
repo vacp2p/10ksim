@@ -31,26 +31,40 @@ class VictoriaReader(Reader):
         self._tracer: MessageTracer = tracer
         self._config_query = victoria_config_query
 
-    def _fetch_data(self, url: str, headers: Dict, params: Dict, extra_fields: List[str]):
+    def _fetch_data(self, url: str, headers: Dict, params: Dict, fields: List[str]):
+        """
+        Fetch log lines from VictoriaLogs.
+
+        :param fields: List of field names to extract from each JSON log object (e.g. ["_msg", "log.from_peer_id", ...]).
+                       All fields are treated as required; missing fields will cause the line to be skipped with a warning.
+        """
         logs = []
         logger.debug(f"Fetching {params}")
         with requests.post(url=url, headers=headers, params=params, stream=True) as response:
             for line in response.iter_lines():
-                if line:
-                    try:
-                        parsed_object = json.loads(line)
-                    except json.decoder.JSONDecodeError as e:
-                        logger.info(line)
-                        exit()
-                    try:
-                        logs.append(
-                            (parsed_object["_msg"],) + tuple(parsed_object[k] for k in extra_fields)
-                        )
-                    except KeyError as e:
-                        logger.warning(f"Malformed log line skipped due to missing key {e}: {line}")
-                        continue
-        logger.debug(f"Fetched {len(logs)} log lines")
+                if not line:
+                    continue
+                try:
+                    parsed_object = json.loads(line)
+                except json.decoder.JSONDecodeError as e:
+                    logger.info(line)
+                    exit()
 
+                row = []
+                skip_line = False
+                for field in fields:
+                    if field not in parsed_object:
+                        logger.warning(
+                            f"Malformed log line skipped due to missing key {field}: {line}"
+                        )
+                        skip_line = True
+                        break
+                    row.append(parsed_object[field])
+                if skip_line:
+                    continue
+                logs.append(tuple(row))
+
+        logger.debug(f"Fetched {len(logs)} log lines")
         return logs
 
     def make_queries(self) -> List[List[Tuple]]:
@@ -71,19 +85,25 @@ class VictoriaReader(Reader):
 
         results = [[] for _ in self._tracer.patterns]
         for i, pattern_group in enumerate(self._tracer.patterns):
+            fields = pattern_group.fields + self._tracer.extra_fields
             logs = self._fetch_data(
                 self._config_query["url"],
                 self._config_query["headers"],
                 params[i],
-                self._tracer.extra_fields,
+                fields,
             )
             query_results = [[] for _ in pattern_group.trace_pairs]
             for log_line in logs:
                 for j, trace_pair in enumerate(pattern_group.trace_pairs):
                     pattern = trace_pair.regex
+                    if pattern is None:
+                        query_results[j].append(list(log_line))
+                        continue
+                    # Apply regex to the first field. Usually, this should be _msg.
                     match = re.search(pattern, log_line[0])
                     if match:
                         match_as_list = list(match.groups())
+                        # Append extra fields (if any). log_line[1:] corresponds to fields after _msg.
                         match_as_list.extend(log_line[1:])
                         query_results[j].append(match_as_list)
 

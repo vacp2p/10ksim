@@ -42,8 +42,10 @@ class StallWatch:
             self._last_change_at = now
 
         if sim_time is None:
-            # Shadow builds the network before the clock starts, so allow a longer grace.
-            if now - self._last_change_at > self.startup_grace_s:
+            # Only a signal before the clock has ever been seen, since Shadow builds the
+            # network first. After that, no reading means an unreadable log, not a stall,
+            # so leave the stall clock where it was.
+            if self._last_sim is None and now - self._last_change_at > self.startup_grace_s:
                 raise RuntimeError(
                     f"Shadow reported no simulated time in {self.startup_grace_s}s; "
                     "the run is stuck before the simulation started"

@@ -71,6 +71,24 @@ def test_unreadable_logs_do_not_trip_it_once_running():
     watch.check(501.0, 60.0)
 
 
+def test_an_extended_read_outage_does_not_kill_a_running_sim():
+    """An API outage longer than the startup grace is still not a startup failure."""
+    watch = StallWatch(stall_timeout_s=100, startup_grace_s=300)
+    watch.check(500.0, 0.0)
+    watch.check(None, 400.0)
+    watch.check(None, 900.0)
+    watch.check(501.0, 950.0)
+
+
+def test_a_stall_is_still_caught_after_a_read_outage():
+    """Unreadable samples must not forgive a stall either: the clock keeps its value."""
+    watch = StallWatch(stall_timeout_s=100, startup_grace_s=300)
+    watch.check(500.0, 0.0)
+    watch.check(None, 400.0)
+    with pytest.raises(RuntimeError, match="livelocked, not slow"):
+        watch.check(500.0, 500.0)
+
+
 def test_default_timeout_tolerates_the_observed_progress_rate():
     """The 50KB quic cell emits a progress line about every two minutes, so the default
     allowance has to sit well above that or a healthy heavy run gets killed."""

@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, ClassVar, Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -70,6 +70,10 @@ V1Deployable = Union[
 logger = logging.getLogger(__name__)
 
 
+class ExperimentFailed(Exception):
+    """The run completed but its result is not usable."""
+
+
 TCfg = TypeVar("TCfg", bound=BaseModel)
 
 
@@ -119,6 +123,9 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     _workdir: Optional[Path] = None
     """Path to deployment output folder. Based off of self.output_folder"""
     _stack: Optional[ExitStack]
+
+    _failures: List[str] = PrivateAttr(default_factory=list)
+    """Reasons the run is invalid, raised once it has finished. See `fail_run`."""
 
     @model_validator(mode="after")
     def set_type(self):
@@ -357,6 +364,20 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         self._dump_metadata()
         if run_post_analysis:
             dispatch_post_analysis(self)
+
+        if self._failures:
+            raise ExperimentFailed(f"`{self._type}`: " + "; ".join(self._failures))
+
+    def fail_run(self, reason: str) -> None:
+        """Mark the run invalid without cutting it short.
+
+        Raising from `_run` would skip metadata and post-run analysis while cleanup still
+        deletes the pods, so the data is lost as well as the result. Recording the reason
+        lets the run finish and collect its data, then exit non-zero.
+        """
+        logger.error(reason)
+        self.log_event({"event": "run_invalid", "reason": reason})
+        self._failures.append(reason)
 
     @abstractmethod
     async def _run(self):

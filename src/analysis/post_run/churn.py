@@ -40,7 +40,7 @@ def longest_run(mask: Sequence[bool]) -> Tuple[Optional[int], Optional[int], int
 
 
 def churn_outages(df: pd.DataFrame, churned: Sequence[str]) -> pd.DataFrame:
-    """Per churned node: the outage read off its own miss run, and what it missed after it.
+    """Per churned node: the outage read off its own miss run, and what it missed outside it.
 
     `df` is the delivery frame: one row per message received by one pod, with `sent` resolved
     to the publish time. Deduplicating on `msgId` alone gives the publish order, since every
@@ -74,6 +74,8 @@ def churn_outages(df: pd.DataFrame, churned: Sequence[str]) -> pd.DataFrame:
                 "outage_s": (
                     (times[end] - times[start]) / pd.Timedelta(seconds=1) if length else 0.0
                 ),
+                # Misses on either side of the outage, not just the tail after it.
+                "missed_outside": int(missed.sum()) - length,
                 "missed_after": len(after),
                 # How long the node keeps dropping messages once its main outage has ended.
                 "recovery_tail_s": (
@@ -98,6 +100,7 @@ def churn_table(
     per_survivor = df[~is_churned].groupby(POD_COLUMN)["msgId"].nunique()
     out = churn_outages(df, churned)
     ragged = int((out["missed_after"] > 0).sum())
+    scattered = int((out["missed_outside"] > 0).sum())
 
     return [
         (
@@ -116,7 +119,9 @@ def churn_table(
             "delivery, churned nodes",
             "one contiguous gap, nothing missed either side of it",
             f"missed {out['missed'].mean():.1f} of {num_messages} on average, "
-            f"{out['outage_messages'].mean():.1f} in one stretch",
+            f"{out['outage_messages'].mean():.1f} in one stretch, "
+            f"{scattered} of {len(out)} nodes missed anything outside it "
+            f"(worst {out['missed_outside'].max()})",
         ),
         (
             "clean recovery",

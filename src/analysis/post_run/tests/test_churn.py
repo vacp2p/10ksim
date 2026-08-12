@@ -44,6 +44,24 @@ def test_churn_flags_a_node_that_keeps_dropping_after_its_outage(deliveries, fan
     )
 
 
+def test_churn_flags_a_miss_on_either_side_of_the_outage(deliveries, fanout):
+    """A miss before the outage counts too: the tail alone only looks to the right of it."""
+    # pod-2 misses message 1, then 3 and 4; pod-3 misses 2 and 3, then 6.
+    df = deliveries(
+        fanout(1, [0, 1, 3], 0)
+        + fanout(2, [0, 1, 2], 30)
+        + fanout(3, [0, 1], 60)
+        + fanout(4, [0, 1, 3], 90)
+        + fanout(5, range(4), 120)
+        + fanout(6, [0, 1, 2], 150)
+    )
+    rows = dict((i, r) for i, _, r in churn_table(df, ["pod-2", "pod-3"], 6, 4))
+
+    assert "2 of 2 nodes missed anything outside it (worst 1)" in rows["delivery, churned nodes"]
+    # only pod-3 trails after its outage, so the tail on its own misses pod-2 entirely
+    assert rows["clean recovery"].startswith("1 of 2 nodes keep dropping")
+
+
 def test_churn_reads_each_nodes_outage_off_its_own_miss_run(deliveries, fanout):
     """Pods come back staggered, so the outage cannot come from a shared window."""
     df = deliveries(

@@ -85,6 +85,24 @@ class DataFileHandler(DataHandler):
 
         return Ok(target_df)
 
+    def _resolve_csv_paths(self, path: Path) -> List[Path]:
+        """A DataPath's CSVs: the file itself, or the ones a scrape wrote inside the folder.
+
+        Scrapper dumps `<location>/<metric folder>/<run name>.csv`, so pointing a DataPath at
+        a scrape dump lands on the metric folder rather than a file.
+        """
+        if path.is_file():
+            return [path]
+
+        match file_utils.get_files_from_folder_path(path, self._include_files, extension="csv"):
+            case Ok(file_names):
+                if not file_names:
+                    self._report_no_csvs(path)
+                return sorted(path / name for name in file_names)
+            case Err(error):
+                logger.error(error)
+                return []
+
     def concat_dataframes_from_files(
         self,
         named_files: List[DataPath],
@@ -97,22 +115,26 @@ class DataFileHandler(DataHandler):
                 logger.error(f"{file_path} cannot be loaded.")
                 continue
 
-            logger.info(f"Reading {file_path} with {points} datapoints")
-            file_df = pd.read_csv(file_path, parse_dates=["Time"], index_col="Time", nrows=points)
-            if len(file_df) < points:
-                logger.warning(f"Not enough datapoints in {file_path}")
+            for csv_path in self._resolve_csv_paths(file_path):
+                self._append_csv(csv_path, data_file.name, group_name, points)
 
-            if self._ignore_columns:
-                columns_to_drop = [
-                    col
-                    for col in file_df.columns
-                    if any(col.startswith(prefix) for prefix in self._ignore_columns)
-                ]
-                if columns_to_drop:
-                    logger.info(f"Dropping {len(columns_to_drop)} columns: {columns_to_drop}")
-                    file_df = file_df.drop(columns=columns_to_drop)
+    def _append_csv(self, file_path: Path, name: str, group_name: str, points: int) -> None:
+        logger.info(f"Reading {file_path} with {points} datapoints")
+        file_df = pd.read_csv(file_path, parse_dates=["Time"], index_col="Time", nrows=points)
+        if len(file_df) < points:
+            logger.warning(f"Not enough datapoints in {file_path}")
 
-            file_df = file_df.reset_index(drop=True)
-            file_df["class"] = group_name
-            file_df["variable"] = data_file.name
-            self._dataframe = pd.concat([self._dataframe, file_df], ignore_index=True)
+        if self._ignore_columns:
+            columns_to_drop = [
+                col
+                for col in file_df.columns
+                if any(col.startswith(prefix) for prefix in self._ignore_columns)
+            ]
+            if columns_to_drop:
+                logger.info(f"Dropping {len(columns_to_drop)} columns: {columns_to_drop}")
+                file_df = file_df.drop(columns=columns_to_drop)
+
+        file_df = file_df.reset_index(drop=True)
+        file_df["class"] = group_name
+        file_df["variable"] = name
+        self._dataframe = pd.concat([self._dataframe, file_df], ignore_index=True)

@@ -51,7 +51,7 @@ GAUGES = frozenset({"mesh-peers", "topic-peers", "connections"})
 def _per_node_values(metrics_dir: Path, folder: str, muxer: str) -> Optional[pd.Series]:
     """One value per relay node: a counter's total over the run, or a gauge's typical
     value across the window. Excludes bootstrap and publisher (only `pod-<n>` are relays)."""
-    csv = metrics_dir / folder / muxer
+    csv = metrics_dir / folder / f"{muxer}.csv"
     if not csv.exists():
         logger.warning(f"gossipsub summary: missing {csv}")
         return None

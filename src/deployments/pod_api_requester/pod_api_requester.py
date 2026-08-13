@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
 
@@ -20,6 +21,25 @@ _DEFAULTS = {
     "service_name": "zerotesting-publisher",
     "app": "zerotenkay-publisher",
 }
+
+_endpoint_override: Optional[Tuple[str, str]] = None
+
+
+@contextmanager
+def publisher_endpoint(host: str, port: int):
+    """Send requests to `host:port` instead of discovering the service's NodePort.
+
+    For reaching the publisher through a port-forward when its NodePort is not routable
+    from where the run is driven.
+    """
+    global _endpoint_override
+    previous = _endpoint_override
+    _endpoint_override = (host, str(port))
+    logger.info(f"pod-api-requester endpoint overridden to {host}:{port}")
+    try:
+        yield
+    finally:
+        _endpoint_override = previous
 
 
 class PodApiError(Exception):
@@ -149,6 +169,9 @@ def _get_api_requester_info(
     publisher_pod: str | NonNegativeInt = 0,
 ) -> Tuple[str, str]:
     """Find the pod-api-requester pod in the cluster."""
+    if _endpoint_override is not None:
+        return _endpoint_override
+
     v1 = client.CoreV1Api()
 
     try:

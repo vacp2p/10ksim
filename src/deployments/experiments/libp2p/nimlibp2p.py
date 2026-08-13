@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import traceback
+from contextlib import AsyncExitStack
 from typing import ClassVar, Literal
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
@@ -10,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegative
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
 from src.deployments.core.k8s_rollout import resolved_images
+from src.deployments.core.port_forward import port_forward
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
@@ -27,6 +29,8 @@ Muxer = Literal["yamux", "quic", "mplex"]
 Discovery = Literal["static", "kad-dht"]
 
 BOOTSTRAP_NAME = "bootstrap"
+PUBLISHER_SERVICE = "zerotesting-publisher"
+PUBLISHER_PORT = 8645
 
 
 class ExpConfig(BaseModel):
@@ -49,6 +53,8 @@ class ExpConfig(BaseModel):
     network_bandwidth_mbit: NonNegativeInt = 0  # 0 = uncapped; folded into the netem qdisc
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
+    publish_via_port_forward: bool = False
+    """Reach the publisher through the API server instead of its NodePort."""
     post_publish_dwell: NonNegativeInt = 90
     max_failed_publishes: NonNegativeInt = 0
     """Publishes that may fail before the run is treated as invalid."""
@@ -265,6 +271,16 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         logger.info(f"Starting publish loop for nodes in `{name}`")
 
+        async with AsyncExitStack() as publish_stack:
+            if self.config.publish_via_port_forward:
+                host, port = await publish_stack.enter_async_context(
+                    port_forward(f"svc/{PUBLISHER_SERVICE}", PUBLISHER_PORT, self.namespace)
+                )
+                publish_stack.enter_context(publisher_endpoint(host, port))
+
+            await self._publish_all(nodes, name, namespace)
+
+    async def _publish_all(self, nodes: V1StatefulSet, name: str, namespace: str) -> None:
         self.log_event("start_messages")
 
         mid_run = asyncio.create_task(self._mid_run(nodes))

@@ -80,12 +80,15 @@ class ServiceDiscoveryAnalyzer(Analyzer):
             },
         )
 
-    def _get_trace_df(self, dfs, key: str) -> pd.DataFrame:
+    def _get_trace_df(self, dfs: List[Dict[str, List[pd.DataFrame]]], key: str) -> pd.DataFrame:
+        trace_dfs = []
         for stateful_set_dfs in dfs:
-            trace_dfs = stateful_set_dfs.get(key, [])
-            if trace_dfs:
-                return trace_dfs[0]
-        return pd.DataFrame()
+            trace_dfs.extend(stateful_set_dfs.get(key, []))
+
+        if not trace_dfs:
+            return pd.DataFrame()
+
+        return pd.concat(trace_dfs, ignore_index=True)
 
     def _build_discovery_latency_df(self, starting_df: pd.DataFrame, found_df: pd.DataFrame):
         starting_df = starting_df.copy()

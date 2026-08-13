@@ -19,6 +19,8 @@ IMAGES = {
     "2.3.0-futures": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-futures"),
     # release/v2.3 plus PR 2929, which landed on master only.
     "2.3.0-2929": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929"),
+    # ...and the node listening on its routable interface rather than 0.0.0.0.
+    "2.3.0-noloop": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929-noloop"),
 }
 
 

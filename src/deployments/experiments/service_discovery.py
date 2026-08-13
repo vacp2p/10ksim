@@ -1,6 +1,7 @@
 # Python Imports
 import asyncio
 import logging
+import random
 from typing import ClassVar, List
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, NonNegativeInt
 # Project Imports
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.k8s_cleanup import get_cleanup
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.libp2p.service_discovery_bridge import ServiceDiscoveryBridge

@@ -40,8 +40,6 @@ class ServiceDiscoveryAnalyzer(Analyzer):
 
         dfs = self.data_puller.get_all_node_dataframes(tracer, statefulsets, nodes_per_statefulset)
 
-        dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_statefulset)
-
         starting_df = self._get_trace_df(dfs, "start_discovery")
         found_df = self._get_trace_df(dfs, "found_advertiser")
         if starting_df.empty or found_df.empty:

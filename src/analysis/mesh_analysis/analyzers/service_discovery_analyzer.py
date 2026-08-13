@@ -1,6 +1,6 @@
 # Python Imports
 import logging
-from typing import Self
+from typing import Self, List, Dict
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -32,10 +32,12 @@ class ServiceDiscoveryAnalyzer(Analyzer):
             .with_found_peer_discovery_pattern()
         )
 
-        stateful_sets = ["rare-discoverer"]
+        name = "rare-discoverer"
+        statefulsets = [ss for ss in self.data_puller.kwargs["stateful_sets"] if name in ss]
+        indexes = [self.data_puller.kwargs["stateful_sets"].index(ss) for ss in statefulsets]
+        nodes_per_statefulset = [self.data_puller.kwargs["nodes_per_statefulset"][index] for index in indexes]
 
-        # nodes_per_statefulset = self.data_puller.kwargs.get("nodes_per_statefulset", [])
-        nodes_per_statefulset = [1]
+        dfs = self.data_puller.get_all_node_dataframes(tracer, statefulsets, nodes_per_statefulset)
 
         dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_statefulset)
 

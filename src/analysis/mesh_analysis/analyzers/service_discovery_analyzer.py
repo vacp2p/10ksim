@@ -11,6 +11,7 @@ from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyz
 from src.analysis.mesh_analysis.readers.tracers.service_discovery_tracer import (
     ServiceDiscoveryTracer,
 )
+from src.analysis.utils.file_utils import dump_df_as_csv
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -55,7 +56,12 @@ class ServiceDiscoveryAnalyzer(Analyzer):
                 },
             )
 
+        dump_df_as_csv(starting_df, self.dump_analysis_dir / "starting_df.csv")
+        dump_df_as_csv(found_df, self.dump_analysis_dir / "found_df.csv")
+
         discovery_df = self._build_discovery_latency_df(starting_df, found_df)
+
+        dump_df_as_csv(found_df, self.dump_analysis_dir / "discovery.csv")
         if discovery_df.empty:
             reason = "No found-peer logs matched a preceding service discovery start"
             logger.warning(reason)

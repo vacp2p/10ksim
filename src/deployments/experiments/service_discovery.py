@@ -225,6 +225,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_option("SERVICE", self.config.advertisers_service_name)
             .with_option("DISCOVER_SERVICES", "secret_chat")
             .with_option("MAXBOOTSTRAPS", 1)
+            .with_option("SD_CLIENT", "true")
             .with_pull_policy("Always")
             .with_label("app", self.config.app_name)
             .with_label("role", self.config.rare_discoverer_role)

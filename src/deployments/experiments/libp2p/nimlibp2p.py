@@ -53,6 +53,8 @@ class ExpConfig(BaseModel):
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
+    max_connections: NonNegativeInt = 250
+    """Per-node connection cap. Relays used the node default until now."""
     rollout_timeout_s: NonNegativeInt = 3600
     """How long to wait for every node to report ready."""
     max_failed_publishes: NonNegativeInt = 0
@@ -90,6 +92,7 @@ def build_nodes(
         .with_option(NimLibp2p.self_trigger, True)
         .with_option(NimLibp2p.muxer, params.muxer)
         .with_option(NimLibp2p.cold_start_delay, params.node_start_delay)
+        .with_option(NimLibp2p.max_connections, params.max_connections)
         .with_readiness_probe(readiness_probe_metrics())
         .with_image(params.image)
     )

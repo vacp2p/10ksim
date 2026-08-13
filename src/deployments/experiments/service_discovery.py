@@ -208,7 +208,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         )
 
         await self.deploy(deployment=discoverer, wait_for_ready=True)
-        self.log_event("popular discoverer deployed")
+        self.log_event("service_discovery_started")
 
     async def _deploy_rare_discoverer(self, image: Image) -> V1StatefulSet:
         rare_discoverer = (

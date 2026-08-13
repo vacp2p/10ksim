@@ -21,6 +21,8 @@ IMAGES = {
     "2.3.0-2929": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929"),
     # ...and the node listening on its routable interface rather than 0.0.0.0.
     "2.3.0-noloop": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929-noloop"),
+    # ...and optimistic kad admission while the routing table is small.
+    "2.3.0-kadfix": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-kadfix"),
 }
 
 

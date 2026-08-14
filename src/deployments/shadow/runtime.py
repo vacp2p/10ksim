@@ -12,6 +12,7 @@ from kubernetes.client.rest import ApiException
 
 from src.deployments.core.k8s_kubeconfig import get_config_file
 from src.deployments.shadow.builders import _RUN_MOUNT, build_log_reader_pod
+from src.deployments.shadow.liveness import StallWatch, simulated_time_s
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,19 @@ async def wait_for_job_complete(
     job_name: str,
     timeout_s: int = 1800,
     poll_interval_s: int = 5,
+    stall_timeout_s: int = 1200,
+    liveness_interval_s: int = 60,
 ) -> JobState:
-    """Poll the Job until it reports Complete or Failed; raise TimeoutError otherwise."""
+    """Poll the Job until it reports Complete or Failed; raise TimeoutError otherwise.
+
+    Also fails fast when Shadow's simulated clock stops advancing, which otherwise looks
+    exactly like a slow run until the job timeout.
+    """
     batch = BatchV1Api(api_client)
+    core = CoreV1Api(api_client)
+    watch = StallWatch(stall_timeout_s=stall_timeout_s)
     elapsed = 0
+    next_liveness = 0
     while elapsed < timeout_s:
         job = batch.read_namespaced_job_status(name=job_name, namespace=namespace)
         for condition in job.status.conditions or []:
@@ -42,12 +52,36 @@ async def wait_for_job_complete(
                 return "complete"
             if condition.type == "Failed" and condition.status == "True":
                 return "failed"
+        # Job status needs a tight poll; the simulated clock does not, and reading the
+        # pod log every few seconds for hours is a lot of API traffic for no extra signal.
+        if elapsed >= next_liveness:
+            watch.check(_job_simulated_time(core, namespace, job_name), time.monotonic())
+            next_liveness = elapsed + liveness_interval_s
         await asyncio.sleep(poll_interval_s)
         elapsed += poll_interval_s
     raise TimeoutError(
         f"Job `{namespace}/{job_name}` did not complete within {timeout_s}s "
         f"(last conditions: {job.status.conditions})"
     )
+
+
+def _job_simulated_time(core: CoreV1Api, namespace: str, job_name: str) -> Optional[float]:
+    """Simulated time from the job pod's recent output, or None if not readable yet."""
+    try:
+        pods = core.list_namespaced_pod(
+            namespace=namespace, label_selector=f"job-name={job_name}"
+        ).items
+        if not pods:
+            return None
+        name = sorted(pods, key=lambda p: p.metadata.creation_timestamp)[-1].metadata.name
+        return simulated_time_s(
+            core.read_namespaced_pod_log(name=name, namespace=namespace, tail_lines=200)
+        )
+    except Exception as e:
+        # A liveness probe must never be the thing that kills a healthy run, so any
+        # read failure reads as "unknown" and the stall clock keeps its last value.
+        logger.debug(f"Could not read shadow log for liveness check: {e}")
+        return None
 
 
 def _find_job_pod(api_client: ApiClient, namespace: str, job_name: str) -> str:

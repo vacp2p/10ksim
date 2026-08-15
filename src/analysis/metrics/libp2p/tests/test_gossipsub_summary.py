@@ -12,7 +12,7 @@ def _write(metrics_dir, folder, muxer, rows):
     path.mkdir(parents=True, exist_ok=True)
     times = pd.to_datetime([f"2026-08-08 01:{m:02d}:00" for m in range(len(rows))])
     pd.DataFrame(rows, index=times, columns=["pod-0", "pod-1"]).rename_axis("Time").to_csv(
-        path / muxer
+        path / f"{muxer}.csv"
     )
 
 

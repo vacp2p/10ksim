@@ -1,0 +1,19 @@
+num_nodes: 1000
+num_messages: 600
+message_size_bytes: 50000
+delay_seconds: 1
+discovery: kad-dht
+start_sleep: 60
+publisher_start_s: 300
+sim_stop_time_s: 1200
+metrics_interval_s: 15
+seed: 1
+cpu_request: "16"
+cpu_limit: "64"
+memory_request: 64Gi
+memory_limit: 256Gi
+pvc_storage: 20Gi
+test_node_image: radiken/dst-test-node-shadow:v2.3.0  # build first, see Dockerfile_amd64_shadow
+node_pin: node-03.ih-eu-mda1.misc.vaclab
+wait_timeout_s: 21600
+

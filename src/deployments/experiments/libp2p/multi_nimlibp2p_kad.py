@@ -14,7 +14,7 @@ IMAGES = {
     "2.0.0": Image(repo="radiken/dst-test-node-regression", tag="v2.0.0-kad"),
     "2.1.0": Image(repo="radiken/dst-test-node-regression", tag="v2.1.0-kad"),
     "2.2.0": Image(repo="radiken/dst-test-node-regression", tag="v2.2.0"),
-    "2.3.0": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-1"),
+    "2.3.0": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2"),
     # Same build plus -d:chronosFutureTracking, for diagnosing the kad bootstrap stall.
     "2.3.0-futures": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-futures"),
     # release/v2.3 plus PR 2929, which landed on master only.
@@ -23,6 +23,18 @@ IMAGES = {
     "2.3.0-noloop": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-2929-noloop"),
     # ...and optimistic kad admission while the routing table is small.
     "2.3.0-kadfix": Image(repo="radiken/dst-test-node-regression", tag="v2.3.0-kadfix"),
+    # 0eb435f8, the commit p2p gave us, plus notice-level admission probe logging.
+    "2.3.0-diag": Image(
+        repo="radiken/dst-test-node-regression", tag="v2.3.0-0eb435f8-diag"
+    ),
+    # d7ba9db1, their PR 2936 probe-timeout fix, same logging.
+    "2.3.0-diag2": Image(
+        repo="radiken/dst-test-node-regression", tag="v2.3.0-d7ba9db1-diag"
+    ),
+    # ...plus optimistic admission while the routing table is below replication.
+    "2.3.0-coldstart": Image(
+        repo="radiken/dst-test-node-regression", tag="v2.3.0-coldstart"
+    ),
 }
 
 

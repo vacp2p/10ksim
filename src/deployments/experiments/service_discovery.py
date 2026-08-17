@@ -210,11 +210,11 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         await self.deploy(deployment=discoverer, wait_for_ready=True)
         self.log_event("service_discovery_started")
 
-    async def _deploy_rare_discoverer(self, image: Image) -> V1StatefulSet:
+    async def _deploy_rare_discoverer(self, image: Image, index: int) -> V1StatefulSet:
         rare_discoverer = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name=self.config.rare_discoverer_ss_name+f'-{random.randint(0, 999999)}',
+                name=self.config.rare_discoverer_ss_name + f'-{index}',
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_discoverer_rare,
                 dns_searches=self.config.dns_searches,
@@ -238,7 +238,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         return rare_discoverer
 
     async def _run(
-        self,
+            self,
     ):
         self.log_event("run_start")
 
@@ -253,6 +253,10 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
            await asyncio.sleep(30)
            clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])
            clean()
+            rare_discoverer = await self._deploy_rare_discoverer(image, i)
+            await asyncio.sleep(30)
+            clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])
+            clean()
 
         await asyncio.sleep(30)
         self.log_event("service_discovery_finished")

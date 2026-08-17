@@ -1,6 +1,6 @@
 # Python Imports
 import logging
-from typing import Self
+from typing import Dict, List, Self
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -11,6 +11,7 @@ from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, Analyz
 from src.analysis.mesh_analysis.readers.tracers.service_discovery_tracer import (
     ServiceDiscoveryTracer,
 )
+from src.analysis.utils.file_utils import dump_df_as_csv
 
 logger = logging.getLogger(__name__)
 sns.set_theme()
@@ -32,12 +33,14 @@ class ServiceDiscoveryAnalyzer(Analyzer):
             .with_found_peer_discovery_pattern()
         )
 
-        stateful_sets = ["rare-discoverer"]
+        name = "rare-discoverer"
+        statefulsets = [ss for ss in self.data_puller.kwargs["stateful_sets"] if name in ss]
+        indexes = [self.data_puller.kwargs["stateful_sets"].index(ss) for ss in statefulsets]
+        nodes_per_statefulset = [
+            self.data_puller.kwargs["nodes_per_statefulset"][index] for index in indexes
+        ]
 
-        # nodes_per_statefulset = self.data_puller.kwargs.get("nodes_per_statefulset", [])
-        nodes_per_statefulset = [1]
-
-        dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_statefulset)
+        dfs = self.data_puller.get_all_node_dataframes(tracer, statefulsets, nodes_per_statefulset)
 
         starting_df = self._get_trace_df(dfs, "start_discovery")
         found_df = self._get_trace_df(dfs, "found_advertiser")
@@ -53,7 +56,12 @@ class ServiceDiscoveryAnalyzer(Analyzer):
                 },
             )
 
+        dump_df_as_csv(starting_df, self.dump_analysis_dir / "starting_df.csv")
+        dump_df_as_csv(found_df, self.dump_analysis_dir / "found_df.csv")
+
         discovery_df = self._build_discovery_latency_df(starting_df, found_df)
+
+        dump_df_as_csv(found_df, self.dump_analysis_dir / "discovery.csv")
         if discovery_df.empty:
             reason = "No found-peer logs matched a preceding service discovery start"
             logger.warning(reason)
@@ -78,12 +86,15 @@ class ServiceDiscoveryAnalyzer(Analyzer):
             },
         )
 
-    def _get_trace_df(self, dfs, key: str) -> pd.DataFrame:
+    def _get_trace_df(self, dfs: List[Dict[str, List[pd.DataFrame]]], key: str) -> pd.DataFrame:
+        trace_dfs = []
         for stateful_set_dfs in dfs:
-            trace_dfs = stateful_set_dfs.get(key, [])
-            if trace_dfs:
-                return trace_dfs[0]
-        return pd.DataFrame()
+            trace_dfs.extend(stateful_set_dfs.get(key, []))
+
+        if not trace_dfs:
+            return pd.DataFrame()
+
+        return pd.concat(trace_dfs, ignore_index=True)
 
     def _build_discovery_latency_df(self, starting_df: pd.DataFrame, found_df: pd.DataFrame):
         starting_df = starting_df.copy()

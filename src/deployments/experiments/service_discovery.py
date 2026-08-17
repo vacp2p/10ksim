@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, NonNegativeInt
 # Project Imports
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.k8s_cleanup import get_cleanup
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
 from src.deployments.libp2p.service_discovery_bridge import ServiceDiscoveryBridge
@@ -206,13 +207,13 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         )
 
         await self.deploy(deployment=discoverer, wait_for_ready=True)
-        self.log_event("popular discoverer deployed")
+        self.log_event("service_discovery_started")
 
-    async def _deploy_rare_discoverer(self, image: Image) -> V1StatefulSet:
+    async def _deploy_rare_discoverer(self, image: Image, index: int) -> V1StatefulSet:
         rare_discoverer = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name=self.config.rare_discoverer_ss_name,
+                name=self.config.rare_discoverer_ss_name + f"-{index}",
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_discoverer_rare,
                 dns_searches=self.config.dns_searches,
@@ -223,6 +224,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
             .with_option("SERVICE", self.config.advertisers_service_name)
             .with_option("DISCOVER_SERVICES", "secret_chat")
             .with_option("MAXBOOTSTRAPS", 1)
+            .with_option("SD_CLIENT", "true")
             .with_pull_policy("Always")
             .with_label("app", self.config.app_name)
             .with_label("role", self.config.rare_discoverer_role)
@@ -245,15 +247,11 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         await self._deploy_popular_advertisers(image)
         await self._deploy_rare_advertiser(image)
         await self._deploy_popular_discoverer(image)
-        self.log_event("service_discovery_started")
-        await self._deploy_rare_discoverer(image)
-        # for i in range(1):
-        #    rare_discoverer = await self._deploy_rare_discoverer(image)
-        #    self.log_event("rare_discoverer deployed")
-        #    await asyncio.sleep(60)
-        #    clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])
-        #    clean()
+        for i in range(10):
+            rare_discoverer = await self._deploy_rare_discoverer(image, i)
+            await asyncio.sleep(30)
+            clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])
+            clean()
 
-        #    self.log_event("rare_discoverer cleaned")
-        await asyncio.sleep(60)
+        await asyncio.sleep(30)
         self.log_event("service_discovery_finished")

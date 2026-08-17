@@ -1,6 +1,6 @@
 # Python Imports
 import logging
-from typing import Self, List, Dict
+from typing import Dict, List, Self
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -36,7 +36,9 @@ class ServiceDiscoveryAnalyzer(Analyzer):
         name = "rare-discoverer"
         statefulsets = [ss for ss in self.data_puller.kwargs["stateful_sets"] if name in ss]
         indexes = [self.data_puller.kwargs["stateful_sets"].index(ss) for ss in statefulsets]
-        nodes_per_statefulset = [self.data_puller.kwargs["nodes_per_statefulset"][index] for index in indexes]
+        nodes_per_statefulset = [
+            self.data_puller.kwargs["nodes_per_statefulset"][index] for index in indexes
+        ]
 
         dfs = self.data_puller.get_all_node_dataframes(tracer, statefulsets, nodes_per_statefulset)
 

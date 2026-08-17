@@ -1,7 +1,6 @@
 # Python Imports
 import asyncio
 import logging
-import random
 from typing import ClassVar, List
 
 from kubernetes.client import V1Probe, V1ServicePort, V1StatefulSet, V1TCPSocketAction
@@ -214,7 +213,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         rare_discoverer = (
             Libp2pStatefulSetBuilder()
             .with_libp2p_config(
-                name=self.config.rare_discoverer_ss_name + f'-{index}',
+                name=self.config.rare_discoverer_ss_name + f"-{index}",
                 namespace=self.config.namespace,
                 num_nodes=self.config.num_discoverer_rare,
                 dns_searches=self.config.dns_searches,
@@ -238,7 +237,7 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         return rare_discoverer
 
     async def _run(
-            self,
+        self,
     ):
         self.log_event("run_start")
 

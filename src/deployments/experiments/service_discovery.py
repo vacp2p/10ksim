@@ -249,10 +249,6 @@ class ServiceDiscovery(BaseExperiment[ExpConfig]):
         await self._deploy_rare_advertiser(image)
         await self._deploy_popular_discoverer(image)
         for i in range(10):
-           rare_discoverer = await self._deploy_rare_discoverer(image)
-           await asyncio.sleep(30)
-           clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])
-           clean()
             rare_discoverer = await self._deploy_rare_discoverer(image, i)
             await asyncio.sleep(30)
             clean = get_cleanup(self.api_client, self.config.namespace, [rare_discoverer.to_dict()])

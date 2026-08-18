@@ -315,8 +315,9 @@ class Nimlibp2pAnalyzer(Analyzer):
         # Collect all "sent_*" groups into one logical received DataFrame
         sent_parts = []
         for group in dfs:
-            if "sent" in group:
-                sent_parts.extend(group["sent"])
+            for key in group:
+                if "sent" in group:
+                    sent_parts.extend(group["sent"])
 
         sent_df = pd.concat(sent_parts, ignore_index=True) if sent_parts else pd.DataFrame()
 

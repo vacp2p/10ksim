@@ -26,7 +26,7 @@ class Nimlibp2pTracer(MessageTracer):
 
     def with_received_pattern_group(self, log_format: Literal["TEXT", "JSON"]) -> Self:
         received_fields = (
-            self._prefix_fields(["msgId", "sentAt", "timestamp", "delayMs"])
+            self._prefix_fields(["msgId", "sentAt", "current", "delayMs"])
             if log_format == "JSON"
             else ["_msg"]
         )

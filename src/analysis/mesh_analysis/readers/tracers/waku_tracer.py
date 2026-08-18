@@ -72,7 +72,7 @@ class WakuTracer(MessageTracer):
 
         self._append_pattern_group(
             name="received_lightpush",
-            query="handling lightpush request",
+            query='"handling lightpush request" AND NOT "waku lightpush legacy"',
             log_format=log_format,
             fields=self._prefix_fields(
                 [
@@ -93,7 +93,7 @@ class WakuTracer(MessageTracer):
 
         self._append_pattern_group(
             name="received_legacy_lightpush",
-            query="handling lightpush request",
+            query='"handling lightpush request" AND "waku lightpush legacy"',
             log_format=log_format,
             fields=self._prefix_fields(
                 [

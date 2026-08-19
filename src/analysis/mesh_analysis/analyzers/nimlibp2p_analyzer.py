@@ -201,7 +201,7 @@ class Nimlibp2pAnalyzer(Analyzer):
         has_shards: bool,
         peer_identifier: str,
     ) -> MessageReliabilityResult:
-
+        dfs = None
         if self.enable_cache:
             received = Path(self._get_dump_path("received"))
             sent = Path(self._get_dump_path("sent"))
@@ -213,7 +213,7 @@ class Nimlibp2pAnalyzer(Analyzer):
                 for df in dfs:
                     df.set_index(columns, inplace=True)
                     df.sort_index(inplace=True)
-        else:
+        if dfs is None:
             dfs = self.data_puller.get_all_node_dataframes(tracer, stateful_sets, nodes_per_ss)
             # Strip suffix for local read.
             for dfs_dicts in dfs:

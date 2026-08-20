@@ -117,6 +117,11 @@ def _create_pod_template_spec_with_default_values() -> V1PodTemplateSpec:
     )
 
 
+def _required_node_affinity_expression(pod_spec: V1PodSpec):
+    selector = pod_spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+    return selector.node_selector_terms[0].match_expressions[0]
+
+
 # --------------------------------------------------------------------------- #
 # StatefulSetBuilder Tests
 # --------------------------------------------------------------------------- #
@@ -162,6 +167,34 @@ class TestStatefulSetBuilder:
             "cluster": "vaclab",
             "team": "dst",
         }
+
+    def test_with_avoided_machines_sets_not_in_node_affinity(self):
+        """Should prevent pods from scheduling on listed machines."""
+        builder = StatefulSetBuilder()
+        builder.config.namespace = "default"
+
+        result = builder.with_avoided_machines(["node-05", "node-06"])
+        stateful_set = builder.build()
+        expression = _required_node_affinity_expression(stateful_set.spec.template.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "NotIn"
+        assert expression.values == ["node-05", "node-06"]
+
+    def test_with_allowed_machines_sets_in_node_affinity(self):
+        """Should restrict pods to listed machines."""
+        builder = StatefulSetBuilder()
+        builder.config.namespace = "default"
+
+        result = builder.with_allowed_machines("node-01")
+        stateful_set = builder.build()
+        expression = _required_node_affinity_expression(stateful_set.spec.template.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "In"
+        assert expression.values == ["node-01"]
 
     @pytest.mark.parametrize("overwrite", [False, True])
     def test_with_image_in_container_calls_helper_with_correct_params(self, mocker, overwrite):
@@ -460,6 +493,19 @@ class TestPodBuilder:
         result = builder.build()
         mock_build_pod.assert_called_once_with(builder.config)
         assert isinstance(result, V1Pod)
+
+    def test_with_allowed_machines_sets_in_node_affinity(self):
+        """Should restrict a pod to listed machines."""
+        builder = PodBuilder()
+
+        result = builder.with_allowed_machines(["node-01", "node-02"])
+        pod = builder.build()
+        expression = _required_node_affinity_expression(pod.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "In"
+        assert expression.values == ["node-01", "node-02"]
 
     def test_dependency_reconciles_on_field_change(self, mocker):
         class ChildBuilder(PodBuilder):
@@ -803,6 +849,19 @@ class TestPodSpecBuilder:
 
         assert isinstance(result, PodSpecBuilder)
         assert builder.config.service_account_name == "default"
+
+    def test_with_avoided_machines_sets_not_in_node_affinity(self):
+        """Should prevent pods from scheduling on listed machines."""
+        builder = PodSpecBuilder()
+
+        result = builder.with_avoided_machines("node-05")
+        pod_spec = builder.build()
+        expression = _required_node_affinity_expression(pod_spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "NotIn"
+        assert expression.values == ["node-05"]
 
 
 # --------------------------------------------------------------------------- #

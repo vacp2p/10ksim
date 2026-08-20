@@ -131,11 +131,43 @@ def test_with_security_context_sets_value():
     assert config.security_context == context
 
 
+def test_with_required_node_affinity_sets_required_expression():
+    config = PodSpecConfig()
+    config.with_required_node_affinity("kubernetes.io/hostname", "NotIn", ["node-05"])
+
+    selector = config.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+    expression = selector.node_selector_terms[0].match_expressions[0]
+    assert expression.key == "kubernetes.io/hostname"
+    assert expression.operator == "NotIn"
+    assert expression.values == ["node-05"]
+
+
+def test_with_required_node_affinity_raises_on_duplicate_without_overwrite():
+    config = PodSpecConfig()
+    config.with_required_node_affinity("kubernetes.io/hostname", "NotIn", ["node-05"])
+
+    with pytest.raises(ValueError):
+        config.with_required_node_affinity("kubernetes.io/hostname", "In", ["node-06"])
+
+
 def test_build_pod_spec_uses_config_values():
     config = PodSpecConfig()
     config.with_dns_search("a.example")
     spec = build_pod_spec(config)
     assert spec.dns_config.searches == ["a.example"]
+
+
+def test_build_pod_spec_uses_node_affinity():
+    config = PodSpecConfig()
+    config.with_required_node_affinity("kubernetes.io/hostname", "In", ["node-01", "node-02"])
+
+    spec = build_pod_spec(config)
+
+    selector = spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+    expression = selector.node_selector_terms[0].match_expressions[0]
+    assert expression.key == "kubernetes.io/hostname"
+    assert expression.operator == "In"
+    assert expression.values == ["node-01", "node-02"]
 
 
 def test_build_pod_template_spec_maps_metadata_and_spec():

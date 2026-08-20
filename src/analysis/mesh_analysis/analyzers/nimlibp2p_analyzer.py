@@ -1,7 +1,7 @@
 import logging
 import traceback
 from pathlib import Path
-from typing import Iterable, List, Optional, Self
+from typing import Dict, Iterable, List, Literal, Optional, Self
 
 import pandas as pd
 import seaborn as sns
@@ -59,6 +59,12 @@ class Nimlibp2pAnalyzer(Analyzer):
     """
 
     msg_hash_key: str = "msgId"
+    enable_cache: bool = False
+    log_format: Optional[Literal["TEXT", "JSON"]] = "TEXT"
+
+    def with_log_format(self, log_format: Literal["TEXT", "JSON"]) -> Self:
+        self.log_format = log_format
+        return self
 
     def with_ss_check(
         self,
@@ -140,8 +146,8 @@ class Nimlibp2pAnalyzer(Analyzer):
         return (
             Nimlibp2pTracer()
             .with_extra_fields(extra_fields)
-            .with_received_pattern_group()
-            .with_sent_pattern_group()
+            .with_received_pattern_group(log_format=self.log_format)
+            .with_sent_pattern_group(log_format=self.log_format)
         )
 
     def analyze_reliability(
@@ -280,13 +286,22 @@ class Nimlibp2pAnalyzer(Analyzer):
 
         return Ok(None)
 
-    def _merge_dfs(self, dfs: List[List[pd.DataFrame]], has_shard: bool) -> List[pd.DataFrame]:
+    def _merge_dfs(
+        self, dfs: List[Dict[str, List[pd.DataFrame]]], has_shard: bool
+    ) -> List[pd.DataFrame]:
         logger.info("Merging and sorting information")
 
-        received_df = pd.concat(
-            [pd.concat(group["received"], ignore_index=True) for group in dfs],
-            ignore_index=True,
+        # Collect all "received_*" groups into one logical received DataFrame
+        received_parts = []
+        for group in dfs:
+            for key, df_list in group.items():
+                if key.startswith("received"):
+                    received_parts.extend(df_list)
+
+        received_df = (
+            pd.concat(received_parts, ignore_index=True) if received_parts else pd.DataFrame()
         )
+
         if has_shard:
             received_df = received_df.assign(
                 shard=received_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)
@@ -297,10 +312,15 @@ class Nimlibp2pAnalyzer(Analyzer):
         received_df.set_index(columns, inplace=True)
         received_df.sort_index(inplace=True)
 
-        sent_df = pd.concat(
-            [pd.concat(group["sent"], ignore_index=True) for group in dfs],
-            ignore_index=True,
-        )
+        # Collect all "sent_*" groups into one logical received DataFrame
+        sent_parts = []
+        for group in dfs:
+            for key in group:
+                if "sent" in group:
+                    sent_parts.extend(group["sent"])
+
+        sent_df = pd.concat(sent_parts, ignore_index=True) if sent_parts else pd.DataFrame()
+
         if has_shard:
             sent_df = sent_df.assign(
                 shard=sent_df["kubernetes.pod_name"].str.extract(r".*-(\d+)-").astype(int)

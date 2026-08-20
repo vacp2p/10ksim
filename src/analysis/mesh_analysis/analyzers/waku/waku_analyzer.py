@@ -56,8 +56,8 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
     def reliability_tracer(self, extra_fields) -> MessageTracer:
         return (
             WakuTracer()
-            .with_received_pattern_group()
-            .with_sent_pattern_group()
+            .with_received_pattern_group(log_format=self.log_format)
+            .with_sent_pattern_group(log_format=self.log_format)
             .with_extra_fields(extra_fields)
         )
 

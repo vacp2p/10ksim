@@ -79,7 +79,7 @@ def test_received_json():
     assert group.fields == [
         "log.msgId",
         "log.sentAt",
-        "log.timestamp",
+        "log.current",
         "log.delayMs",
     ]
     assert pair.regex is None

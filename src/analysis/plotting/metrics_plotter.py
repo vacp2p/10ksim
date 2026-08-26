@@ -45,10 +45,7 @@ class MetricsPlotter(BaseModel):
 
             for group in plot_specs.groups:
                 file_data_handler = DataFileHandler(plot_specs.ignore_columns)
-                named_files = [
-                    DataPath(name=data_path.name, path=data_path.path / metric)
-                    for data_path in group.data_paths
-                ]
+                named_files = self._named_files_for_metric(plot_specs, group.data_paths, metric)
                 logger.debug(f"named_files: {named_files}")
 
                 file_data_handler.concat_dataframes_from_files(
@@ -71,6 +68,31 @@ class MetricsPlotter(BaseModel):
             )
             plot_specs_dict = plot_specs.model_dump()
             self._add_subplot_df_to_axs(metric_df, i, axs, plot_specs_dict, metric)
+
+    def _named_files_for_metric(
+        self, plot_specs: PlotConfig, data_paths: List[DataPath], metric: str
+    ) -> List[DataPath]:
+        if not plot_specs.include_files:
+            return [
+                DataPath(name=data_path.name, path=data_path.path / metric)
+                for data_path in data_paths
+            ]
+
+        named_files = []
+        for data_path in data_paths:
+            if data_path.file_name:
+                if data_path.file_name not in plot_specs.include_files:
+                    continue
+                path = data_path.path / metric / data_path.file_name
+                if path.exists():
+                    named_files.append(DataPath(name=data_path.name, path=path))
+                continue
+
+            for file_name in plot_specs.include_files:
+                path = data_path.path / metric / file_name
+                if path.exists():
+                    named_files.append(DataPath(name=file_name, path=path))
+        return named_files
 
     def _save_plot(self, plot_name: str):
         plt.tight_layout()

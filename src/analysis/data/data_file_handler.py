@@ -19,6 +19,8 @@ class DataPath(BaseModel):
     """Name associated with data (eg. experiment name)"""
     path: Path
     """Data path"""
+    file_name: Optional[str] = None
+    """Optional file name under the metric folder when different from the display name."""
 
 
 class DataFileHandler(DataHandler):

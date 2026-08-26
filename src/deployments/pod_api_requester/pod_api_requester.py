@@ -223,7 +223,11 @@ async def pod_api_request(
     try:
         targ_pod_response = response_obj["response"]
     except KeyError as e:
-        err = response_obj.get("exception", "<no exception key>").replace("\n", "\n")
+        err = response_obj.get("exception", "<no exception key>")
+        if isinstance(err, dict):
+            err = json.dumps(err)
+        if isinstance(err, str):
+            err = err.replace("\n", "\n")
         logger.error(f"pod-api-requester's request attempt failed. Exception: `{err}`")
         raise PodApiHttpError(response_obj) from e
 

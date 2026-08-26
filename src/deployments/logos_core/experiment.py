@@ -77,7 +77,12 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             LogoscorePodApiRequester()
             .with_namespace(self.namespace)
             .with_name("logoscore-requester")
-            .with_image(Image(repo="pearsonwhite/dst-lc-api", tag="wip-amd"))
+            .with_image(
+                Image(
+                    repo="pearsonwhite/dst-lc-api",
+                    tag="f351363a4a175bfbbadf9cef1149836d2570bcc7-amd",
+                )
+            )
             .with_mode("server")
             .with_service_account_name(self.service_account_name)
             .with_service_name(_LOGOSCORE_PUBLISHER["service_name"])
@@ -151,7 +156,11 @@ class LogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                 await init_token(self.namespace, indexed_name, self.bootstrap_service)
             except Exception as e:
                 logger.error(f"e: {e}")
+
+        for index in range(self.config.num_bootstrap_nodes):
+            indexed_name = f"{bootstrap_name}-{index}"
             await init_node(self.namespace, indexed_name, self.bootstrap_service)
+            await start_metrics(self.namespace, indexed_name, self.bootstrap_service)
 
         # Get bootstrap addresses
         addresses = []
@@ -254,6 +263,39 @@ async def subscribe(namespace, name_with_index, service_name, topic):
     try:
         target = Target(
             name="subscribe",
+            name_template=name_with_index,
+            service=service_name,
+            port=8645,
+        )
+        return await pod_api_request(
+            namespace=namespace,
+            service_name=_LOGOSCORE_PUBLISHER["service_name"],
+            app=_LOGOSCORE_PUBLISHER["app"],
+            url_template="http://{target_ip}:{node_port}/logoscore/call",
+            data={
+                "target": wrap_arg(target),
+                "params": params,
+            },
+        )
+    except PodApiApplicationError as e:
+        logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
+    except PodApiError as e:
+        logger.error(f"PodApiError: {e} {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"Other exception: {e} {traceback.format_exc()}")
+
+
+async def start_metrics(namespace, name_with_index, service_name):
+    func_params = {"port": 9090, "modules": ["delivery_module"]}
+    params = {
+        "module": "openmetrics",
+        "function": "start",
+        "params": func_params,
+    }
+
+    try:
+        target = Target(
+            name="start_metrics",
             name_template=name_with_index,
             service=service_name,
             port=8645,

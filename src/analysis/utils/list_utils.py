@@ -12,7 +12,7 @@ from result import Err, Ok, Result
 def order_by_groups(list_to_order: List) -> List:
     # TODO: change this to a more generic function
     def get_default_format_id(val):
-        return int(val.split("-")[1].split("_")[0])
+        return int(val.split(".")[0].split("-")[-1].split("_")[0])
 
     nodes = []
     bootstrap = []

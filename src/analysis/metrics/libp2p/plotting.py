@@ -44,7 +44,9 @@ class Nimlibp2pScrapePlotData:
         return DataGroup(name=name, data_paths=data_paths)
 
     @classmethod
-    def groups_by_version(cls, scrape_configs: list[ScrapeConfig] | ScrapeConfig) -> list[DataGroup]:
+    def groups_by_version(
+        cls, scrape_configs: list[ScrapeConfig] | ScrapeConfig
+    ) -> list[DataGroup]:
         if isinstance(scrape_configs, ScrapeConfig):
             scrape_configs = [scrape_configs]
 

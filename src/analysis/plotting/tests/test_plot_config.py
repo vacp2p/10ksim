@@ -25,9 +25,14 @@ def test_with_group_adds_data_paths(tmp_path):
 
 
 def test_with_groups_adds_existing_groups(tmp_path):
-    group = PlotConfigBuilder(name="source").with_group(
-        "scrapes", [DataPath(name="mplex", path=tmp_path / "asd_run_0", file_name="mplex")]
-    ).build().groups[0]
+    group = (
+        PlotConfigBuilder(name="source")
+        .with_group(
+            "scrapes", [DataPath(name="mplex", path=tmp_path / "asd_run_0", file_name="mplex")]
+        )
+        .build()
+        .groups[0]
+    )
 
     config = PlotConfigBuilder(name="target").with_groups(group).build()
 

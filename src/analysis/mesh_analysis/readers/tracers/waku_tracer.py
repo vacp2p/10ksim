@@ -27,7 +27,7 @@ class WakuTracer(MessageTracer):
                 "received",
                 trace_pairs=[
                     TracePair(
-                        regex=r"received relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?from_peer_id[\s\":=]+([\w*]+).*?receivedTime[\s\":=]+(\d+)",
+                        regex=r"[Rr]eceived relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?from_peer_id[\s\":=]+([\w*]+).*?receivedTime[\s\":=]+(\d+)",
                         convert=self._trace_received_in_logs,
                     ),
                     TracePair(
@@ -35,18 +35,19 @@ class WakuTracer(MessageTracer):
                         # Legacy lightpush
                         # Example from jswaku:
                         # NTC 2025-11-20 13:50:35.376+00:00 handling lightpush request topics="waku lightpush legacy" tid=7 file=protocol.nim:48 peer_id=12D*YCde2H requestId=46e649c7-f0db-409c-afed-c34f17e2ff7b pubsubTopic=/waku/2/rs/2/0 msg_hash=0x1441e3e14e6f957d2a45332378cda900e066022412d6a1c47c95e587d82e6eb2 receivedTime=1763646635380167168
-                        r'handling lightpush request.*?topics="waku lightpush legacy".*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)',
+                        r'[Hh]andling lightpush request.*?topics="waku lightpush legacy".*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)',
                         convert=self._trace_legacy_lightpush_in_logs,
                     ),
                     TracePair(
                         regex=
                         # Example from nwaku:
                         # NTC 2025-11-20 13:06:16.015+00:00 handling lightpush request topics="waku lightpush" tid=7 file=protocol.nim:79 my_peer_id=16U*GiNg1a peer_id=16U*wJXtuH requestId=db01d1a6519de2145f10 pubsubTopic="some(\"/waku/2/rs/2/0\")" msg_hash=0x17cfd30767acac9b86c18333ba918abef93cc23f65b6c98c845c682584f92583 receivedTime=1763643976019361536
-                        r"handling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)",
+                        r"[Hh]andling lightpush request.*?my_peer_id=([\w*]+).*?peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?receivedTime=(\d+)",
                         convert=self._trace_lightpush_in_logs,
                     ),
                 ],
-                query="(received relay message OR  handling lightpush request)",
+                # i(...) since nwaku capitalized these log lines (Received/Handling)
+                query='(i("received relay message") OR i("handling lightpush request"))',
             )
         )
         return self
@@ -56,7 +57,7 @@ class WakuTracer(MessageTracer):
             name="sent",
             trace_pairs=[
                 TracePair(
-                    regex=r"sent relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?to_peer_id[\s\":=]+([\w*]+).*?sentTime[\s\":=]+(\d+)",
+                    regex=r"[Ss]ent relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?to_peer_id[\s\":=]+([\w*]+).*?sentTime[\s\":=]+(\d+)",
                     convert=self._trace_sent_in_logs,
                 ),
                 TracePair(
@@ -64,7 +65,7 @@ class WakuTracer(MessageTracer):
                     convert=self._trace_mixnet_in_logs,
                 ),
             ],
-            query="sent relay message",
+            query='i("sent relay message")',
         )
         self.patterns.append(sent_pattern_group)
         return self

@@ -35,6 +35,9 @@ class PlotConfig(BaseModel):
     metrics: List[str] = Field(default_factory=list)
     """List of metrics to include in plots."""
 
+    include_files: Optional[List[str]] = None
+    """File names to include inside each metric folder."""
+
 
 class PlotConfigBuilder(BaseModel):
     name: str
@@ -80,6 +83,24 @@ class PlotConfigBuilder(BaseModel):
 
         folders = [ensure_trailing_slash(folder) for folder in folders]
         self.config.folder.extend(folders)
+        return self
+
+    def with_include_files(self, include_files: List[str] | str) -> Self:
+        if isinstance(include_files, str):
+            include_files = [include_files]
+        self.config.include_files = include_files
+        return self
+
+    def with_x_order(self, x_order: List[str] | str) -> Self:
+        if isinstance(x_order, str):
+            x_order = [x_order]
+        self.config.x_order = x_order
+        return self
+
+    def with_legend_order(self, legend_order: List[str] | str) -> Self:
+        if isinstance(legend_order, str):
+            legend_order = [legend_order]
+        self.config.legend_order = legend_order
         return self
 
     def with_scrape_metrics(self, scrape_config: ScrapeConfig) -> Self:

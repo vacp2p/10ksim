@@ -91,7 +91,7 @@ class MetricsPlotter(BaseModel):
             for file_name in plot_specs.include_files:
                 path = data_path.path / metric / file_name
                 if path.exists():
-                    named_files.append(DataPath(name=file_name, path=path))
+                    named_files.append(DataPath(name=f"{data_path.name}/{file_name}", path=path))
         return named_files
 
     def _save_plot(self, plot_name: str):

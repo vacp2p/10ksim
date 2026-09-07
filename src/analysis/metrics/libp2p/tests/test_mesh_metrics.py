@@ -17,7 +17,7 @@ def _write_gauge_csv(metrics_dir: Path, folder: str, name: str, columns: dict) -
     n = len(next(iter(columns.values())))
     times = [f"2026-07-18 04:{40 + 5 * i:02d}:00" for i in range(n)]
     df = pd.DataFrame({"Time": times, **columns})
-    df.to_csv(d / name, index=False)
+    df.to_csv(d / f"{name}.csv", index=False)
 
 
 # --------------------------------------------------------------------------- #

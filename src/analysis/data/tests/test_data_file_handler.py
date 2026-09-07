@@ -1,4 +1,6 @@
 import logging
+import re
+import subprocess
 
 import pandas as pd
 
@@ -11,8 +13,8 @@ def _write_csv(path, rows=3, value=1.0):
     pd.DataFrame({"pod-0": [value] * rows}, index=times).rename_axis("Time").to_csv(path)
 
 
-def _mean(folder):
-    handler = DataFileHandler()
+def _mean(folder, include_files=None):
+    handler = DataFileHandler(include_files=include_files)
     handler.concat_dataframes_from_folders_as_mean([folder], 3)
     return handler.dataframe
 
@@ -37,7 +39,7 @@ def test_a_scrape_taken_before_the_suffix_change_says_how_to_fix_it(tmp_path, ca
         assert _mean(tmp_path / "libp2p-in").empty
     assert "no .csv suffix" in caplog.text
     assert "quic" in caplog.text
-    assert "-exec mv" in caplog.text
+    assert "-exec sh -c" in caplog.text
 
 
 def test_an_empty_folder_still_reports(tmp_path, caplog):
@@ -45,3 +47,40 @@ def test_an_empty_folder_still_reports(tmp_path, caplog):
     with caplog.at_level(logging.ERROR):
         assert _mean(tmp_path / "libp2p-in").empty
     assert "holds no files" in caplog.text
+
+
+def test_include_files_name_the_run_without_the_suffix(tmp_path):
+    """Callers pass muxer names like `quic`, which must still pick `quic.csv`."""
+    _write_csv(tmp_path / "libp2p-in" / "quic.csv")
+    _write_csv(tmp_path / "libp2p-in" / "yamux.csv", value=5.0)
+    df = _mean(tmp_path / "libp2p-in", include_files=["quic"])
+    assert sorted(df.columns.drop("class")) == ["quic.csv"]
+
+
+def test_include_files_that_match_nothing_blame_the_list_not_the_suffix(tmp_path, caplog):
+    _write_csv(tmp_path / "libp2p-in" / "quic.csv")
+    with caplog.at_level(logging.ERROR):
+        assert _mean(tmp_path / "libp2p-in", include_files=["tcp"]).empty
+    assert "include_files=['tcp']" in caplog.text
+    assert "no .csv suffix" not in caplog.text
+
+
+def test_the_suggested_rename_only_touches_scrapes(tmp_path, caplog):
+    """The command the error prints is run as-is: it must skip junk and keep dotted run names."""
+    folder = tmp_path / "libp2p-in"
+    _write_csv(folder / "quic")
+    _write_csv(folder / "v2.2.0")
+    (folder / ".DS_Store").write_bytes(b"\x00\x01junk")
+    (folder / "notes.txt").write_text("scratch")
+    with caplog.at_level(logging.ERROR):
+        assert _mean(folder).empty
+    command = re.search(r"`(find .*)`", caplog.text).group(1)
+    subprocess.run(command, shell=True, check=True)
+    subprocess.run(command, shell=True, check=True)
+    assert sorted(p.name for p in folder.iterdir()) == [
+        ".DS_Store",
+        "notes.txt",
+        "quic.csv",
+        "v2.2.0.csv",
+    ]
+    assert sorted(_mean(folder).columns.drop("class")) == ["quic.csv", "v2.2.0.csv"]

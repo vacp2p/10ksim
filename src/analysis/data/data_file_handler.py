@@ -44,15 +44,23 @@ class DataFileHandler(DataHandler):
                 case Err(error):
                     logger.error(error)
 
-    @staticmethod
-    def _report_no_csvs(path: Path) -> None:
-        """Name the suffixless files, since scrapes taken before the .csv change have none."""
-        stale = [p.name for p in path.iterdir() if p.is_file() and not p.name.startswith(".")]
-        if stale:
+    def _report_no_csvs(self, path: Path) -> None:
+        """Say why nothing was read: the include list, missing suffixes, or an empty folder."""
+        files = [p for p in path.iterdir() if p.is_file() and not p.name.startswith(".")]
+        csvs = [p.name for p in files if p.suffix == ".csv"]
+        stale = [p.name for p in files if p.suffix != ".csv"]
+        if csvs and self._include_files:
+            logger.error(
+                f"{path} holds {len(csvs)} .csv file(s) but none named in "
+                f"include_files={self._include_files}: {', '.join(csvs[:3])}"
+                f"{', ...' if len(csvs) > 3 else ''}"
+            )
+        elif stale:
             logger.error(
                 f"{path} holds {len(stale)} file(s) with no .csv suffix ({', '.join(stale[:3])}"
                 f"{', ...' if len(stale) > 3 else ''}); rename them with "
-                f"`find {path} -type f ! -name '*.csv' -exec mv {{}} {{}}.csv \\;`"
+                f"`find {path} -type f ! -name '*.csv' -exec sh -c "
+                f'\'head -c5 "$1" | grep -q "^Time," && mv "$1" "$1.csv"\' _ {{}} \\;`'
             )
         else:
             logger.error(f"{path} holds no files to read.")

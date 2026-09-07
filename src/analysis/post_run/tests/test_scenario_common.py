@@ -11,6 +11,7 @@ from src.analysis.post_run.scenario_common import (
     load_deliveries,
     load_mesh_peers,
     mesh_peers_row,
+    pod_names,
     prepare,
     published_messages,
     write_table,
@@ -121,3 +122,8 @@ def test_prepare_refuses_a_run_with_no_deliveries(tmp_path, mocker):
     exp = SimpleNamespace(output_folder=tmp_path, config=SimpleNamespace())
     with pytest.raises(NoDeliveries, match="No deliveries"):
         prepare(exp)
+
+
+def test_pod_names_expands_the_statefulset_from_one_member():
+    assert pod_names("nodes-28", 3) == ["nodes-0", "nodes-1", "nodes-2"]
+    assert pod_names("relay-set-4", 2) == ["relay-set-0", "relay-set-1"]

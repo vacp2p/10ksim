@@ -68,6 +68,12 @@ def mesh_peers_row(
     )
 
 
+def pod_names(sample: str, num_nodes: int) -> List[str]:
+    """Every pod of the StatefulSet `sample` belongs to, by ordinal."""
+    prefix = sample.rsplit("-", 1)[0]
+    return [f"{prefix}-{i}" for i in range(num_nodes)]
+
+
 def pct(part: int, whole: int) -> str:
     return f"{part} of {whole} ({100 * part / whole:.1f}%)" if whole else f"{part} of 0"
 

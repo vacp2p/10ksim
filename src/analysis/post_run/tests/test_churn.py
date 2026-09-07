@@ -19,7 +19,7 @@ def test_churn_puts_every_miss_inside_one_contiguous_outage(deliveries, fanout):
     )
     rows = dict((i, r) for i, _, r in churn_table(df, ["pod-2", "pod-3"], 4, 4))
     assert "12 of 16" in rows["delivery, whole run"]
-    assert "4 to 4 of 4" in rows["delivery, nodes that stayed up"]
+    assert rows["delivery, nodes that stayed up"] == "4 to 4 of 4 on 2 nodes, 0 received nothing"
     assert "missed 2.0 of 4" in rows["delivery, churned nodes"]
     assert "2.0 in one stretch" in rows["delivery, churned nodes"]
     assert rows["clean recovery"].startswith("0 of 2 nodes keep dropping")
@@ -99,3 +99,11 @@ def test_the_recovery_denominator_covers_every_churned_node(deliveries, fanout):
     rows = dict((i, r) for i, _, r in churn_table(df, ["pod-2", "pod-3", "pod-4"], 2, 5))
 
     assert rows["clean recovery"].startswith("0 of 3 nodes keep dropping")
+
+
+def test_a_survivor_that_received_nothing_is_still_counted(deliveries, fanout):
+    """A survivor with no deliveries has no rows to group, so it used to drop out of the row."""
+    # pod-1 stayed up but never received anything.
+    df = deliveries(fanout(1, [0, 2, 3], 0) + fanout(2, [0, 2, 3], 30))
+    rows = dict((i, r) for i, _, r in churn_table(df, ["pod-3"], 2, 4))
+    assert rows["delivery, nodes that stayed up"] == "0 to 2 of 2 on 3 nodes, 1 received nothing"

@@ -13,6 +13,7 @@ from src.analysis.post_run.scenario_common import (
     load_mesh_peers,
     mesh_peers_row,
     pct,
+    pod_names,
     prepare,
     published_messages,
     write_table,
@@ -96,8 +97,13 @@ def churn_table(
     """Expectation-vs-result rows: delivery is below 100%, and every miss sits inside the
     churned node's own outage rather than trailing after it."""
     is_churned = df[POD_COLUMN].isin(set(churned))
-    survivors = num_nodes - len(set(churned))
-    per_survivor = df[~is_churned].groupby(POD_COLUMN)["msgId"].nunique()
+    # Reindex over every survivor: one that received nothing has no rows to group.
+    sample = churned[0] if len(churned) else df[POD_COLUMN].iloc[0]
+    survivors = [p for p in pod_names(sample, num_nodes) if p not in set(churned)]
+    per_survivor = (
+        df[~is_churned].groupby(POD_COLUMN)["msgId"].nunique().reindex(survivors, fill_value=0)
+    )
+    silent = int((per_survivor == 0).sum())
     out = churn_outages(df, churned)
     ragged = int((out["missed_after"] > 0).sum())
     scattered = int((out["missed_outside"] > 0).sum())
@@ -111,9 +117,8 @@ def churn_table(
         (
             "delivery, nodes that stayed up",
             "100%",
-            f"{per_survivor.min() if len(per_survivor) else 0} to "
-            f"{per_survivor.max() if len(per_survivor) else 0} of {num_messages}, "
-            f"on {len(per_survivor)} of {survivors} nodes",
+            f"{per_survivor.min()} to {per_survivor.max()} of {num_messages} "
+            f"on {len(survivors)} nodes, {silent} received nothing",
         ),
         (
             "delivery, churned nodes",

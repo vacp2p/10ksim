@@ -51,6 +51,25 @@ def test_named_files_for_metric_uses_display_name_with_explicit_file_name(tmp_pa
     ]
 
 
+def test_named_files_for_metric_disambiguates_multiple_included_files(tmp_path):
+    run_0 = tmp_path / "asd_run_0"
+    (run_0 / "container-memory").mkdir(parents=True)
+    (run_0 / "container-memory" / "mplex").touch()
+    (run_0 / "container-memory" / "quic").touch()
+
+    plot_config = PlotConfig(name="memory", include_files=["mplex", "quic"])
+    named_files = MetricsPlotter(configs=[plot_config])._named_files_for_metric(
+        plot_config,
+        [DataPath(name="2.3.0", path=run_0)],
+        "container-memory",
+    )
+
+    assert [(file.name, file.path) for file in named_files] == [
+        ("2.3.0/mplex", run_0 / "container-memory" / "mplex"),
+        ("2.3.0/quic", run_0 / "container-memory" / "quic"),
+    ]
+
+
 def test_named_files_for_metric_keeps_legacy_metric_file_paths_without_include_files(tmp_path):
     plot_config = PlotConfig(name="memory")
     named_files = MetricsPlotter(configs=[plot_config])._named_files_for_metric(

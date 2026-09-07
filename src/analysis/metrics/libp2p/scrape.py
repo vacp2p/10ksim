@@ -76,4 +76,5 @@ class Nimlibp2pScrapeBuilder(BaseModel):
             metrics_to_scrape=all_metrics,
             name=self.name,
             interval=self.interval,
+            exp=self.exp,
         )

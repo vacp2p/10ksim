@@ -2,8 +2,10 @@
 
 import logging
 
+from kubernetes.client import V1StatefulSet
 from pydantic import Field, NonNegativeInt
 
+from src.deployments.experiments.libp2p.disturbance import check_shaping_applied
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 
@@ -21,3 +23,7 @@ class DegradedNetwork(NimLibp2pExperiment):
     """Regression run over a high-latency, jittery, lossy link."""
 
     config: DegradedConfig
+
+    async def _after_nodes(self, nodes: V1StatefulSet) -> None:
+        pods = check_shaping_applied(nodes.metadata.name, self.namespace, self.api_client)
+        self.log_event({"event": "degradation_applied", "pods": pods})

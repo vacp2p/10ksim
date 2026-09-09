@@ -8,6 +8,10 @@ from kubernetes.client import V1StatefulSet
 from pydantic import Field, NonNegativeInt, model_validator
 
 from src.deployments.core.k8s_rollout import scale_statefulset, wait_for_rollout
+from src.deployments.experiments.libp2p.disturbance import (
+    DisturbanceNotApplied,
+    check_nodes_left,
+)
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 
@@ -63,6 +67,11 @@ class NodeChurn(NimLibp2pExperiment):
         self.log_event({"event": "churn_down", "nodes": targets})
         logger.info(f"Taking down {len(targets)} nodes: {targets[0]}..{targets[-1]}")
         await scale_statefulset(name, self.namespace, replicas - len(targets), self.api_client)
+        try:
+            check_nodes_left(name, self.namespace, replicas - len(targets), self.api_client)
+        except DisturbanceNotApplied as e:
+            # Mid-run, so the run keeps going and collects its data before reporting invalid.
+            self.fail_run(str(e))
         self.log_event({"event": "churn_is_down", "nodes": targets})
 
         await asyncio.sleep(self.config.churn_downtime)

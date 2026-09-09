@@ -62,6 +62,28 @@ def test_single_group_uses_version_and_muxer_as_display_name(tmp_path):
     ]
 
 
+def test_single_group_uses_image_tag_as_display_name_when_versionless(tmp_path):
+    group = Nimlibp2pScrapePlotData.single_group(
+        [
+            _scrape(
+                "mplex",
+                tmp_path / "asd_run_0",
+                exp={
+                    "params": {
+                        "muxer": "mplex",
+                        "image": "soutullostatus/dst-test-node:feature-a1b2c3d4",
+                    }
+                },
+            )
+        ]
+    )
+
+    assert group.name == "scrapes"
+    assert [(path.name, path.path, path.file_name) for path in group.data_paths] == [
+        ("feature-a1b2c3d4/mplex", tmp_path / "asd_run_0", "mplex"),
+    ]
+
+
 def test_groups_by_version_uses_version_as_group_and_muxer_as_display_name(tmp_path):
     groups = Nimlibp2pScrapePlotData.groups_by_version(
         [
@@ -105,6 +127,44 @@ def test_groups_by_version_uses_version_as_group_and_muxer_as_display_name(tmp_p
     ]
     assert [(path.name, path.path, path.file_name) for path in groups[1].data_paths] == [
         ("mplex", tmp_path / "asd_run_2", "mplex"),
+    ]
+
+
+def test_groups_by_version_keeps_versionless_mplex_builds_separate(tmp_path):
+    groups = Nimlibp2pScrapePlotData.groups_by_version(
+        [
+            _scrape(
+                "mplex",
+                tmp_path / "asd_run_0",
+                exp={
+                    "params": {
+                        "muxer": "mplex",
+                        "image": "soutullostatus/dst-test-node:feature-a1b2c3d4",
+                    }
+                },
+            ),
+            _scrape(
+                "mplex",
+                tmp_path / "asd_run_1",
+                exp={
+                    "params": {
+                        "muxer": "mplex",
+                        "image": {
+                            "repo": "soutullostatus/dst-test-node",
+                            "tag": "feature-e5f6a7b8",
+                        },
+                    }
+                },
+            ),
+        ]
+    )
+
+    assert [group.name for group in groups] == ["feature-a1b2c3d4", "feature-e5f6a7b8"]
+    assert [(path.name, path.path, path.file_name) for path in groups[0].data_paths] == [
+        ("mplex", tmp_path / "asd_run_0", "mplex"),
+    ]
+    assert [(path.name, path.path, path.file_name) for path in groups[1].data_paths] == [
+        ("mplex", tmp_path / "asd_run_1", "mplex"),
     ]
 
 

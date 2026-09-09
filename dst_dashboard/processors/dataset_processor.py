@@ -174,12 +174,12 @@ class DatasetProcessor:
 
             # Use specific pattern if provided
             if pattern == "received":
-                tracer = tracer.with_received_pattern_group()
+                tracer = tracer.with_received_pattern_group(log_format="TEXT")
             elif pattern == "sent":
-                tracer = tracer.with_sent_pattern_group()
+                tracer = tracer.with_sent_pattern_group(log_format="TEXT")
             else:
                 # Default to received for message delay analysis
-                tracer = tracer.with_received_pattern_group()
+                tracer = tracer.with_received_pattern_group(log_format="TEXT")
 
             return tracer
         else:

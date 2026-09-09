@@ -31,21 +31,24 @@ def capture_pod_logs(
     ones a churn scenario took down.
     """
     api = client.CoreV1Api(api_client or client.ApiClient())
+    # The capture is a fallback: nothing in it may take the run down.
     try:
         pods = api.list_namespaced_pod(namespace=namespace, label_selector=label_selector).items
-    except ApiException as e:
-        logger.warning(f"Could not list pods in `{namespace}` to capture logs: {e}")
+        dest.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Could not list pods in `{namespace}` to capture logs: {e!r}")
         return 0
-
-    dest.mkdir(parents=True, exist_ok=True)
 
     def capture(name: str) -> bool:
         try:
             log = api.read_namespaced_pod_log(name=name, namespace=namespace)
+            (dest / f"{name}.log").write_text(log)
         except ApiException as e:
             logger.warning(f"Could not read logs from pod `{name}`: {e.status}")
             return False
-        (dest / f"{name}.log").write_text(log)
+        except Exception as e:
+            logger.warning(f"Could not capture logs from pod `{name}`: {e!r}")
+            return False
         return True
 
     names = [pod.metadata.name for pod in pods]

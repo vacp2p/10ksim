@@ -61,3 +61,34 @@ def test_the_destination_is_created(mocker, tmp_path):
     dest = tmp_path / "nested" / "kubectl_logs"
     assert capture_pod_logs("ns", dest) == 1
     assert dest.is_dir()
+
+
+def test_a_non_api_error_on_one_pod_does_not_lose_the_rest(mocker, tmp_path, caplog):
+    """`pool.map` re-raises whatever a worker raised, so only ApiException is not enough."""
+    api = _api(["pod-0", "pod-1"])
+    api.read_namespaced_pod_log.side_effect = lambda name, namespace: (
+        (_ for _ in ()).throw(RuntimeError("boom")) if name == "pod-0" else "ok"
+    )
+    mocker.patch.object(pod_logs.client, "CoreV1Api", return_value=api)
+    with caplog.at_level(logging.WARNING):
+        assert capture_pod_logs("ns", tmp_path) == 1
+    assert (tmp_path / "pod-1.log").exists()
+    assert "Could not capture logs from pod `pod-0`: RuntimeError('boom')" in caplog.text
+
+
+def test_a_write_failure_on_one_pod_does_not_lose_the_rest(mocker, tmp_path, caplog):
+    mocker.patch.object(pod_logs.client, "CoreV1Api", return_value=_api(["pod-0", "pod-1"]))
+    (tmp_path / "pod-0.log").mkdir(parents=True)
+    with caplog.at_level(logging.WARNING):
+        assert capture_pod_logs("ns", tmp_path) == 1
+    assert (tmp_path / "pod-1.log").read_text() == "log for pod-1"
+    assert "Could not capture logs from pod `pod-0`" in caplog.text
+
+
+def test_a_non_api_listing_failure_is_not_fatal(mocker, tmp_path, caplog):
+    mocker.patch.object(
+        pod_logs.client, "CoreV1Api", return_value=_api([], list_error=ConnectionError("down"))
+    )
+    with caplog.at_level(logging.WARNING):
+        assert capture_pod_logs("ns", tmp_path) == 0
+    assert "Could not list pods" in caplog.text

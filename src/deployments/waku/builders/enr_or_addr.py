@@ -115,7 +115,7 @@ class Enr(_BaseFeature):
 
 class Addrs(_BaseFeature):
     command_arg_key = "--lightpushnode"
-    volume_name = "enr-data"
+    volume_name = "address-data"
     init_container_type = "address"
     env_vars = "addrs"
     source_file = "/etc/addrs/addrs.env"

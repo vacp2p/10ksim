@@ -1,9 +1,12 @@
 # Python Imports
 import ast
 import base64
+import json
 import logging
-from typing import List, Self
+from pathlib import Path
+from typing import List, Optional, Self
 
+import pandas as pd
 import seaborn as sns
 from pydantic import NonNegativeInt
 
@@ -31,6 +34,16 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         return self._with_parameterized_check(
             self.check_store_messages,
             on_fail=on_fail,
+        )
+
+    def with_store_archive_check(
+        self, folder: Path, *, received_csv: Optional[Path] = None, on_fail: OnFail = "continue"
+    ) -> Self:
+        return self._with_parameterized_check(
+            self.check_store_archives,
+            on_fail=on_fail,
+            folder=folder,
+            received_csv=received_csv,
         )
 
     def with_reliability_check(
@@ -93,6 +106,41 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         )
         if result.is_ok():
             logger.info(f"Messages from store saved in {result.ok_value}")
+
+    def check_store_archives(self, folder: Path, received_csv: Optional[Path] = None):
+        """
+        Compare each store node's archive against the messages relay delivered.
+
+        Reads the per-node dumps written by the experiment, so a store node that archived
+        nothing shows up instead of being hidden by the others. Has to run after
+        analyze_reliability, which writes the delivery summary it compares against.
+        """
+        received_csv = received_csv or self._dump_analysis_path / "summary" / "received.csv"
+        if not Path(received_csv).exists():
+            logger.error(f"No delivery summary to compare against. path: `{received_csv}`")
+            return
+
+        expected = set(pd.read_csv(received_csv)[self.msg_hash_key].unique())
+        archives = sorted(Path(folder).glob("store-*.json"))
+        if not archives:
+            logger.error(f"No store archive dumps found. folder: `{folder}`")
+            return
+
+        complete = 0
+        for archive in archives:
+            with open(archive) as archive_file:
+                hashes = {"0x" + base64.b64decode(msg).hex() for msg in json.load(archive_file)}
+            missing = expected - hashes
+            unexpected = hashes - expected
+            if not missing and not unexpected:
+                complete += 1
+                logger.info(f"`{archive.stem}` holds all {len(expected)} messages")
+            else:
+                logger.error(
+                    f"`{archive.stem}` holds {len(hashes)} of {len(expected)} messages. "
+                    f"missing: `{len(missing)}` unexpected: `{len(unexpected)}`"
+                )
+        logger.info(f"Store nodes with a complete archive: {complete} of {len(archives)}")
 
     def check_filter_messages(self):
         """

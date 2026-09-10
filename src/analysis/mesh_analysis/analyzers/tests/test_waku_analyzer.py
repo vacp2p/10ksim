@@ -1,15 +1,8 @@
-import base64
 import json
 
 import pandas as pd
 
 from src.analysis.mesh_analysis.analyzers.waku.waku_analyzer import WakuAnalyzer
-
-
-def _hash_pair(suffix: str):
-    """A message hash in the two shapes: log form and store REST form."""
-    raw = bytes.fromhex(suffix)
-    return "0x" + raw.hex(), base64.b64encode(raw).decode("ascii")
 
 
 def _write_archive(folder, name, encoded_hashes):
@@ -23,15 +16,15 @@ def _write_received(path, log_hashes):
 
 
 def test_store_archive_check_reports_each_node(tmp_path, caplog):
-    first_log, first_store = _hash_pair("aa" * 32)
-    second_log, second_store = _hash_pair("bb" * 32)
+    first = "0x" + "aa" * 32
+    second = "0x" + "bb" * 32
     received = tmp_path / "summary" / "received.csv"
     # Duplicated because every receiving node logs the same message.
-    _write_received(received, [first_log, second_log, first_log])
+    _write_received(received, [first, second, first])
 
     archives = tmp_path / "store_messages"
-    _write_archive(archives, "store-0-0", [first_store, second_store])
-    _write_archive(archives, "store-0-1", [first_store])
+    _write_archive(archives, "store-0-0", [first, second])
+    _write_archive(archives, "store-0-1", [first])
 
     with caplog.at_level("INFO"):
         WakuAnalyzer().check_store_archives(archives, received_csv=received)

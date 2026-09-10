@@ -129,7 +129,8 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         complete = 0
         for archive in archives:
             with open(archive) as archive_file:
-                hashes = {"0x" + base64.b64decode(msg).hex() for msg in json.load(archive_file)}
+                # Store v3 already returns hashes in the 0x form the relay logs use.
+                hashes = {msg.lower() for msg in json.load(archive_file)}
             missing = expected - hashes
             unexpected = hashes - expected
             if not missing and not unexpected:

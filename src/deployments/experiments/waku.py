@@ -184,9 +184,10 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
         self.log_event("run_start")
 
         # Publisher
-        publisher = (
-            PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
+        publisher_builder = (
+            PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server")
         )
+        publisher = {"pod": publisher_builder.build(), **publisher_builder.build_dependencies()}
 
         if self.config.cmd_type == 1:
             cluster_id = 2
@@ -195,7 +196,7 @@ class WakuExperiment(BaseExperiment[ExpConfig]):
         else:
             raise ValueError()
 
-        await self.deploy(deployment=publisher, wait_for_ready=True)
+        await self.deploy(deployment=publisher, wait_for_ready=True, exist_ok=True)
 
         # Nodes
         deployments = build_nodes(self.namespace, self.config)

@@ -70,6 +70,7 @@ class ExpConfig(BaseModel):
     num_lightpush_clients: NonNegativeInt = 500
     num_messages: NonNegativeInt = 600
     msg_size_kbytes: NonNegativeInt = 1
+    content_topic: str = DEFAULT_CONTENT_TOPIC
     protocols: List[Protocol] = ["relay", "lightpush"]
     delay_cold_start: NonNegativeFloat = 300
     delay_after_publish: NonNegativeFloat = 1
@@ -160,6 +161,8 @@ def build_filter_clients(namespace: str, config: ExpConfig) -> V1Deployable:
         _base("fclient-0", namespace, config.num_filter_clients)
         .with_light_client(config.cmd_type, FILTER_CLIENT_APP, FILTER_CLIENT_SERVICE)
         .with_filter_addrs(1, f"{FILTER_SERVER_SERVICE}.{namespace}")
+        # Without this the client names a filter peer but never subscribes to anything.
+        .with_args({"--content-topic": config.content_topic}, on_duplicate="replace")
     )
     return _finish(builder, config)
 
@@ -224,6 +227,7 @@ async def publish(
     service: str,
     msg_size_kbytes: NonNegativeInt,
     cluster_id: int,
+    content_topic: str,
 ):
     target = Target(name="waku-node", name_template=pod_name, service=service, port=WAKU_REST_PORT)
     try:
@@ -231,6 +235,7 @@ async def publish(
             await waku_publish(
                 namespace=namespace,
                 target=target,
+                content_topic=content_topic,
                 msg_size_kbytes=msg_size_kbytes,
                 cluster_id=cluster_id,
             )
@@ -238,6 +243,7 @@ async def publish(
             await waku_lightpush_publish(
                 namespace=namespace,
                 target=target,
+                content_topic=content_topic,
                 msg_size_kbytes=msg_size_kbytes,
                 cluster_id=cluster_id,
             )
@@ -270,11 +276,13 @@ class FullLogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
     async def dump_store_messages(self, topic: str):
         """Read each store node's archive separately, so one empty node is visible."""
+        if self.dry_run:
+            return
         for index in range(0, self.config.num_store_nodes):
             pod_name = f"store-0-{index}"
             try:
                 hashes = await store_message_hashes(
-                    self.namespace, pod_name, DEFAULT_CONTENT_TOPIC, topic
+                    self.namespace, pod_name, self.config.content_topic, topic
                 )
             except Exception as e:
                 logger.error(f"Failed to read the archive of `{pod_name}`: {e}")
@@ -315,6 +323,7 @@ class FullLogosDeliveryExperiment(BaseExperiment[ExpConfig]):
                         service,
                         self.config.msg_size_kbytes,
                         cluster_id,
+                        self.config.content_topic,
                     )
                 )
             )

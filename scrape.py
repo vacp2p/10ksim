@@ -6,6 +6,7 @@ from typing import Iterable, Union
 
 from src.analysis.metrics.config import ScrapeConfig
 from src.analysis.metrics.libp2p import gossipsub_summary
+from src.analysis.metrics.libp2p.plotting import Nimlibp2pScrapePlotData
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
@@ -78,25 +79,30 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
         ]
     ]
 
-    muxers = ["yamux", "quic", "mplex"]
-    in_plot = (
-        PlotConfigBuilder(name="in")
+    muxers = ["mplex", "yamux", "quic"]
+    scrape_groups = Nimlibp2pScrapePlotData.groups_by_version(scrapes)
+    bandwidth_plot = (
+        PlotConfigBuilder(name="bandwidth")
         .with_metric("libp2p-in")
-        .with_folders(old_data_folders)
-        .with_include_files(muxers)
-        .with_data_from_scrapes(scrapes)
-        .build()
-    )
-    out_plot = (
-        PlotConfigBuilder(name="out")
         .with_metric("libp2p-out")
-        .with_folders(old_data_folders)
         .with_include_files(muxers)
-        .with_data_from_scrapes(scrapes)
+        .with_x_order(muxers)
+        .with_groups(scrape_groups)
         .build()
     )
 
-    MetricsPlotter(configs=[in_plot, out_plot]).create_plots()
+    memory_plot = (
+        PlotConfigBuilder(name="memory")
+        .with_metric("container-memory")
+        .with_include_files(muxers)
+        .with_x_order(muxers)
+        .with_groups(scrape_groups)
+        .build()
+    )
+    memory_plot.ylabel_name = "MBytes"
+    memory_plot.scale_x = 1_000_000
+
+    MetricsPlotter(configs=[bandwidth_plot, memory_plot]).create_plots()
 
 
 def default_kubeconfig_path() -> str:

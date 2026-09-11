@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from src.analysis.post_run_analysis import run_post_analysis
-from src.deployments.experiments.base_experiment import BaseExperiment
+from src.deployments.experiments.base_experiment import BaseExperiment, ExperimentFailed
 from src.deployments.registry import experiment
 from src.deployments.registry import registry as experiment_registry
 from src.deployments.utils.parser import ARG_NOT_SET
@@ -79,6 +79,7 @@ class Multiple(BaseExperiment[Config]):
             self.config.delay
         ), "Delay between experiments must be specified either in the subclass or the cli args (--delay)"
         completed_experiments = []
+        invalid: list[str] = []
         for params in param_list:
             this_time = datetime.now(dt_timezone.utc)
             logger.info(f"UTC time: {this_time.hour:02d}:{this_time.minute:02d}")
@@ -112,6 +113,13 @@ class Multiple(BaseExperiment[Config]):
             )
             try:
                 await experiment.run(run_post_analysis=False)
+            except ExperimentFailed as e:
+                # The run itself finished, so its data is worth analysing; only the result
+                # is not usable. Dropping it here would lose the analysis of the run that
+                # most needs looking at.
+                logger.error(f"Experiment result is not usable. {e}")
+                invalid.append(str(e))
+                completed_experiments.append(experiment)
             except Exception as e:
                 logger.error(f"Experiment failed. Exception: {e} {traceback.format_exc()}")
             else:
@@ -122,6 +130,9 @@ class Multiple(BaseExperiment[Config]):
 
         for experiment in completed_experiments:
             run_post_analysis(experiment)
+
+        if invalid:
+            self.fail_run(f"{len(invalid)} of the sweep's runs are not usable: {invalid}")
 
     @abstractmethod
     def get_params_list(self) -> List[dict]:

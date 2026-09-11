@@ -4,7 +4,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from dst_dashboard.api import admin, datasets, datasources, experiments, panels
+from dst_dashboard.api import admin, datasets, datasources, experiments, panels, vaclab
 from dst_dashboard.config.constants import Constants
 from dst_dashboard.config.utils import LoadConfig
 from dst_dashboard.storage.db import DSTDatabase
@@ -71,6 +71,7 @@ app.include_router(experiments.router)
 app.include_router(datasources.router)
 app.include_router(datasets.router)
 app.include_router(panels.router)
+app.include_router(vaclab.router)
 
 
 @app.get("/")

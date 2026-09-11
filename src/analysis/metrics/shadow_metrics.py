@@ -99,29 +99,69 @@ class EphemeralVictoriaMetrics:
 RECEIVED_METRIC = "libp2p_gossipsub_received_total"  # no topic label, assumes one topic
 
 
+def _received_total(snapshot: str) -> Optional[float]:
+    """Value of the received counter in one snapshot, or None if it is not there."""
+    for line in snapshot.splitlines():
+        if line.startswith(RECEIVED_METRIC):
+            return float(line.split()[-1])
+    return None
+
+
+def _snapshot_totals(per_peer: List[tuple]) -> List[float]:
+    """Received counter summed across peers, one entry per snapshot.
+
+    A peer's last value is carried forward past the end of its own snapshots, so a peer
+    that stops reporting early cannot make the total fall and read as traffic stopping.
+    """
+    width = max((len(s) for _, s in per_peer), default=0)
+    carried = [0.0] * len(per_peer)
+    totals = []
+    for index in range(width):
+        for peer_index, (_, snaps) in enumerate(per_peer):
+            if index < len(snaps):
+                value = _received_total(snaps[index])
+                if value is not None:
+                    carried[peer_index] = value
+        totals.append(sum(carried))
+    return totals
+
+
 def first_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:
     """Index of the snapshot where nodes first receive a message."""
-    for index in range(max((len(s) for _, s in per_peer), default=0)):
-        for _, snaps in per_peer:
-            if index >= len(snaps):
-                continue
-            for line in snaps[index].splitlines():
-                if line.startswith(RECEIVED_METRIC) and float(line.split()[-1]) > 0:
-                    return index
+    for index, total in enumerate(_snapshot_totals(per_peer)):
+        if total > 0:
+            return index
     return None
+
+
+def last_delivery_snapshot(per_peer: List[tuple]) -> Optional[int]:
+    """Index of the last snapshot where the received counter was still rising, which is
+    where publishing stopped. Shadow logs no `publisher_messages_finished` event, but the
+    counter going flat says the same thing."""
+    totals = _snapshot_totals(per_peer)
+    last = None
+    for index in range(1, len(totals)):
+        if totals[index] > totals[index - 1]:
+            last = index
+    return last
 
 
 def settled_window(info: dict) -> tuple:
     """Settled part of the run, or all of it when the run is too short to have one.
 
     Shifts come from the bridge's `stable` window so the two platforms cannot drift apart.
-    Shadow anchors the start on the first delivery instead of `start_messages`, and the end
-    on the last sample instead of `publisher_messages_finished`, because it logs neither.
+    Shadow logs neither `start_messages` nor `publisher_messages_finished`, so both ends
+    are anchored on the received counter instead: when it first rises, and when it stops
+    rising. Ending on the last sample of the run instead would run the window minutes past
+    the traffic, and gauges read over it would report the idle state: quic sheds its
+    connections once nothing is being published, so it read 27 rather than the 250 it
+    held under load.
     """
     first = info.get("first_delivery_epoch_s")
     if first is not None:
         start = first + STABLE_START_SHIFT.total_seconds()
-        end = info["last_epoch_s"] + STABLE_END_SHIFT.total_seconds()
+        traffic_end = info.get("last_delivery_epoch_s") or info["last_epoch_s"]
+        end = traffic_end + STABLE_END_SHIFT.total_seconds()
         if start < end:
             return start, end
     logger.warning("Run too short to have a settled window; scraping all of it")
@@ -182,12 +222,16 @@ def import_shadow_metrics(
 
     requests.get(f"{vm_url}/internal/force_flush", timeout=15)  # make the import queryable now
     first = first_delivery_snapshot(per_peer)
+    last_delivery = last_delivery_snapshot(per_peer)
     summary = {
         "peers": len(per_peer),
         "snapshots_posted": posted,
         "start_epoch_s": start_epoch_s,
         "last_epoch_s": last_epoch_s,
         "first_delivery_epoch_s": None if first is None else start_epoch_s + first * interval_s,
+        "last_delivery_epoch_s": (
+            None if last_delivery is None else start_epoch_s + last_delivery * interval_s
+        ),
     }
     logger.info(f"Imported Shadow metrics: {summary}")
     return summary

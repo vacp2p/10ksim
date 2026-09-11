@@ -3,8 +3,10 @@
 import logging
 from typing import ClassVar
 
+from kubernetes.client import V1StatefulSet
 from pydantic import Field, NonNegativeInt
 
+from src.deployments.experiments.libp2p.disturbance import check_shaping_applied
 from src.deployments.experiments.libp2p.nimlibp2p import ExpConfig, NimLibp2pExperiment
 from src.deployments.registry import experiment
 
@@ -23,3 +25,7 @@ class DegradedNetwork(NimLibp2pExperiment):
 
     config: DegradedConfig
     post_run_analysis: ClassVar[str] = "src.analysis.post_run.degraded:run_degraded_analysis"
+
+    async def _after_nodes(self, nodes: V1StatefulSet) -> None:
+        pods = check_shaping_applied(nodes.metadata.name, self.namespace, self.api_client)
+        self.log_event({"event": "degradation_applied", "pods": pods})

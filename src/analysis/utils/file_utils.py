@@ -37,7 +37,8 @@ def get_files_from_folder_path(
     files = [
         p.name
         for p in path.glob(extension)
-        if p.is_file() and (include_files is None or p.name in include_files)
+        if p.is_file()
+        and (include_files is None or p.name in include_files or p.stem in include_files)
     ]
     logger.debug(f"Found {len(files)} files in {path}")
     logger.debug(f"Files are: {files}")

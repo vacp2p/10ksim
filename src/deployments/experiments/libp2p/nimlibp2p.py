@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 import traceback
 from typing import ClassVar, Literal
 
@@ -9,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, NonNegative
 
 from src.deployments.core.builders import ServiceBuilder
 from src.deployments.core.configs.container import Image
+from src.deployments.core.k8s_rollout import resolved_images
+from src.deployments.core.pod_logs import capture_pod_logs
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.libp2p.bridge import Bridge
 from src.deployments.libp2p.builders.builders import Libp2pStatefulSetBuilder
@@ -49,6 +52,12 @@ class ExpConfig(BaseModel):
     network_loss_pct: float = Field(default=0, ge=0, le=100)  # percent; folded into the netem qdisc
     node_start_delay: NonNegativeInt = 60
     post_publish_dwell: NonNegativeInt = 90
+    max_failed_publishes: NonNegativeInt = 0
+    """Publishes that may fail before the run is treated as invalid."""
+    capture_pod_logs: bool = True
+    """Pull pod logs with the run, so the analysis does not depend on the log collector."""
+    log_capture_lead: NonNegativeInt = 45
+    """Seconds of the dwell reserved for the capture; 1000 pods take about 30s."""
     wait_nodes_ready: bool = True
 
     @model_validator(mode="after")
@@ -164,7 +173,8 @@ def build_bootstrap_nodes(namespace: str, params: ExpConfig) -> V1StatefulSet:
     )
 
 
-async def publish(config, namespace, random_name):
+async def publish(config, namespace, random_name) -> bool:
+    """Publish one message. Returns whether it reached the node."""
     try:
         target = Target(
             name="libp2p-node",
@@ -175,12 +185,14 @@ async def publish(config, namespace, random_name):
         await libp2p_dst_node_publish(
             namespace=namespace, target=target, msg_size_bytes=config.message_size_bytes
         )
+        return True
     except PodApiApplicationError as e:
         logger.error(f"PodApiApplicationError: {e} {traceback.format_exc()}")
     except PodApiError as e:
         logger.error(f"PodApiError: {e} {traceback.format_exc()}")
     except Exception as e:
         logger.error(f"Other exception: {e} {traceback.format_exc()}")
+    return False
 
 
 @experiment(name="nimlibp2p")
@@ -247,6 +259,16 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
 
         await asyncio.sleep(self.config.delay_cold_start)
 
+        # After the cold start, not the deploy: a scenario that does not wait for readiness
+        # has pods with no container status yet, which would record no digest at all.
+        self.log_event(
+            {
+                "event": "images_resolved",
+                "requested": f"{self.config.image.repo}:{self.config.image.tag}",
+                "resolved": resolved_images(name, namespace, self.api_client),
+            }
+        )
+
         logger.info(f"Starting publish loop for nodes in `{name}`")
 
         self.log_event("start_messages")
@@ -260,13 +282,47 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
             self.log_event({"event": "publish", "node": random_name, "index": msg_index})
             tasks.append(asyncio.create_task(publish(self.config, namespace, random_name)))
             await asyncio.sleep(self.config.delay_after_publish)
-        await asyncio.gather(*tasks)
+        published = await asyncio.gather(*tasks)
+        failed = published.count(False)
+        self.log_event({"event": "publish_summary", "attempted": len(published), "failed": failed})
 
         self.log_event("publisher_messages_finished")
 
         await mid_run
 
-        await asyncio.sleep(self.config.post_publish_dwell)
+        await self._dwell_and_capture()
         self.log_event("publisher_wait_finished")
 
+        if failed > self.config.max_failed_publishes:
+            self.fail_run(
+                f"{failed} of {len(published)} messages were never published, so delivery "
+                f"is measured against a denominator the run did not send"
+            )
+
         self.log_event("internal_run_finished")
+
+    async def _dwell_and_capture(self) -> None:
+        """Wait out the post-publish dwell, capturing pod logs before the pods go away.
+
+        The capture has to land inside the dwell, not after it: cleanup starts in the same
+        second the dwell ends and pulling a thousand logs takes longer than the pods last.
+        """
+        dwell = self.config.post_publish_dwell
+        if not self.config.capture_pod_logs or self.output_folder is None:
+            await asyncio.sleep(dwell)
+            return
+
+        started = time.monotonic()
+        # Let late deliveries land before reading the logs, but leave room to pull them.
+        await asyncio.sleep(max(dwell - self.config.log_capture_lead, 0))
+
+        self.log_event("log_capture_start")
+        captured = await asyncio.to_thread(
+            capture_pod_logs,
+            self.namespace,
+            self.output_folder / "kubectl_logs",
+            self.api_client,
+        )
+        self.log_event({"event": "log_capture_finished", "pods": captured})
+
+        await asyncio.sleep(max(dwell - (time.monotonic() - started), 0))

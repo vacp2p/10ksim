@@ -14,6 +14,15 @@ module.exports = {
                 'base-content-secondary': 'var(--content-secondary)',
                 'base-content-tertiary': 'var(--content-tertiary)',
             },
+            keyframes: {
+                'page-in': {
+                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                },
+            },
+            animation: {
+                'page-in': 'page-in 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
+            },
         },
     },
     plugins: [require('daisyui')],
@@ -41,6 +50,10 @@ module.exports = {
                     'warning-content': '#152521',
                     error: '#e40014',
                     'error-content': '#f5f5ef',
+                    '--rounded-box': '0.375rem',
+                    '--rounded-btn': '0.25rem',
+                    '--rounded-badge': '0.25rem',
+                    '--tab-radius': '0.25rem',
                 },
             },
             {
@@ -65,6 +78,10 @@ module.exports = {
                     'warning-content': '#152521',
                     error: '#fb2c36',
                     'error-content': '#152521',
+                    '--rounded-box': '0.375rem',
+                    '--rounded-btn': '0.25rem',
+                    '--rounded-badge': '0.25rem',
+                    '--tab-radius': '0.25rem',
                 },
             },
         ],

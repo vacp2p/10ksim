@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { flattenExperiments } from '../utils/experiments';
+import PageLoader from '../components/PageLoader';
+import Reveal from '../components/Reveal';
+import ExperimentCard from '../components/ExperimentCard';
 
 function ExperimentsPage() {
     const [familiesData, setFamiliesData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const navigate = useNavigate();
+    const [query, setQuery] = useState('');
 
     useEffect(() => {
         fetchFamilies();
@@ -26,7 +29,7 @@ function ExperimentsPage() {
     };
 
     if (loading) {
-        return <div className="text-center py-24 text-base-content-tertiary text-lg">Loading experiments...</div>;
+        return <PageLoader />;
     }
 
     if (error) {
@@ -37,132 +40,101 @@ function ExperimentsPage() {
         );
     }
 
-    const allExperiments = [];
-    familiesData?.families?.forEach((family) => {
-        family.experiments?.forEach((exp) => {
-            allExperiments.push({
-                ...exp,
-                family: family.name,
-            });
-        });
-    });
+    const allExperiments = flattenExperiments(familiesData);
 
-    const filteredExperiments = selectedCategory === 'all'
+    const categoryFiltered = selectedCategory === 'all'
         ? allExperiments
         : allExperiments.filter((exp) => exp.family === selectedCategory);
 
+    const normalizedQuery = query.trim().toLowerCase();
+    const filteredExperiments = normalizedQuery
+        ? categoryFiltered.filter((exp) => exp.title?.toLowerCase().includes(normalizedQuery))
+        : categoryFiltered;
+
     return (
         <div>
-            <section className="bg-base-200 border-b border-base-100 px-4 lg:px-8 py-12">
+            <section className="bg-base-200 border-b border-base-100 px-4 lg:px-8 py-14 md:py-20">
                 <span className="text-secondary font-mono text-sm uppercase tracking-widest border-b border-secondary/40 pb-1">
-                    Data
+                    Benchmarks
                 </span>
-                <h1 className="text-3xl md:text-4xl font-bold mt-4">Experiments</h1>
-                <p className="text-base-content-secondary text-lg font-light mt-2 max-w-2xl">
-                    Browse benchmark runs by category and drill into individual experiment results.
+                <h1 className="text-4xl md:text-5xl font-bold mt-5 tracking-tight">Experiments</h1>
+                <p className="text-base-content-secondary text-lg font-light mt-3 max-w-2xl">
+                    Browse experiments by category, or search for a specific run.
                 </p>
             </section>
 
-            {/* Categories */}
-            <section className="bg-base-200 py-10 px-4 lg:px-8 border-b border-base-100">
-                <div className="max-w-7xl mx-auto">
-                    <h2 className="font-mono text-xl uppercase tracking-widest mb-6">Categories</h2>
-                    <div className="flex flex-wrap gap-3">
+            {/* Filter bar: category pills + search, in one compact row */}
+            <section className="sticky top-16 z-20 bg-base-200/95 backdrop-blur border-b border-base-100 px-4 lg:px-8 py-4">
+                <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center gap-3">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by category">
                         <button
                             type="button"
                             onClick={() => setSelectedCategory('all')}
-                            className={`px-5 py-3 rounded-lg border text-center transition-colors ${selectedCategory === 'all'
-                                    ? 'border-primary bg-base-100 text-primary'
-                                    : 'border-base-100 bg-base-100/50 hover:border-secondary'
+                            className={`px-4 py-1.5 rounded text-sm font-medium border transition-colors ${selectedCategory === 'all'
+                                    ? 'bg-primary text-primary-content border-primary'
+                                    : 'border-base-300 text-base-content-secondary hover:border-secondary hover:text-primary'
                                 }`}
                         >
-                            <div className="font-medium text-sm">All Experiments</div>
-                            <div className="font-mono text-lg">{allExperiments.length}</div>
+                            All <span className="opacity-60">{allExperiments.length}</span>
                         </button>
                         {familiesData?.families?.map((family) => (
                             <button
                                 type="button"
                                 key={family.name}
                                 onClick={() => setSelectedCategory(family.name)}
-                                className={`px-5 py-3 rounded-lg border text-center transition-colors ${selectedCategory === family.name
-                                        ? 'border-primary bg-base-100 text-primary'
-                                        : 'border-base-100 bg-base-100/50 hover:border-secondary'
+                                className={`px-4 py-1.5 rounded text-sm font-medium border transition-colors ${selectedCategory === family.name
+                                        ? 'bg-primary text-primary-content border-primary'
+                                        : 'border-base-300 text-base-content-secondary hover:border-secondary hover:text-primary'
                                     }`}
                             >
-                                <div className="font-medium text-sm">{family.name}</div>
-                                <div className="font-mono text-lg">{family.experiments?.length || 0}</div>
+                                {family.name} <span className="opacity-60">{family.experiments?.length || 0}</span>
                             </button>
                         ))}
                     </div>
+                    <label className="flex items-center gap-2 bg-base-100 border border-base-300 rounded px-4 py-1.5 w-full lg:w-64 lg:ml-auto shrink-0 focus-within:border-secondary transition-colors">
+                        <i className="bi bi-search text-base-content-tertiary text-sm"></i>
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Search experiments"
+                            className="grow bg-transparent outline-none text-sm min-w-0"
+                            aria-label="Search experiments"
+                        />
+                        {query && (
+                            <button
+                                type="button"
+                                onClick={() => setQuery('')}
+                                aria-label="Clear search"
+                                className="text-base-content-tertiary hover:text-primary shrink-0"
+                            >
+                                <i className="bi bi-x-lg text-xs"></i>
+                            </button>
+                        )}
+                    </label>
                 </div>
             </section>
 
             {/* Experiments grid */}
             <section className="bg-base-300 py-12 px-4 lg:px-8">
                 <div className="max-w-7xl mx-auto">
-                    <h2 className="font-mono text-xl uppercase tracking-widest mb-6">
-                        {selectedCategory === 'all' ? 'All Experiments' : `${selectedCategory} Experiments`}
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredExperiments.map((experiment) => (
-                            <div
-                                key={experiment.id}
-                                onClick={() => navigate(`/experiment/${experiment.id}`)}
-                                className="card bg-base-200 border border-base-100 hover:border-secondary hover:-translate-y-1 transition-all cursor-pointer"
-                            >
-                                <div className="card-body p-6">
-                                    <div className="flex justify-between items-start gap-3">
-                                        <h3 className="font-semibold leading-snug">{experiment.title}</h3>
-                                        {experiment.date && (
-                                            <span className="text-base-content-tertiary text-xs whitespace-nowrap">
-                                                {new Date(experiment.date).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                })}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {experiment.description && (
-                                        <p className="text-base-content-secondary text-sm mt-2 line-clamp-2 font-light">
-                                            {experiment.description}
-                                        </p>
-                                    )}
-
-                                    <div className="flex flex-wrap gap-2 pt-4 mt-4 border-t border-base-100">
-                                        {experiment.github_repo && (
-                                            <a
-                                                href={experiment.github_repo}
-                                                onClick={(e) => e.stopPropagation()}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="badge badge-neutral gap-1"
-                                            >
-                                                <i className="bi bi-github"></i>
-                                                GitHub
-                                            </a>
-                                        )}
-                                        {experiment.github_pr && (
-                                            <a
-                                                href={experiment.github_pr}
-                                                onClick={(e) => e.stopPropagation()}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="badge badge-neutral gap-1"
-                                            >
-                                                PR
-                                            </a>
-                                        )}
-                                        {experiment.docker_image && (
-                                            <span className="badge badge-outline text-base-content-tertiary" title={experiment.docker_image}>
-                                                {experiment.docker_image.split(':').pop()}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                    <p className="text-base-content-tertiary text-sm mb-6">
+                        Showing {filteredExperiments.length} of {allExperiments.length} experiments
+                    </p>
+                    {filteredExperiments.length === 0 ? (
+                        <div className="text-center py-16 text-base-content-tertiary">
+                            <i className="bi bi-search text-3xl mb-3 block"></i>
+                            No experiments match your search.
+                        </div>
+                    ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                        {filteredExperiments.map((experiment, index) => (
+                            <Reveal key={experiment.id} delay={(index % 6) * 60} className="h-full">
+                                <ExperimentCard experiment={experiment} />
+                            </Reveal>
                         ))}
                     </div>
+                    )}
                 </div>
             </section>
         </div>

@@ -5,8 +5,6 @@ from typing import List, Optional, Self
 from pydantic import BaseModel, Field, PositiveInt, model_validator
 
 from src.analysis.data.data_file_handler import DataPath
-from src.analysis.metrics.config import MetricToScrape, ScrapeConfig
-from src.deployments.utils.flatten import flatten
 
 
 class DataGroup(BaseModel):
@@ -35,6 +33,9 @@ class PlotConfig(BaseModel):
     metrics: List[str] = Field(default_factory=list)
     """List of metrics to include in plots."""
 
+    include_files: Optional[List[str]] = None
+    """File names to include inside each metric folder."""
+
 
 class PlotConfigBuilder(BaseModel):
     name: str
@@ -45,52 +46,52 @@ class PlotConfigBuilder(BaseModel):
         self.config = PlotConfig(name=self.name)
         return self
 
-    def with_metric(self, metric: MetricToScrape | str) -> Self:
-        if isinstance(metric, MetricToScrape):
-            self.config.metrics.append(metric.name.strip("/"))
-        else:
-            self.config.metrics.append(metric.strip("/"))
+    def with_metric(self, metric: str) -> Self:
+        self.config.metrics.append(metric.strip("/"))
         return self
 
-    def with_group(self, name: str, inputs: list) -> Self:
+    def with_group(self, name: str, data_paths: List[DataPath] | DataPath) -> Self:
         """Each group corresponds to an entry in the plot legend.
         Each DataPath entry corresponds to a point along the x-axis"""
-        data_paths = []
-        for item in flatten(inputs):
-            if isinstance(item, ScrapeConfig):
-                path_name = item.dump_location.parent.name
-                data_paths.append(DataPath(name=path_name, path=item.dump_location))
-            elif isinstance(item, DataPath):
-                data_paths.append(item)
+        if isinstance(data_paths, DataPath):
+            data_paths = [data_paths]
         self.config.groups.append(DataGroup(name=name, data_paths=data_paths))
         return self
 
-    def with_folders(self, folders: List[str | Path] | str | Path) -> Self:
+    def with_groups(self, groups: List[DataGroup] | DataGroup) -> Self:
+        if isinstance(groups, DataGroup):
+            groups = [groups]
+        self.config.groups.extend(groups)
+        return self
+
+    def with_folders(
+        self, folders: List[str | Path] | str | Path, *, group_name: str = "folders"
+    ) -> Self:
         if isinstance(folders, str) or isinstance(folders, Path):
             folders = [folders]
 
-        # TODO [plotter config]: This hack will be removed.
-        def ensure_trailing_slash(folder: str | Path) -> str:
-            if isinstance(folder, Path):
-                folder = folder.as_posix()
-            if folder.endswith("/"):
-                return folder
-            else:
-                return f"{folder}/"
+        data_paths = [DataPath(name=Path(folder).name, path=Path(folder)) for folder in folders]
+        if data_paths:
+            self.config.groups.append(DataGroup(name=group_name, data_paths=data_paths))
 
-        folders = [ensure_trailing_slash(folder) for folder in folders]
-        self.config.folder.extend(folders)
         return self
 
-    def with_scrape_metrics(self, scrape_config: ScrapeConfig) -> Self:
-        for metric in scrape_config.metrics_to_scrape:
-            self.with_metric(metric)
+    def with_include_files(self, include_files: List[str] | str) -> Self:
+        if isinstance(include_files, str):
+            include_files = [include_files]
+        self.config.include_files = include_files
         return self
 
-    def with_data_from_scrapes(self, scrape_configs: List[ScrapeConfig] | ScrapeConfig) -> Self:
-        if isinstance(scrape_configs, ScrapeConfig):
-            scrape_configs = [scrape_configs]
-        self.with_folders([config.dump_location for config in scrape_configs])
+    def with_x_order(self, x_order: List[str] | str) -> Self:
+        if isinstance(x_order, str):
+            x_order = [x_order]
+        self.config.x_order = x_order
+        return self
+
+    def with_legend_order(self, legend_order: List[str] | str) -> Self:
+        if isinstance(legend_order, str):
+            legend_order = [legend_order]
+        self.config.legend_order = legend_order
         return self
 
     def build(self) -> PlotConfig:

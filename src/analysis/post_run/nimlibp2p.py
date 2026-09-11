@@ -29,19 +29,14 @@ def _require_bounded_query(stack: dict) -> None:
 
 
 def _log_derived_deliveries(reliability: dict) -> int:
-    """Deliveries the logs account for: everything expected, less what each node missed.
-
-    `messages` and `nodes` on a MissingMessages are independent marginals -- every message
-    somebody missed, and every node that missed something -- so multiplying them counts
-    deliveries that were never absent.
-    """
-    expected = reliability["expected_num_peers"] * reliability["expected_num_messages"]
+    """(node, message) pairs present in the collected logs."""
+    observed = reliability["num_peers"] * reliability["num_unique_messages"]
     missing = sum(
         node.get("missing") or 0
         for entry in reliability.get("missing_messages", [])
         for node in entry.get("nodes", [])
     )
-    return expected - missing
+    return observed - missing
 
 
 def _cross_check_delivery(results, stack: dict, dump_dir: Path) -> None:

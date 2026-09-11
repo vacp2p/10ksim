@@ -42,3 +42,29 @@ def test_store_archive_check_without_dumps(tmp_path, caplog):
         WakuAnalyzer().check_store_archives(tmp_path / "store_messages", received_csv=received)
 
     assert "No store archive dumps found" in caplog.text
+
+
+def test_store_archive_check_returns_result_status(tmp_path):
+    first = "0x" + "aa" * 32
+    received = tmp_path / "summary" / "received.csv"
+    _write_received(received, [first])
+    archives = tmp_path / "store_messages"
+    _write_archive(archives, "store-0-0", [first])
+
+    result = WakuAnalyzer().check_store_archives(archives, received_csv=received)
+
+    assert result.status == "passed"
+    assert result.intermediates["complete_nodes"] == 1
+    assert result.intermediates["nodes"]["store-0-0"]["missing"] == 0
+
+
+def test_store_archive_check_skips_on_empty_summary(tmp_path):
+    received = tmp_path / "summary" / "received.csv"
+    _write_received(received, [])
+    archives = tmp_path / "store_messages"
+    _write_archive(archives, "store-0-0", ["0x" + "aa" * 32])
+
+    result = WakuAnalyzer().check_store_archives(archives, received_csv=received)
+
+    assert result.status == "skipped"
+    assert "holds no messages" in result.intermediates["failed"]

@@ -11,7 +11,7 @@ import seaborn as sns
 from pydantic import NonNegativeInt
 
 # Project Imports
-from src.analysis.mesh_analysis.analyzers.analyzer import OnFail
+from src.analysis.mesh_analysis.analyzers.analyzer import AnalysisResult, OnFail
 from src.analysis.mesh_analysis.analyzers.nimlibp2p_analyzer import Nimlibp2pAnalyzer
 from src.analysis.mesh_analysis.readers.tracers.message_tracer import MessageTracer
 from src.analysis.mesh_analysis.readers.tracers.waku_tracer import WakuTracer
@@ -107,7 +107,9 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         if result.is_ok():
             logger.info(f"Messages from store saved in {result.ok_value}")
 
-    def check_store_archives(self, folder: Path, received_csv: Optional[Path] = None):
+    def check_store_archives(
+        self, folder: Path, received_csv: Optional[Path] = None
+    ) -> AnalysisResult:
         """
         Compare each store node's archive against the messages relay delivered.
 
@@ -115,33 +117,62 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
         nothing shows up instead of being hidden by the others. Has to run after
         analyze_reliability, which writes the delivery summary it compares against.
         """
-        received_csv = received_csv or self._dump_analysis_path / "summary" / "received.csv"
-        if not Path(received_csv).exists():
-            logger.error(f"No delivery summary to compare against. path: `{received_csv}`")
-            return
+        received_csv = Path(received_csv or self._dump_analysis_path / "summary" / "received.csv")
+        archives = sorted(Path(folder).glob("store-*.json"))
+        intermediates = {"folder": str(folder), "received_csv": str(received_csv)}
+
+        def skipped(reason: str) -> AnalysisResult:
+            logger.error(reason)
+            return AnalysisResult(
+                name="store_archives",
+                intermediates={**intermediates, "failed": reason},
+                status="skipped",
+            )
+
+        if not archives:
+            return skipped(f"No store archive dumps found. folder: `{folder}`")
+        if not received_csv.exists():
+            return skipped(f"No delivery summary to compare against. path: `{received_csv}`")
 
         expected = set(pd.read_csv(received_csv)[self.msg_hash_key].unique())
-        archives = sorted(Path(folder).glob("store-*.json"))
-        if not archives:
-            logger.error(f"No store archive dumps found. folder: `{folder}`")
-            return
+        if not expected:
+            return skipped(f"Delivery summary holds no messages. path: `{received_csv}`")
 
-        complete = 0
+        nodes = {}
         for archive in archives:
             with open(archive) as archive_file:
                 # Store v3 already returns hashes in the 0x form the relay logs use.
                 hashes = {msg.lower() for msg in json.load(archive_file)}
             missing = expected - hashes
             unexpected = hashes - expected
+            nodes[archive.stem] = {
+                "held": len(hashes),
+                "missing": len(missing),
+                "unexpected": len(unexpected),
+            }
             if not missing and not unexpected:
-                complete += 1
                 logger.info(f"`{archive.stem}` holds all {len(expected)} messages")
             else:
                 logger.error(
                     f"`{archive.stem}` holds {len(hashes)} of {len(expected)} messages. "
                     f"missing: `{len(missing)}` unexpected: `{len(unexpected)}`"
                 )
+
+        complete = sum(
+            1 for node in nodes.values() if not node["missing"] and not node["unexpected"]
+        )
         logger.info(f"Store nodes with a complete archive: {complete} of {len(archives)}")
+        return AnalysisResult(
+            name="store_archives",
+            intermediates={
+                **intermediates,
+                "expected_num_messages": len(expected),
+                "complete_nodes": complete,
+                "num_store_nodes": len(archives),
+                "nodes": nodes,
+            },
+            status="passed" if complete == len(archives) else "failed",
+        )
 
     def check_filter_messages(self):
         """

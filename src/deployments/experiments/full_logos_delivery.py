@@ -36,6 +36,7 @@ Protocol = Literal["relay", "lightpush"]
 
 WAKU_REST_PORT = 8645
 STORE_PAGE_SIZE = 100
+FILTER_SUBSCRIBE_BATCH = 50
 
 BOOTSTRAP_SERVICE = "zerotesting-bootstrap"
 FILTER_SERVER_SERVICE = "zerotesting-service"
@@ -220,6 +221,29 @@ async def store_message_hashes(
             return hashes
 
 
+async def filter_subscribe(namespace: str, pod_name: str, content_topic: str, topic: str):
+    """Ask one edge node to subscribe. --filternode only names the peer to ask."""
+    body = json.dumps(
+        {"requestId": pod_name, "contentFilters": [content_topic], "pubsubTopic": topic}
+    )
+    url = f"http://127.0.0.1:{WAKU_REST_PORT}/filter/v2/subscriptions"
+    command = exec_command_in_pod(
+        namespace,
+        pod_name,
+        [
+            "/bin/sh",
+            "-c",
+            f"curl -s -X POST {url} -H 'Content-Type: application/json' -d '{body}'",
+        ],
+        container=WAKU_CONTAINER_NAME,
+    )
+    await command.collect_output_async()
+    if not command.ok:
+        raise RuntimeError(f"Subscribe failed on `{pod_name}`: `{command.output}`")
+    if json.loads(command.output).get("statusDesc") != "OK":
+        raise RuntimeError(f"Subscribe rejected on `{pod_name}`: `{command.output}`")
+
+
 async def publish(
     protocol: Protocol,
     namespace: str,
@@ -290,6 +314,28 @@ class FullLogosDeliveryExperiment(BaseExperiment[ExpConfig]):
             self.dump(json.dumps(hashes), Path("store_messages") / f"{pod_name}.json")
             self.log_event({"event": "store_archive", "node": pod_name, "messages": len(hashes)})
 
+    async def subscribe_filter_clients(self, topic: str):
+        """Subscribe every filter client, in batches so the API server keeps up."""
+        pods = [f"fclient-0-{index}" for index in range(0, self.config.num_filter_clients)]
+        subscribed = 0
+        for start in range(0, len(pods), FILTER_SUBSCRIBE_BATCH):
+            batch = pods[start : start + FILTER_SUBSCRIBE_BATCH]
+            results = await asyncio.gather(
+                *(
+                    filter_subscribe(self.namespace, pod, self.config.content_topic, topic)
+                    for pod in batch
+                ),
+                return_exceptions=True,
+            )
+            for pod, result in zip(batch, results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to subscribe `{pod}`: {result}")
+                else:
+                    subscribed += 1
+        self.log_event(
+            {"event": "filter_subscribed", "subscribed": subscribed, "clients": len(pods)}
+        )
+
     def _publish_target(self, protocol: Protocol) -> tuple:
         """Relay goes straight into the mesh; lightpush goes through an edge node."""
         if protocol == "relay":
@@ -357,6 +403,8 @@ class FullLogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
         await asyncio.sleep(self.config.delay_cold_start)
         self.log_event("nodes_settled")
+
+        await self.subscribe_filter_clients(pubsub_topic(cluster_id))
 
         await self._publish_loop(cluster_id)
 

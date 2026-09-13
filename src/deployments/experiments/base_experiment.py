@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, ClassVar, Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 from kubernetes.client import (
     ApiClient,
@@ -20,6 +20,7 @@ from kubernetes.client import (
     V1DaemonSet,
     V1Deployment,
     V1Job,
+    V1NetworkPolicy,
     V1Pod,
     V1PodTemplateSpec,
     V1Role,
@@ -32,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from ruamel import yaml
 
 # Project Imports
+from src.analysis.post_run_analysis import run_post_analysis
 from src.analysis.utils.log_utils import log_to_path
 from src.deployments.core.base_bridge import BaseBridge
 from src.deployments.core.k8s_cleanup import (
@@ -49,8 +51,6 @@ from src.utils.cli_utils import flag_exists
 from src.utils.yaml_utils import get_YAML
 
 V1Deployable = Union[
-    V1Role,
-    V1RoleBinding,
     V1PodTemplateSpec,
     V1Pod,
     V1Deployment,
@@ -59,15 +59,26 @@ V1Deployable = Union[
     V1DaemonSet,
     V1Job,
     V1CronJob,
+    V1Role,
+    V1RoleBinding,
     V1ConfigMap,
     V1ServiceAccount,
+    V1NetworkPolicy,
 ]
 
 
 logger = logging.getLogger(__name__)
 
 
+class ExperimentFailed(Exception):
+    """The run completed but its result is not usable."""
+
+
 TCfg = TypeVar("TCfg", bound=BaseModel)
+
+
+def dispatch_post_analysis(experiment: "BaseExperiment") -> Any:
+    return run_post_analysis(experiment)
 
 
 def kind_of(dep):
@@ -83,6 +94,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    post_run_analysis: ClassVar[Optional[str]] = None
 
     _type: str = PrivateAttr()
 
@@ -111,6 +123,9 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
     _workdir: Optional[Path] = None
     """Path to deployment output folder. Based off of self.output_folder"""
     _stack: Optional[ExitStack]
+
+    _failures: List[str] = PrivateAttr(default_factory=list)
+    """Reasons the run is invalid, raised once it has finished. See `fail_run`."""
 
     @model_validator(mode="after")
     def set_type(self):
@@ -332,7 +347,7 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
         for path in [self.out_log_path, self.events_log_path, self.metadata_log_path]:
             path.parent.mkdir(parents=True, exist_ok=True)
 
-    async def run(self):
+    async def run(self, *, run_post_analysis: bool = True):
         self._deployed.clear()
         self._setup_log_paths()
         self._dump_initial_metadata()
@@ -347,6 +362,22 @@ class BaseExperiment(ABC, BaseModel, Generic[TCfg]):
 
         self.log_event("run_finished")
         self._dump_metadata()
+        if run_post_analysis:
+            dispatch_post_analysis(self)
+
+        if self._failures:
+            raise ExperimentFailed(f"`{self._type}`: " + "; ".join(self._failures))
+
+    def fail_run(self, reason: str) -> None:
+        """Mark the run invalid without cutting it short.
+
+        Raising from `_run` would skip metadata and post-run analysis while cleanup still
+        deletes the pods, so the data is lost as well as the result. Recording the reason
+        lets the run finish and collect its data, then exit non-zero.
+        """
+        logger.error(reason)
+        self.log_event({"event": "run_invalid", "reason": reason})
+        self._failures.append(reason)
 
     @abstractmethod
     async def _run(self):

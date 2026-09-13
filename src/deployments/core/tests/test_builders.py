@@ -28,6 +28,7 @@ from src.deployments.core.builders import (
     default_readiness_probe_health,
 )
 from src.deployments.core.configs.container import ContainerConfig, Image
+from src.deployments.core.configs.helpers.utils import init_container_delay
 from src.deployments.core.dependency_decorator import depends_on
 
 # --------------------------------------------------------------------------- #
@@ -116,6 +117,11 @@ def _create_pod_template_spec_with_default_values() -> V1PodTemplateSpec:
     )
 
 
+def _required_node_affinity_expression(pod_spec: V1PodSpec):
+    selector = pod_spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+    return selector.node_selector_terms[0].match_expressions[0]
+
+
 # --------------------------------------------------------------------------- #
 # StatefulSetBuilder Tests
 # --------------------------------------------------------------------------- #
@@ -162,6 +168,34 @@ class TestStatefulSetBuilder:
             "team": "dst",
         }
 
+    def test_with_avoided_machines_sets_not_in_node_affinity(self):
+        """Should prevent pods from scheduling on listed machines."""
+        builder = StatefulSetBuilder()
+        builder.config.namespace = "default"
+
+        result = builder.with_avoided_machines(["node-05", "node-06"])
+        stateful_set = builder.build()
+        expression = _required_node_affinity_expression(stateful_set.spec.template.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "NotIn"
+        assert expression.values == ["node-05", "node-06"]
+
+    def test_with_allowed_machines_sets_in_node_affinity(self):
+        """Should restrict pods to listed machines."""
+        builder = StatefulSetBuilder()
+        builder.config.namespace = "default"
+
+        result = builder.with_allowed_machines("node-01")
+        stateful_set = builder.build()
+        expression = _required_node_affinity_expression(stateful_set.spec.template.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "In"
+        assert expression.values == ["node-01"]
+
     @pytest.mark.parametrize("overwrite", [False, True])
     def test_with_image_in_container_calls_helper_with_correct_params(self, mocker, overwrite):
         """Should call with_image_for_container helper with correct arguments."""
@@ -198,8 +232,8 @@ class TestStatefulSetBuilder:
             return_value=delay_container,
         )
 
-        builder.with_network_delay("100ms", "10ms")
-        mock_init_delay.assert_called_once_with("100ms", "10ms")
+        builder.with_network_delay(100, 10)
+        mock_init_delay.assert_called_once_with(100, 10, None, None)
 
     def test_with_network_delay_adds_init_container_to_pod_spec(self, mocker):
         """Should add init container to pod spec with correct delay and jitter values."""
@@ -232,8 +266,8 @@ class TestStatefulSetBuilder:
             return_value=delay_container,
         )
 
-        builder.with_network_delay("100ms", "10ms")
-        mock_init_delay.assert_called_once_with("100ms", "10ms")
+        builder.with_network_delay(100, 10)
+        mock_init_delay.assert_called_once_with(100, 10, None, None)
         init_containers = (
             builder.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.init_containers
         )
@@ -252,8 +286,17 @@ class TestStatefulSetBuilder:
         mocker.patch(
             "src.deployments.core.builders.init_container_delay", return_value=delay_container
         )
-        result = builder.with_network_delay("100ms", "10ms")
+        result = builder.with_network_delay(100, 10)
         assert isinstance(result, StatefulSetBuilder)
+
+    def test_init_container_delay_folds_rate_into_netem(self):
+        """delay + a bandwidth cap share one netem qdisc (a separate tbf root would collide)."""
+        assert init_container_delay(50, 0, 50).command == [
+            "tc qdisc add dev eth0 root netem delay 50ms rate 50mbit"
+        ]
+        assert init_container_delay(100, 10).command == [
+            "tc qdisc add dev eth0 root netem delay 100ms 10ms distribution normal"
+        ]
 
     def test_with_bandwidth_limit_calls_helper(self, mocker):
         """Should call init_container_bandwidth_limit."""
@@ -346,7 +389,7 @@ class TestStatefulSetBuilder:
             return_value=bandwidth_container,
         )
 
-        builder.with_network_delay("100ms", "10ms").with_bandwidth_limit(
+        builder.with_network_delay(100, 10).with_bandwidth_limit(
             ingress_rate="1mbit", egress_rate="500kbit"
         )
         init_containers = (
@@ -450,6 +493,19 @@ class TestPodBuilder:
         result = builder.build()
         mock_build_pod.assert_called_once_with(builder.config)
         assert isinstance(result, V1Pod)
+
+    def test_with_allowed_machines_sets_in_node_affinity(self):
+        """Should restrict a pod to listed machines."""
+        builder = PodBuilder()
+
+        result = builder.with_allowed_machines(["node-01", "node-02"])
+        pod = builder.build()
+        expression = _required_node_affinity_expression(pod.spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "In"
+        assert expression.values == ["node-01", "node-02"]
 
     def test_dependency_reconciles_on_field_change(self, mocker):
         class ChildBuilder(PodBuilder):
@@ -793,6 +849,19 @@ class TestPodSpecBuilder:
 
         assert isinstance(result, PodSpecBuilder)
         assert builder.config.service_account_name == "default"
+
+    def test_with_avoided_machines_sets_not_in_node_affinity(self):
+        """Should prevent pods from scheduling on listed machines."""
+        builder = PodSpecBuilder()
+
+        result = builder.with_avoided_machines("node-05")
+        pod_spec = builder.build()
+        expression = _required_node_affinity_expression(pod_spec)
+
+        assert result is builder
+        assert expression.key == "kubernetes.io/hostname"
+        assert expression.operator == "NotIn"
+        assert expression.values == ["node-05"]
 
 
 # --------------------------------------------------------------------------- #

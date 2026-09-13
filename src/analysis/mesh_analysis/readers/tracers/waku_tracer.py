@@ -27,7 +27,7 @@ class WakuTracer(MessageTracer):
                 "received",
                 trace_pairs=[
                     TracePair(
-                        regex=r"received relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?from_peer_id=([\w*]+).*?receivedTime=(\d+)",
+                        regex=r"received relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?from_peer_id[\s\":=]+([\w*]+).*?receivedTime[\s\":=]+(\d+)",
                         convert=self._trace_received_in_logs,
                     ),
                     TracePair(
@@ -56,7 +56,7 @@ class WakuTracer(MessageTracer):
             name="sent",
             trace_pairs=[
                 TracePair(
-                    regex=r"sent relay message.*?my_peer_id=([\w*]+).*?msg_hash=(0x[\da-f]+).*?to_peer_id=([\w*]+).*?sentTime=(\d+)",
+                    regex=r"sent relay message.*?my_peer_id[\s\":=]+([\w*]+).*?msg_hash[\s\":=]+(0x[\da-f]+).*?to_peer_id[\s\":=]+([\w*]+).*?sentTime[\s\":=]+(\d+)",
                     convert=self._trace_sent_in_logs,
                 ),
                 TracePair(

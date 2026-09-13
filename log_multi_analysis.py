@@ -130,6 +130,7 @@ def get_analyzer_for_dev_testing(metadata) -> Analyzer:
     data_puller = DataPuller().with_kwargs(stack)
     stateful_sets = stack["stateful_sets"]
     nodes_per_statefulset = stack["nodes_per_statefulset"]
+    out_folder = metadata["experiment"]["dump"]["output_folder"]
 
     # TODO: We search for all StatefulSets in our exp["stack"],
     # but the bootstrap nodes are relay=False, so they are filtered here.
@@ -146,10 +147,10 @@ def get_analyzer_for_dev_testing(metadata) -> Analyzer:
         .with_reliability_check(
             stateful_sets=[ss[0] for ss in reliability],
             nodes_per_ss=[ss[1] for ss in reliability],
-            expected_num_peers=params["num_nodes"],
+            expected_num_peers=params["num_relay_nodes"],
             expected_num_messages=params["num_messages"],
         )
-        .with_dump_analysis_dir(f"local_data/simulations_data/{metadata['stack']['name']}/")
+        .with_dump_analysis_dir(f"{out_folder}/analysis/")
     )
 
 
@@ -211,7 +212,8 @@ async def main():
     summary = defaultdict(int)
 
     all_results = []
-    for exp in get_experiments():
+    exp_class = "WakuExperiment"
+    for exp in get_experiments(experiment_class=exp_class):
         try:
             results = await process_experiment(exp)
             all_results.append(results)

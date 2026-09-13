@@ -35,7 +35,9 @@ class Scrapper(BaseModel):
                 case Ok(data):
                     logger.debug(f"Successfully extracted {metric_config.name} data from response")
                     file_location = (
-                        self._config.dump_location / metric_config.folder_name / self._config.name
+                        self._config.dump_location
+                        / metric_config.folder_name
+                        / f"{self._config.name}.csv"
                     ).as_posix()
                     self._dump_data(
                         metric_config.name,

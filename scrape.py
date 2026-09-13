@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Iterable, Union
 
 from src.analysis.metrics.config import ScrapeConfig
+from src.analysis.metrics.libp2p import gossipsub_summary
+from src.analysis.metrics.libp2p.plotting import Nimlibp2pScrapePlotData
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
 from src.analysis.metrics.scrapper import Scrapper
 from src.analysis.plotting.config import PlotConfigBuilder
@@ -50,11 +52,19 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
             .with_exp(exp, extract_name=True)
             .with_dump_location(dump_fmt.format(i=i))
             .with_libp2p_metrics()
+            .with_gossipsub_detail_metrics()
             .build()
         )
         scrapes.append(config)
         scrapper = Scrapper(k8s_config, config)
         scrapper.query_and_dump_metrics()
+
+        # Gossipsub control/efficiency detail (IHAVE/IWANT/GRAFT/PRUNE, duplicate ratio),
+        # the same set the Shadow runs report. Cluster counts are noisier run-to-run than
+        # Shadow's, so use them for single-run inspection, not cross-version comparison.
+        gs = gossipsub_summary.summarize(Path(config.dump_location), config.name)
+        if gs:
+            logger.info(f"Gossipsub detail (per-node median) for {config.name}: {gs}")
 
     # Data from previous reports.
     base = Path(__file__).parent / "nimlibp2pdata"
@@ -69,25 +79,30 @@ def nimlibp2p_regression_scrape_and_plots(k8s_config: str):
         ]
     ]
 
-    muxers = ["yamux", "quic", "mplex"]
-    in_plot = (
-        PlotConfigBuilder(name="in")
+    muxers = ["mplex", "yamux", "quic"]
+    scrape_groups = Nimlibp2pScrapePlotData.groups_by_version(scrapes)
+    bandwidth_plot = (
+        PlotConfigBuilder(name="bandwidth")
         .with_metric("libp2p-in")
-        .with_folders(old_data_folders)
-        .with_include_files(muxers)
-        .with_data_from_scrapes(scrapes)
-        .build()
-    )
-    out_plot = (
-        PlotConfigBuilder(name="out")
         .with_metric("libp2p-out")
-        .with_folders(old_data_folders)
         .with_include_files(muxers)
-        .with_data_from_scrapes(scrapes)
+        .with_x_order(muxers)
+        .with_groups(scrape_groups)
         .build()
     )
 
-    MetricsPlotter(configs=[in_plot, out_plot]).create_plots()
+    memory_plot = (
+        PlotConfigBuilder(name="memory")
+        .with_metric("container-memory")
+        .with_include_files(muxers)
+        .with_x_order(muxers)
+        .with_groups(scrape_groups)
+        .build()
+    )
+    memory_plot.ylabel_name = "MBytes"
+    memory_plot.scale_x = 1_000_000
+
+    MetricsPlotter(configs=[bandwidth_plot, memory_plot]).create_plots()
 
 
 def default_kubeconfig_path() -> str:

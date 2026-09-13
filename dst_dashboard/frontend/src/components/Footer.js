@@ -7,8 +7,8 @@ const FOOTER_COLUMNS = [
         title: 'Explore',
         links: [
             { label: 'Experiments', to: '/experiments' },
-            { label: 'Topology', to: '/vaclab/topology' },
-            { label: 'Networks', to: '/vaclab/networks' },
+            { label: 'Network', to: '/vaclab/network' },
+            { label: 'Resources', to: '/vaclab/resources' },
         ],
     },
     {

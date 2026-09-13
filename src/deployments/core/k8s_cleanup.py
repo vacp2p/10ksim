@@ -33,6 +33,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
         "Role": [],
         "RoleBinding": [],
         "ServiceAccount": [],
+        "NetworkPolicy": [],
     }
     types = (
         types
@@ -50,6 +51,7 @@ def get_cleanup_resources(yamls: List[yaml.YAMLObject], types: Optional[List[str
             "ConfigMap",
             "ServiceAccount",
             "PersistentVolumeClaim",
+            "NetworkPolicy",
         ]
     )
     for yaml in yamls:
@@ -72,6 +74,14 @@ def delete_pod(name, namespace, *, grace_period=0):
     )
 
 
+def delete_network_policy(
+    name: str, namespace: str, api_client: Optional[ApiClient] = None
+) -> None:
+    client.NetworkingV1Api(api_client or client.ApiClient()).delete_namespaced_network_policy(
+        name=name, namespace=namespace, body=client.V1DeleteOptions()
+    )
+
+
 def cleanup_resources(
     resources: dict,
     namespace: str,
@@ -83,6 +93,7 @@ def cleanup_resources(
     """
     logger.info(f"Cleanup resources: `{resources}`")
     deletion_order = [
+        "NetworkPolicy",
         "Deployment",
         "StatefulSet",
         "DaemonSet",
@@ -142,6 +153,9 @@ def cleanup_resources(
         "RoleBinding": lambda name: client.RbacAuthorizationV1Api(
             api_client
         ).delete_namespaced_role_binding(name, namespace, body=client.V1DeleteOptions()),
+        "NetworkPolicy": lambda name: client.NetworkingV1Api(
+            api_client
+        ).delete_namespaced_network_policy(name, namespace, body=client.V1DeleteOptions()),
     }
 
     for kind in deletion_order:

@@ -52,10 +52,11 @@ def get_scenarios(funcs: List[Callable]) -> List[pytest.ParamSpec]:
     scenarios = []
     scenarios.append(pytest.param(funcs, id="base_order"))
     scenarios.append(pytest.param(list(reversed(funcs)), id="reversed_order"))
+    rng = random.Random()
     for seed in [7, 41, 227]:
         shuffled_case = funcs.copy()
-        random.seed(seed)
-        random.shuffle(shuffled_case)
+        rng.seed(seed)
+        rng.shuffle(shuffled_case)
         scenarios.append(pytest.param(shuffled_case, id=f"shuffled_seed_{seed}"))
     return scenarios
 

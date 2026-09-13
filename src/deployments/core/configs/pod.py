@@ -3,7 +3,12 @@ from copy import deepcopy
 from typing import Dict, List, Literal, Optional, TypeVar
 
 from kubernetes.client import (
+    V1Affinity,
     V1Container,
+    V1NodeAffinity,
+    V1NodeSelector,
+    V1NodeSelectorRequirement,
+    V1NodeSelectorTerm,
     V1ObjectMeta,
     V1Pod,
     V1PodDNSConfig,
@@ -29,6 +34,7 @@ class PodSpecConfig(BaseModel):
     service_account_name: Optional[str] = None
     security_context: Optional[V1PodSecurityContext] = None
     automount_service_account_token: Optional[bool] = None
+    affinity: Optional[V1Affinity] = None
 
     def with_dns_search(self, dns_search: str, *, overwrite: bool = False):
         if self.dns_config is None:
@@ -133,6 +139,45 @@ class PodSpecConfig(BaseModel):
             )
         self.security_context = context
 
+    def with_required_node_affinity(
+        self,
+        key: str,
+        operator: Literal["In", "NotIn"],
+        values: List[str],
+        *,
+        overwrite: bool = False,
+    ):
+        if not values:
+            raise ValueError("Node affinity values must not be empty.")
+
+        if self.affinity is None:
+            self.affinity = V1Affinity()
+        if self.affinity.node_affinity is None:
+            self.affinity.node_affinity = V1NodeAffinity()
+
+        existing = self.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+        if existing is not None and not overwrite:
+            raise ValueError(
+                f"required node affinity already exists in {type(self)}. "
+                f"key: `{key}` operator: `{operator}` values: `{values}` config: `{self}`"
+            )
+
+        self.affinity.node_affinity.required_during_scheduling_ignored_during_execution = (
+            V1NodeSelector(
+                node_selector_terms=[
+                    V1NodeSelectorTerm(
+                        match_expressions=[
+                            V1NodeSelectorRequirement(
+                                key=key,
+                                operator=operator,
+                                values=values,
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+
 
 class PodTemplateSpecConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -186,6 +231,7 @@ def build_pod_spec(config: PodSpecConfig) -> V1PodSpec:
         service_account_name=config.service_account_name,
         security_context=config.security_context,
         automount_service_account_token=config.automount_service_account_token,
+        affinity=deepcopy(config.affinity),
     )
 
 

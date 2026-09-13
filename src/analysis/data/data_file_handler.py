@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
+from pydantic import BaseModel
 from result import Err, Ok, Result
 
 # Project Imports
@@ -13,8 +14,16 @@ from src.analysis.utils import file_utils
 logger = logging.getLogger(__name__)
 
 
-class DataFileHandler(DataHandler):
+class DataPath(BaseModel):
+    name: str
+    """Name associated with data (eg. experiment name)"""
+    path: Path
+    """Data path"""
+    file_name: Optional[str] = None
+    """Optional file name under the metric folder when different from the display name."""
 
+
+class DataFileHandler(DataHandler):
     def __init__(self, ignore_columns: Optional[List] = None, include_files: Optional[List] = None):
         super().__init__(ignore_columns)
         self._include_files = include_files
@@ -23,8 +32,12 @@ class DataFileHandler(DataHandler):
         for folder in folders:
             folder_path = Path(folder)
             folder_df = pd.DataFrame()
-            match file_utils.get_files_from_folder_path(folder_path, self._include_files):
+            match file_utils.get_files_from_folder_path(
+                folder_path, self._include_files, extension="csv"
+            ):
                 case Ok(data_files_names):
+                    if not data_files_names:
+                        self._report_no_csvs(folder_path)
                     folder_df = self._concat_files_as_mean(
                         folder_df, data_files_names, folder_path, points
                     )
@@ -32,6 +45,27 @@ class DataFileHandler(DataHandler):
                     self._dataframe = pd.concat([self._dataframe, folder_df])
                 case Err(error):
                     logger.error(error)
+
+    def _report_no_csvs(self, path: Path) -> None:
+        """Say why nothing was read: the include list, missing suffixes, or an empty folder."""
+        files = [p for p in path.iterdir() if p.is_file() and not p.name.startswith(".")]
+        csvs = [p.name for p in files if p.suffix == ".csv"]
+        stale = [p.name for p in files if p.suffix != ".csv"]
+        if csvs and self._include_files:
+            logger.error(
+                f"{path} holds {len(csvs)} .csv file(s) but none named in "
+                f"include_files={self._include_files}: {', '.join(csvs[:3])}"
+                f"{', ...' if len(csvs) > 3 else ''}"
+            )
+        elif stale:
+            logger.error(
+                f"{path} holds {len(stale)} file(s) with no .csv suffix ({', '.join(stale[:3])}"
+                f"{', ...' if len(stale) > 3 else ''}); rename them with "
+                f"`find {path} -type f ! -name '*.csv' -exec sh -c "
+                f'\'head -c5 "$1" | grep -q "^Time," && mv "$1" "$1.csv"\' _ {{}} \\;`'
+            )
+        else:
+            logger.error(f"{path} holds no files to read.")
 
     def _concat_files_as_mean(
         self, target_df: pd.DataFrame, data_files_path: List, location: Path, points: int
@@ -60,3 +94,57 @@ class DataFileHandler(DataHandler):
         target_df = self.concat_data_as_mean(target_df, file_df, file_path.name)
 
         return Ok(target_df)
+
+    def _resolve_csv_paths(self, path: Path) -> List[Path]:
+        """A DataPath's CSVs: the file itself, or the ones a scrape wrote inside the folder.
+
+        Scrapper dumps `<location>/<metric folder>/<run name>.csv`, so pointing a DataPath at
+        a scrape dump lands on the metric folder rather than a file.
+        """
+        if path.is_file():
+            return [path]
+
+        match file_utils.get_files_from_folder_path(path, self._include_files, extension="csv"):
+            case Ok(file_names):
+                if not file_names:
+                    self._report_no_csvs(path)
+                return sorted(path / name for name in file_names)
+            case Err(error):
+                logger.error(error)
+                return []
+
+    def concat_dataframes_from_files(
+        self,
+        named_files: List[DataPath],
+        group_name: str,
+        points: int,
+    ):
+        for data_file in named_files:
+            file_path = Path(data_file.path)
+            if not file_path.exists():
+                logger.error(f"{file_path} cannot be loaded.")
+                continue
+
+            for csv_path in self._resolve_csv_paths(file_path):
+                self._append_csv(csv_path, data_file.name, group_name, points)
+
+    def _append_csv(self, file_path: Path, name: str, group_name: str, points: int) -> None:
+        logger.info(f"Reading {file_path} with {points} datapoints")
+        file_df = pd.read_csv(file_path, parse_dates=["Time"], index_col="Time", nrows=points)
+        if len(file_df) < points:
+            logger.warning(f"Not enough datapoints in {file_path}")
+
+        if self._ignore_columns:
+            columns_to_drop = [
+                col
+                for col in file_df.columns
+                if any(col.startswith(prefix) for prefix in self._ignore_columns)
+            ]
+            if columns_to_drop:
+                logger.info(f"Dropping {len(columns_to_drop)} columns: {columns_to_drop}")
+                file_df = file_df.drop(columns=columns_to_drop)
+
+        file_df = file_df.reset_index(drop=True)
+        file_df["class"] = group_name
+        file_df["variable"] = name
+        self._dataframe = pd.concat([self._dataframe, file_df], ignore_index=True)

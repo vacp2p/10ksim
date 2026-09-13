@@ -117,11 +117,20 @@ class PodResponse(BaseModel):
     headers: Optional[Dict[str, str]] = None
 
 
-async def post_async(url, data):
+REQUEST_TIMEOUT_S = 30
+"""Cap on one pod-api-requester call.
+
+aiohttp's default is 300s and its connector pool holds 100 sockets, so requests to pods
+that are gone hold their slots long enough to starve a publish loop rather than failing.
+"""
+
+
+async def post_async(url, data, timeout_s: float = REQUEST_TIMEOUT_S):
     """Execute an async POST request.
 
     :param data: JSON data for the request."""
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=timeout_s)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(url, json=data) as response:
             text = await response.text()
             return PodResponse(
@@ -192,6 +201,10 @@ async def pod_api_request(
     try:
         response = await post_async(url, data)
         response_obj = json.loads(response.text)
+    except asyncio.TimeoutError as e:
+        raise PodApiClientError(
+            f"pod-api-requester did not answer within {REQUEST_TIMEOUT_S}s."
+        ) from e
     except aiohttp.ClientError as e:
         raise PodApiClientError("Failed to make the request to pod-api-requester.") from e
     except json.JSONDecodeError as e:

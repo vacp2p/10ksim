@@ -91,3 +91,27 @@ def test_build_command_script_mode_returns_shell_wrapper():
 def test_build_container_command_uses_custom_prefix():
     result = build_container_command(["echo hello"], prefix=["bash", "-lc"])
     assert result == ["bash", "-lc", "echo hello\n"]
+
+
+def test_add_args_replace_replaces_existing_flag_value_pair():
+    command = Command(command="app", args=[("--max-connections", "1000")])
+    command.add_args([("--max-connections", "200")], on_duplicate="replace")
+    assert command.args == [("--max-connections", "200")]
+
+
+def test_add_args_replace_consumes_duplicate_existing_args_in_order():
+    command = Command(command="app", args=[("--name", "alice"), ("--name", "bob")])
+    command.add_args(
+        [("--name", "carl"), ("--name", "dave")],
+        on_duplicate="replace",
+    )
+    assert command.args == [("--name", "carl"), ("--name", "dave")]
+
+
+def test_add_args_replace_appends_new_values_after_replacing_existing_duplicates():
+    command = Command(command="app", args=[("--name", "alice"), ("--name", "bob")])
+    command.add_args(
+        [("--name", "carl"), ("--name", "dave"), ("--name", "eric")],
+        on_duplicate="replace",
+    )
+    assert command.args == [("--name", "carl"), ("--name", "dave"), ("--name", "eric")]

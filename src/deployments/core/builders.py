@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Self, Tuple, Union
+from typing import List, Optional, Self, Tuple
 
 from kubernetes.client import (
     V1Container,
@@ -13,7 +13,7 @@ from kubernetes.client import (
     V1ServicePort,
     V1StatefulSet,
 )
-from pydantic import BaseModel, Field, NonNegativeInt
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 
 from src.deployments.core.configs.command import Command, CommandConfig, build_command
 from src.deployments.core.configs.container import ContainerConfig, Image, build_container
@@ -34,6 +34,19 @@ from src.deployments.core.configs.service import ServiceConfig, ServiceSpecType,
 from src.deployments.core.configs.statefulset import StatefulSetConfig, build_stateful_set
 
 logger = logging.getLogger(__name__)
+
+NODE_HOSTNAME_LABEL = "kubernetes.io/hostname"
+
+
+def _normalize_machines(machines: List[str] | str) -> List[str]:
+    if isinstance(machines, str):
+        machines = [machines]
+    else:
+        machines = list(machines)
+
+    if not machines:
+        raise ValueError("At least one machine must be provided.")
+    return machines
 
 
 class StatefulSetBuilder(BaseModel):
@@ -71,14 +84,48 @@ class StatefulSetBuilder(BaseModel):
         self.config.stateful_set_spec.volume_claim_templates.append(pvc)
         return self
 
+    def with_allowed_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Restrict pods to machines whose label value is in ``machines``."""
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_required_node_affinity(
+            label_key,
+            "In",
+            _normalize_machines(machines),
+            overwrite=overwrite,
+        )
+        return self
+
+    def with_avoided_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Prevent pods from scheduling on machines whose label value is in ``machines``."""
+        self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.with_required_node_affinity(
+            label_key,
+            "NotIn",
+            _normalize_machines(machines),
+            overwrite=overwrite,
+        )
+        return self
+
     def with_network_delay(
         self,
-        delay: Union[str, NonNegativeInt],
-        jitter: Union[str, NonNegativeInt],
+        delay: NonNegativeInt,
+        jitter: NonNegativeInt,
+        rate_mbit: Optional[NonNegativeInt] = None,
+        loss_pct: Optional[NonNegativeFloat] = None,
         *,
         overwrite: bool = False,
     ) -> Self:
-        delay_container = init_container_delay(delay, jitter)
+        delay_container = init_container_delay(delay, jitter, rate_mbit, loss_pct)
         self.config.stateful_set_spec.pod_template_spec_config.pod_spec_config.add_init_container(
             delay_container, overwrite=overwrite
         )
@@ -167,6 +214,38 @@ class PodBuilder(BaseModel):
     ) -> Self:
         with_image_for_container(
             config=self.config, image=image, container_name=container_name, overwrite=overwrite
+        )
+        return self
+
+    def with_allowed_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Restrict the pod to machines whose label value is in ``machines``."""
+        self.config.pod_spec_config.with_required_node_affinity(
+            label_key,
+            "In",
+            _normalize_machines(machines),
+            overwrite=overwrite,
+        )
+        return self
+
+    def with_avoided_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Prevent the pod from scheduling on machines whose label value is in ``machines``."""
+        self.config.pod_spec_config.with_required_node_affinity(
+            label_key,
+            "NotIn",
+            _normalize_machines(machines),
+            overwrite=overwrite,
         )
         return self
 
@@ -284,6 +363,38 @@ class PodSpecBuilder(BaseModel):
 
     def with_service_account_name(self, name: str, *, overwrite: bool = False) -> Self:
         self.config.with_service_account_name(name, overwrite=overwrite)
+        return self
+
+    def with_allowed_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Restrict pods to machines whose label value is in ``machines``."""
+        self.config.with_required_node_affinity(
+            label_key,
+            "In",
+            _normalize_machines(machines),
+            overwrite=overwrite,
+        )
+        return self
+
+    def with_avoided_machines(
+        self,
+        machines: List[str] | str,
+        *,
+        label_key: str = NODE_HOSTNAME_LABEL,
+        overwrite: bool = False,
+    ) -> Self:
+        """Prevent pods from scheduling on machines whose label value is in ``machines``."""
+        self.config.with_required_node_affinity(
+            label_key,
+            "NotIn",
+            _normalize_machines(machines),
+            overwrite=overwrite,
+        )
         return self
 
 

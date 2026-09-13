@@ -1,4 +1,5 @@
 # Python Imports
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
@@ -110,31 +111,30 @@ def dict_partial_compare(complete_dict: Dict[Any, Any], partial_dict: Dict[Any, 
     return True
 
 
-def dict_apply(
-    obj: Any,
-    func: Callable[[Any], Any],
-    path: Path | None = None,
-    *,
-    order: Literal["pre", "post"] = "pre",
-) -> dict:
-    """Applies `func(obj)` to every obj in `node` and adds the result to the same path in a new dict.
-    Wrapper around `dict_visit` that returns a new dict using the provided `func`.
+class KeepNode(Exception):
+    pass
 
-    Note: `None` values are ignored and not added to the new dict.
+
+def dict_transform(obj: Any, func: Callable[[Any], Any]) -> Any:
+    """Rewrite a nested dict by replacing each node with `func(node)` recursively (pre-order).
+    If `func(node)` raises KeepNode, a copy of the old dict element will be used and traveral will continue.
     """
-    new_dict = {}
+    tree = deepcopy(obj)
 
-    def apply(path, node):
-        nonlocal new_dict
-        new_value = func(node)
-        if new_value is not None:
-            if path == Path():
-                new_dict = new_value
-            else:
-                dict_set(new_dict, path, new_value)
+    def rewrite(node: Any) -> Any:
+        try:
+            node = func(node)
+        except KeepNode:
+            pass
 
-    dict_visit(obj, apply, path, order=order)
-    return new_dict
+        if isinstance(node, dict):
+            return {key: rewrite(value) for key, value in node.items()}
+        elif isinstance(node, list):
+            return [rewrite(item) for item in node]
+        else:
+            return node
+
+    return rewrite(tree)
 
 
 def dict_visit(
@@ -152,6 +152,9 @@ def dict_visit(
     Calls `func(path, item)` for each list item in list.
 
     Calls `func(path, node)` for each other node.
+
+    Mutating the nested dict during the execution of this function (such as in `func`) is undefined behavior.
+    This function expects that non-scaler nodes will not be mutated.
     """
     if order not in ["pre", "post"]:
         raise ValueError(f'Invalid order. Expected "pre" or "post". order: `{order}`')

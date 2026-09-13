@@ -17,11 +17,8 @@ from pydantic import BaseModel, ConfigDict
 from ruamel import yaml
 
 # Project Imports
-from src.deployments.core.base_bridge import (
-    format_metadata_timestamps,
-    get_valid_shifted_times,
-    parse_events_log,
-)
+from src.deployments.core.base_bridge import format_metadata_timestamps, parse_events_log
+from src.deployments.core.metadata_times import apply_time_shifts
 from src.deployments.core.pod_interaction import exec_command_in_pod
 from src.deployments.experiments.base_experiment import BaseExperiment
 from src.deployments.pod_api_requester.builder import PodApiRequesterBuilder
@@ -235,10 +232,9 @@ class JsWakuNodes(BaseExperiment[EmptyConfig]):
 
         # Get timedeltas for each path. dict of {path : timedelta}.
         deltatime_map = {obj[1][0]: obj[1][1] for obj in events_list}
-        shifted = get_valid_shifted_times(deltatime_map, metadata)
-        metadata.update(shifted)
+        metadata = apply_time_shifts(deltatime_map, metadata)
 
-        metadata = format_metadata_timestamps(metadata)
+        metadata = format_metadata_timestamps(metadata, format="vquery")
 
         # Add links.
         links_map = {

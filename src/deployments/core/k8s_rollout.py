@@ -2,10 +2,12 @@
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterable, Optional, Tuple
 
 from kubernetes import client
 from kubernetes.client import (
+    ApiClient,
     ApiException,
     V1DaemonSet,
     V1Deployment,
@@ -134,6 +136,57 @@ async def wait_for_rollout(
         await asyncio.sleep(polling_interval)
 
 
+def label_pods(names: Iterable[str], namespace: str, labels: dict, api_client=None) -> int:
+    """Add labels to the named pods, in parallel. Returns how many were labelled."""
+    api = client.CoreV1Api(api_client or client.ApiClient())
+    body = {"metadata": {"labels": labels}}
+
+    def patch(name: str) -> bool:
+        try:
+            api.patch_namespaced_pod(name=name, namespace=namespace, body=body)
+            return True
+        except ApiException as e:
+            logger.warning(f"Could not label pod `{name}`: {e.status}")
+            return False
+
+    names = list(names)
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        return sum(pool.map(patch, names))
+
+
+async def scale_statefulset(
+    name: str,
+    namespace: str,
+    replicas: int,
+    api_client: Optional[ApiClient] = None,
+    *,
+    timeout: int = 600,
+    polling_interval: int = 5,
+) -> None:
+    """Set a StatefulSet's replica count and wait for the pods to follow.
+
+    Scaling down removes the highest ordinals. The patch returns before the pods are gone,
+    so a caller that times an outage from it would start counting too early.
+    """
+    api = client.AppsV1Api(api_client or client.ApiClient())
+    api.patch_namespaced_stateful_set_scale(
+        name=name, namespace=namespace, body={"spec": {"replicas": replicas}}
+    )
+
+    deadline = time.time() + timeout
+    while True:
+        current = api.read_namespaced_stateful_set(name=name, namespace=namespace)
+        actual = getattr(current.status, "replicas", None) or 0
+        if actual == replicas:
+            logger.info(f"StatefulSet `{name}` scaled to {replicas}")
+            return
+        if time.time() > deadline:
+            raise TimeoutError(
+                f"StatefulSet `{name}` still at {actual} pods, wanted {replicas}, after {timeout}s"
+            )
+        await asyncio.sleep(polling_interval)
+
+
 def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iterable[V1Pod]:
     api_client = api_client or client.ApiClient()
     apps_api = client.AppsV1Api(api_client)
@@ -170,6 +223,26 @@ def get_pods_for_statefulset(name: str, namespace: str, api_client=None) -> Iter
         lambda obj: has_matching_owner(obj),
         core_api.list_namespaced_pod(**kwargs).items,
     )
+
+
+def resolved_images(name: str, namespace: str, api_client=None) -> dict:
+    """Digest each container of a StatefulSet's pods actually pulled, keyed by container.
+
+    A pod spec holds a mutable tag, so it does not say which binary ran. Values are lists
+    because a mid-run rollout can leave pods on different digests.
+    """
+    digests: dict = {}
+    try:
+        pods = get_pods_for_statefulset(name, namespace, api_client)
+    except ApiException as e:
+        logger.warning(f"Could not resolve images for `{namespace}/{name}`: {e}")
+        return digests
+
+    for pod in pods:
+        for status in getattr(pod.status, "container_statuses", None) or []:
+            if status.image_id:
+                digests.setdefault(status.name, set()).add(status.image_id)
+    return {container: sorted(ids) for container, ids in digests.items()}
 
 
 def check_pod_condition(

@@ -60,7 +60,7 @@ class GossipsubPriorityQueuesAnalyzer(Analyzer):
         tracer = (
             Nimlibp2pTracer()
             .with_extra_fields(["kubernetes.pod_name"])
-            .with_received_pattern_group()
+            .with_received_pattern_group(log_format="TEXT")
         )
 
         # Get dataframes for all nodes

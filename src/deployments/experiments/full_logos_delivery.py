@@ -316,6 +316,8 @@ class FullLogosDeliveryExperiment(BaseExperiment[ExpConfig]):
 
     async def subscribe_filter_clients(self, topic: str):
         """Subscribe every filter client, in batches so the API server keeps up."""
+        if self.dry_run:
+            return
         pods = [f"fclient-0-{index}" for index in range(0, self.config.num_filter_clients)]
         subscribed = 0
         for start in range(0, len(pods), FILTER_SUBSCRIBE_BATCH):

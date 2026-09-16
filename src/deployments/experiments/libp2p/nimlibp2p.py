@@ -222,11 +222,10 @@ class NimLibp2pExperiment(BaseExperiment[ExpConfig]):
     async def _run(self):
         self.log_event("run_start")
 
-        # Publisher
-        publisher = (
-            PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server").build()
-        )
-        await self.deploy(deployment=publisher, wait_for_ready=True)
+        # Publisher, with the config map, role and service it mounts and resolves.
+        requester = PodApiRequesterBuilder().with_namespace(self.namespace).with_mode("server")
+        await self.deploy(deployment=requester.build_dependencies(), exist_ok=True)
+        await self.deploy(deployment=requester.build(), wait_for_ready=True)
 
         # Backs the StatefulSet's per-pod DNS and is what the publisher resolves nodes
         # through, so both discovery modes need it, not just the static dial.

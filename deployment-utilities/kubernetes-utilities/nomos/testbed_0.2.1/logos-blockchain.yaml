@@ -31,7 +31,7 @@ spec:
             name: nomos-initial-keystores
       containers:
         - name: nomos
-          image: ghcr.io/logos-blockchain/logos-blockchain:dst
+          image: ghcr.io/logos-blockchain/logos-blockchain:0.2.4-dst
           imagePullPolicy: Always
           resources:
             requests:
@@ -132,4 +132,4 @@ spec:
         storageClassName: longhorn-nomos
         resources:
           requests:
-            storage: 20Gi
+            storage: 30Gi

@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from typing import List
+from typing import ClassVar, List
 
 from kubernetes.client import (
     V1LabelSelector,
@@ -35,8 +35,6 @@ class PartitionConfig(ExpConfig):
     """Share of relay nodes on the first side."""
     heal_at: NonNegativeInt = 120
     """Seconds after the first message before the halves may meet."""
-    node_start_delay: NonNegativeInt = 240
-    """Must outlast pod creation, or a node dials before its side label is on."""
     wait_nodes_ready: bool = False
     """Ready means already meshed, which the split has to precede."""
     delay_cold_start: NonNegativeFloat = 700
@@ -117,6 +115,7 @@ class NetworkPartition(NimLibp2pExperiment):
     """
 
     config: PartitionConfig
+    bootstrap_after_nodes: ClassVar[bool] = True
 
     async def _wait_for_pods_to_exist(self, nodes: V1StatefulSet, timeout: int = 600) -> None:
         """Existence, not readiness: Ready already means meshed."""

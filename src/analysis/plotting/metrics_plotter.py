@@ -29,7 +29,7 @@ class MetricsPlotter(BaseModel):
         fig, axs = plt.subplots(
             nrows=1,
             ncols=len(plot_specs.metrics),
-            sharey="row",
+            sharey="row" if plot_specs.share_y else False,
             figsize=plot_specs.fig_size,
         )
 
@@ -136,6 +136,8 @@ class MetricsPlotter(BaseModel):
 
         formatter = ticker.FuncFormatter(lambda x, pos: "{:.0f}".format(x / plot_specs["scale_x"]))
         box_plot.yaxis.set_major_formatter(formatter)
+        if plot_specs["scale_x"] == 1:
+            box_plot.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
         box_plot.set(xlabel=plot_specs["xlabel_name"], ylabel=plot_specs["ylabel_name"])
         box_plot.set_title(metric)

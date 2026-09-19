@@ -176,6 +176,9 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             # don't let a log-pull failure mask the run state
             logger.exception("Failed to pull Shadow logs")
             self.log_event({"event": "logs_pull_failed", "error": str(e)})
+            # Keep the PVC so shadow.data can still be copied by hand; cleanup skips unknown kinds.
+            pvc_dict["kind"] = "RetainedPersistentVolumeClaim"
+            self.log_event({"event": "pvc_retained", "pvc": pvc_name})
 
         if state == "failed":
             raise RuntimeError(f"Shadow Job `{namespace}/{job_name}` failed")

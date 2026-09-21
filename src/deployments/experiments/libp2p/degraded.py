@@ -1,6 +1,7 @@
 """Regression scenario: a degraded link (latency, jitter, packet loss)."""
 
 import logging
+from typing import ClassVar
 
 from kubernetes.client import V1StatefulSet
 from pydantic import Field, NonNegativeInt
@@ -23,6 +24,7 @@ class DegradedNetwork(NimLibp2pExperiment):
     """Regression run over a high-latency, jittery, lossy link."""
 
     config: DegradedConfig
+    post_run_analysis: ClassVar[str] = "src.analysis.post_run.degraded:run_degraded_analysis"
 
     async def _after_nodes(self, nodes: V1StatefulSet) -> None:
         pods = check_shaping_applied(nodes.metadata.name, self.namespace, self.api_client)

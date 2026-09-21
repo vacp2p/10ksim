@@ -7,7 +7,7 @@ These are the same figures, drawn the same way, off the run's own stable window.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional
+from typing import Dict, List, Optional
 
 from src.analysis.data.data_file_handler import DataPath
 from src.analysis.metrics.libp2p.scrape import Nimlibp2pScrapeBuilder
@@ -18,19 +18,33 @@ from src.analysis.plotting.metrics_plotter import MetricsPlotter
 logger = logging.getLogger(__name__)
 
 
-class PlotSpec(NamedTuple):
-    name: str
-    metrics: List[str]
-    ylabel: str
-    scale: int
-    fig_size: List[int]
-
-
 STANDARD_PLOTS = [
-    PlotSpec("bandwidth", ["libp2p-in", "libp2p-out"], "KBytes/s", 1000, [14, 5]),
-    PlotSpec("memory", ["container-memory", "nim-gc-memory"], "MBytes", 1_000_000, [14, 5]),
-    PlotSpec("connections", ["connections", "mesh-peers"], "peers per node", 1, [14, 5]),
+    PlotConfig(
+        name="bandwidth",
+        metrics=["libp2p-in", "libp2p-out"],
+        ylabel_name="KBytes/s",
+        scale_x=1000,
+        fig_size=[14, 5],
+        outliers=False,
+    ),
+    PlotConfig(
+        name="memory",
+        metrics=["container-memory", "nim-gc-memory"],
+        ylabel_name="MBytes",
+        scale_x=1_000_000,
+        fig_size=[14, 5],
+        outliers=False,
+    ),
+    PlotConfig(
+        name="connections",
+        metrics=["connections", "mesh-peers"],
+        ylabel_name="peers per node",
+        scale_x=1,
+        fig_size=[14, 5],
+        outliers=False,
+    ),
 ]
+"""Templates: `name` is the figure's file stem, the run fills in groups and output path."""
 
 
 def scrape_run_metrics(
@@ -47,7 +61,7 @@ def scrape_run_metrics(
 
 
 def plot_run_metrics(
-    dumps: Dict[str, Path], out_dir: Path, xlabel: str, plots: Optional[List[PlotSpec]] = None
+    dumps: Dict[str, Path], out_dir: Path, xlabel: str, plots: Optional[List[PlotConfig]] = None
 ) -> List[Path]:
     """Box-plot each standard figure across `dumps`, keyed by series label (eg. muxer).
 
@@ -56,26 +70,26 @@ def plot_run_metrics(
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     configs = []
-    for spec in plots or STANDARD_PLOTS:
-        available = {label: dump for label, dump in dumps.items() if _has_any(dump, spec.metrics)}
+    for template in plots or STANDARD_PLOTS:
+        available = {
+            label: dump for label, dump in dumps.items() if _has_any(dump, template.metrics)
+        }
         if not available:
-            logger.warning(f"No data for the {spec.name} plot; skipping it")
+            logger.warning(f"No data for the {template.name} plot; skipping it")
             continue
-        target = out_dir / spec.name
+        target = out_dir / template.name
         configs.append(
-            PlotConfig(
-                name=str(target),
-                metrics=spec.metrics,
-                groups=[
-                    DataGroup(name=label, data_paths=[DataPath(name=label, path=dump)])
-                    for label, dump in available.items()
-                ],
-                legend_order=list(available),
-                xlabel_name=xlabel,
-                ylabel_name=spec.ylabel,
-                scale_x=spec.scale,
-                fig_size=spec.fig_size,
-                outliers=False,
+            template.model_copy(
+                deep=True,
+                update={
+                    "name": str(target),
+                    "groups": [
+                        DataGroup(name=label, data_paths=[DataPath(name=label, path=dump)])
+                        for label, dump in available.items()
+                    ],
+                    "legend_order": list(available),
+                    "xlabel_name": xlabel,
+                },
             )
         )
         written.append(target.with_suffix(".jpg"))

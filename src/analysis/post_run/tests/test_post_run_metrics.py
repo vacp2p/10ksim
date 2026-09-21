@@ -2,7 +2,8 @@ import logging
 
 import pandas as pd
 
-from src.analysis.post_run.metrics import STANDARD_PLOTS, PlotSpec, plot_run_metrics
+from src.analysis.plotting.config import PlotConfig
+from src.analysis.post_run.metrics import STANDARD_PLOTS, plot_run_metrics
 
 
 def _scrape_dump(root, muxer, metrics, rows=6):
@@ -20,7 +21,7 @@ def _scrape_dump(root, muxer, metrics, rows=6):
 def test_plots_a_scrape_dump_without_staging_it_first(tmp_path):
     metrics = ["libp2p-in", "libp2p-out"]
     dumps = {m: _scrape_dump(tmp_path / "metrics", m, metrics) for m in ("yamux", "quic")}
-    spec = [PlotSpec("bandwidth", metrics, "KBytes/s", 1000, [14, 5])]
+    spec = [PlotConfig(name="bandwidth", metrics=metrics, ylabel_name="KBytes/s")]
 
     written = plot_run_metrics(dumps, tmp_path / "plots", xlabel="test", plots=spec)
 
@@ -31,7 +32,7 @@ def test_plots_a_scrape_dump_without_staging_it_first(tmp_path):
 def test_a_plot_with_no_data_is_skipped_and_said_so(tmp_path, caplog):
     """A silently missing figure reads as "we did not measure that"."""
     dumps = {"yamux": _scrape_dump(tmp_path / "metrics", "yamux", ["libp2p-in"])}
-    spec = [PlotSpec("memory", ["nim-gc-memory"], "MBytes", 1_000_000, [14, 5])]
+    spec = [PlotConfig(name="memory", metrics=["nim-gc-memory"], scale_x=1_000_000)]
 
     with caplog.at_level(logging.WARNING):
         assert plot_run_metrics(dumps, tmp_path / "plots", xlabel="test", plots=spec) == []
@@ -44,7 +45,7 @@ def test_a_muxer_missing_one_metric_does_not_drop_the_others(tmp_path):
         "yamux": _scrape_dump(root, "yamux", ["connections"]),
         "quic": _scrape_dump(root, "quic", ["libp2p-in"]),
     }
-    spec = [PlotSpec("connections", ["connections"], "peers", 1, [9, 6])]
+    spec = [PlotConfig(name="connections", metrics=["connections"], scale_x=1, fig_size=[9, 6])]
 
     written = plot_run_metrics(dumps, tmp_path / "plots", xlabel="test", plots=spec)
 
@@ -52,5 +53,5 @@ def test_a_muxer_missing_one_metric_does_not_drop_the_others(tmp_path):
 
 
 def test_the_standard_set_covers_the_report_figures():
-    names = {spec.name for spec in STANDARD_PLOTS}
+    names = {plot.name for plot in STANDARD_PLOTS}
     assert names == {"bandwidth", "memory", "connections"}

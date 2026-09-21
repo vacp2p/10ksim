@@ -1,5 +1,6 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
+import asyncio
 import logging
 from typing import ClassVar, Literal, Optional
 
@@ -162,7 +163,8 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         # Pull output before cleanup deletes the pod.
         logs_dir = self.output_folder / "shadow_logs"
         try:
-            pull_shadow_logs(
+            await asyncio.to_thread(
+                pull_shadow_logs,
                 api_client=self.api_client,
                 namespace=namespace,
                 job_name=job_name,

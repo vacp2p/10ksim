@@ -1,7 +1,6 @@
 # Python Imports
 import logging
-from dataclasses import dataclass
-from typing import Callable, Dict, List, Self, Tuple
+from typing import Callable, List, Optional, Self
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -9,15 +8,14 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class TracePair:
-    regex: str
+class TracePair(BaseModel):
+    regex: Optional[str] = None
     convert: Callable[[List[str]], pd.DataFrame]
 
 
-@dataclass
-class PatternGroup:
+class PatternGroup(BaseModel):
     name: str
+    fields: List[str] = Field(default_factory=lambda: ["_msg"])
     trace_pairs: List[TracePair]
     query: str
 
@@ -32,14 +30,15 @@ class MessageTracer(BaseModel):
     def with_wildcard_pattern(self) -> Self:
         self.patterns.append(
             PatternGroup(
-                "wildcard",
-                [TracePair(regex="(.*)", convert=self._trace_all_logs)],
+                name="wildcard",
+                fields=["_msg"],
+                trace_pairs=[TracePair(regex="(.*)", convert=self._trace_all_logs)],
                 query="*",
             )
         )
         return self
 
-    def trace(self, parsed_logs: List[List[Tuple]]) -> Dict[str, List[pd.DataFrame]]:
+    def trace(self, parsed_logs: List[List[tuple]]) -> dict[str, list[pd.DataFrame]]:
         """
         :type parsed_logs: List[List[List]]
         :param parsed_logs: List of groups of matched patterns.

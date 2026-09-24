@@ -14,7 +14,7 @@ NEGATIVE = (
 
 
 def _received_regex():
-    tracer = Nimlibp2pTracer().with_received_pattern_group()
+    tracer = Nimlibp2pTracer().with_received_pattern_group(log_format="TEXT")
     (group,) = [p for p in tracer.patterns if p.name == "received"]
     (pair,) = group.trace_pairs
     return re.compile(pair.regex)
@@ -35,7 +35,7 @@ def test_negative_delay_is_parsed():
 
 
 def test_negative_delay_survives_conversion():
-    tracer = Nimlibp2pTracer().with_received_pattern_group()
+    tracer = Nimlibp2pTracer().with_received_pattern_group(log_format="TEXT")
     df = tracer._trace_received_in_logs(
         [("2759438560592407784", "1785892519584947712", "1785892519583493632", "-1")]
     )
@@ -68,3 +68,82 @@ class TestNegativeDelayWarning:
         tracer = Nimlibp2pTracer().with_extra_fields([])
         df = tracer._trace_received_in_logs(self._rows(["10", "-3"]))
         assert len(df) == 2
+
+
+def test_received_json():
+    tracer = Nimlibp2pTracer().with_received_pattern_group(log_format="JSON")
+    (group,) = tracer.patterns
+    (pair,) = group.trace_pairs
+
+    assert group.name == "received"
+    assert group.fields == [
+        "log.msgId",
+        "log.sentAt",
+        "log.current",
+        "log.delayMs",
+    ]
+    assert pair.regex is None
+
+    parsed_logs = [
+        [
+            [
+                [
+                    "13647046878266911",
+                    "1785892519584947712",
+                    "1785892519585947712",
+                    "1",
+                ]
+            ]
+        ]
+    ]
+
+    dfs = tracer.trace(parsed_logs)
+    received_df = dfs["received"][0]
+
+    assert list(received_df.columns) == [
+        "msgId",
+        "sentAt",
+        "timestamp",
+        "delayMs",
+    ]
+    assert received_df.loc[0, "msgId"] == 13647046878266911
+    assert received_df.loc[0, "sentAt"].value == 1785892519584947712
+    assert received_df.loc[0, "timestamp"].value == 1785892519585947712
+    assert received_df.loc[0, "delayMs"] == "1"
+    assert str(received_df["sentAt"].dtype) == "datetime64[ns]"
+    assert str(received_df["timestamp"].dtype) == "datetime64[ns]"
+
+
+def test_sent_json():
+    tracer = Nimlibp2pTracer().with_sent_pattern_group(log_format="JSON")
+    (group,) = tracer.patterns
+    (pair,) = group.trace_pairs
+
+    assert group.name == "sent"
+    assert group.fields == [
+        "log.msgId",
+        "log.timestamp",
+    ]
+    assert pair.regex is None
+
+    parsed_logs = [
+        [
+            [
+                [
+                    "13647046878266911",
+                    "1785892519584947712",
+                ]
+            ]
+        ]
+    ]
+
+    dfs = tracer.trace(parsed_logs)
+    sent_df = dfs["sent"][0]
+
+    assert list(sent_df.columns) == [
+        "msgId",
+        "timestamp",
+    ]
+    assert sent_df.loc[0, "msgId"] == 13647046878266911
+    assert sent_df.loc[0, "timestamp"].value == 1785892519584947712
+    assert str(sent_df["timestamp"].dtype) == "datetime64[ns]"

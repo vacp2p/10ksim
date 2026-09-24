@@ -1,5 +1,6 @@
 # Shadow GossipSub experiment: N nim libp2p peers + 1 publisher inside Shadow on a
 # single k8s pod. See the "Using Shadow at DST" runbook in Notion.
+import asyncio
 import logging
 from typing import ClassVar, Literal, Optional
 
@@ -162,7 +163,8 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
         # Pull output before cleanup deletes the pod.
         logs_dir = self.output_folder / "shadow_logs"
         try:
-            pull_shadow_logs(
+            await asyncio.to_thread(
+                pull_shadow_logs,
                 api_client=self.api_client,
                 namespace=namespace,
                 job_name=job_name,
@@ -176,6 +178,9 @@ class ShadowGossipsubExperiment(BaseExperiment[ExpConfig]):
             # don't let a log-pull failure mask the run state
             logger.exception("Failed to pull Shadow logs")
             self.log_event({"event": "logs_pull_failed", "error": str(e)})
+            # Keep the PVC so shadow.data can still be copied by hand; cleanup skips unknown kinds.
+            pvc_dict["kind"] = "RetainedPersistentVolumeClaim"
+            self.log_event({"event": "pvc_retained", "pvc": pvc_name})
 
         if state == "failed":
             raise RuntimeError(f"Shadow Job `{namespace}/{job_name}` failed")

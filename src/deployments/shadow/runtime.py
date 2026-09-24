@@ -146,6 +146,7 @@ def pull_shadow_logs(
     dest_dir: Path,
     node_pin: Optional[str] = None,
     reader_ready_timeout_s: int = 120,
+    copy_retry_s: int = 3600,
 ) -> None:
     """Pull Shadow's output into `dest_dir`: `shadow_stdout.log` (Job pod stdout via
     kubectl logs), `shadow_data/` (the PVC's shadow.data, copied out via a reader pod +
@@ -177,11 +178,18 @@ def pull_shadow_logs(
         data_dest = dest_dir / "shadow_data"
         data_dest.mkdir(parents=True, exist_ok=True)
         src = f"{namespace}/{reader_name}:{_RUN_MOUNT}/shadow.data"
-        subprocess.run(
-            _kubectl_prefix() + ["cp", "--retries=3", src, str(data_dest / "shadow.data")],
-            check=True,
-            capture_output=True,
-        )
+        deadline = time.monotonic() + copy_retry_s
+        while True:
+            res = subprocess.run(
+                _kubectl_prefix() + ["cp", "--retries=3", src, str(data_dest / "shadow.data")],
+                capture_output=True,
+            )
+            if res.returncode == 0:
+                break
+            logger.warning(f"kubectl cp failed: {res.stderr.decode(errors='replace').strip()}")
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"kubectl cp of shadow.data still failing after {copy_retry_s}s")
+            time.sleep(60)
         logger.info(f"Copied shadow.data into {data_dest}/")
         _flatten_host_logs(data_dest, dest_dir / "logs")
     finally:

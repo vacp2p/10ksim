@@ -110,13 +110,7 @@ class WakuAnalyzer(Nimlibp2pAnalyzer):
     def check_store_archives(
         self, folder: Path, received_csv: Optional[Path] = None
     ) -> AnalysisResult:
-        """
-        Compare each store node's archive against the messages relay delivered.
-
-        Reads the per-node dumps written by the experiment, so a store node that archived
-        nothing shows up instead of being hidden by the others. Has to run after
-        analyze_reliability, which writes the delivery summary it compares against.
-        """
+        """Compare each store node's archive with what relay delivered; run after reliability."""
         received_csv = Path(received_csv or self._dump_analysis_path / "summary" / "received.csv")
         archives = sorted(Path(folder).glob("store-*.json"))
         intermediates = {"folder": str(folder), "received_csv": str(received_csv)}

@@ -46,7 +46,7 @@ class WakuTracer(MessageTracer):
                         convert=self._trace_lightpush_in_logs,
                     ),
                 ],
-                # i(...) since nwaku capitalized these log lines (Received/Handling)
+                # i(): newer nwaku capitalizes these lines.
                 query='(i("received relay message") OR i("handling lightpush request"))',
             )
         )

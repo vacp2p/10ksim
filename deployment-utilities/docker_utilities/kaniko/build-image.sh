@@ -29,8 +29,7 @@ EXCLUDE_NODE="${EXCLUDE_NODE:-node-01.ih-eu-mda1.misc.vaclab}"
 # `dockerhub-creds`; set this (and a matching <destination> namespace) to push under
 # your own Docker Hub account instead of whoever owns the default secret. See README.
 DOCKER_SECRET="${DOCKER_SECRET:-dockerhub-creds}"
-# Multi-stage Dockerfiles: kaniko builds every stage and pushes the LAST one unless a
-# target is named, which is rarely the one you want. Set TARGET to the stage to push.
+# Stage to push from a multi-stage Dockerfile; kaniko pushes the last stage by default.
 TARGET="${TARGET:-}"
 
 if [ "$#" -lt 5 ]; then

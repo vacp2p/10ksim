@@ -29,7 +29,7 @@ Example — a nim test node from a fix branch:
 
 The script applies a kaniko Job, streams its logs, and waits for completion. Env overrides:
 `KC` (kubeconfig, defaults to `$KUBECONFIG` or `~/.kube/config`), `BUILD_NS`, `EXCLUDE_NODE`,
-`DOCKER_SECRET` (see below).
+`DOCKER_SECRET` (see below), `TARGET` (stage to push from a multi-stage Dockerfile).
 
 ### Pushing under your own Docker Hub account
 

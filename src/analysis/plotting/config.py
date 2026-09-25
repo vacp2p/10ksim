@@ -23,6 +23,8 @@ class PlotConfig(BaseModel):
     outliers: bool = True
     scale_x: PositiveInt = 1000
     fig_size: List[PositiveInt] = Field(default_factory=lambda: [20, 20])
+    share_y: bool = True
+    """Share the y axis across the metric subplots."""
 
     x_order: Optional[List[str]] = None
     legend_order: Optional[List[str]] = None
